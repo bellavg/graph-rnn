@@ -13,8 +13,8 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 
 from model import GraphLevelRNN, EdgeLevelRNN, EdgeLevelMLP
-
 from aig_dataset import AIGDataset
+
 
 def train_mlp_step(graph_rnn, edge_mlp, data, criterion, optim_graph_rnn, optim_edge_mlp,
                    scheduler_graph_rnn, scheduler_mlp, device, use_edge_features):
@@ -23,6 +23,15 @@ def train_mlp_step(graph_rnn, edge_mlp, data, criterion, optim_graph_rnn, optim_
     edge_mlp.zero_grad()
 
     s, lens = data['x'].float().to(device), data['len'].cpu()
+
+    # Get truth table if available
+    truth_table = data.get('y')
+    if truth_table is not None:
+        # Flatten truth table - assume shape is [batch, n_outputs, 2^n_inputs]
+        # Reshape to [batch, n_outputs * 2^n_inputs]
+        truth_table = truth_table.float().to(device)
+        if len(truth_table.shape) > 2:
+            truth_table = truth_table.reshape(truth_table.shape[0], -1)
 
     # If s does not have edge features, just add a dummy dimension 1
     # to the end
@@ -39,16 +48,25 @@ def train_mlp_step(graph_rnn, edge_mlp, data, criterion, optim_graph_rnn, optim_
     x = torch.cat((one_frame, s[:, :, :]), dim=1)
     y = torch.cat((s[:, :, :], zero_frame), dim=1)
 
-    lens = lens+1
+    lens = lens + 1
 
     graph_rnn.reset_hidden()
-    hidden = graph_rnn(x, lens)
-    y_pred = edge_mlp(hidden, return_logits=use_edge_features)  # Edge features use cross entropy loss which reqires logits
+    # Pass truth table to model if it has conditioning capability
+    if hasattr(graph_rnn, 'use_conditioning') and graph_rnn.use_conditioning and truth_table is not None:
+        hidden = graph_rnn(x, lens, truth_table)
+    else:
+        hidden = graph_rnn(x, lens)
+
+    # Pass truth table to edge model if it has conditioning capability
+    if hasattr(edge_mlp, 'use_conditioning') and edge_mlp.use_conditioning and truth_table is not None:
+        y_pred = edge_mlp(hidden, return_logits=use_edge_features, truth_table=truth_table)
+    else:
+        y_pred = edge_mlp(hidden, return_logits=use_edge_features)
 
     y = pack_padded_sequence(y, lens, batch_first=True, enforce_sorted=False)
     y, _ = pad_packed_sequence(y, batch_first=True)
 
-    # Edge features use Cross Entroy loss which wants the features in
+    # Edge features use Cross Entropy loss which wants the features in
     # the second dimension, so we have to swap them around
     if use_edge_features:
         # y_pred shape: [batch_size, seq_len+1, m, 3]
@@ -91,7 +109,16 @@ def train_rnn_step(graph_rnn, edge_rnn, data, criterion, optim_graph_rnn, optim_
 
     seq, lens = data['x'].float().to(device), data['len'].cpu()
 
-    # If s does not have edge features, just add a dummy dimension 1
+    # Get truth table if available
+    truth_table = data.get('y')
+    if truth_table is not None:
+        # Flatten truth table - assume shape is [batch, n_outputs, 2^n_inputs]
+        # Reshape to [batch, n_outputs * 2^n_inputs]
+        truth_table = truth_table.float().to(device)
+        if len(truth_table.shape) > 2:
+            truth_table = truth_table.reshape(truth_table.shape[0], -1)
+
+    # If seq does not have edge features, just add a dummy dimension 1
     # to the end
     if len(seq.shape) == 3:
         seq = seq.unsqueeze(3)
@@ -101,60 +128,17 @@ def train_rnn_step(graph_rnn, edge_rnn, data, criterion, optim_graph_rnn, optim_
     one_frame = torch.ones([seq.shape[0], 1, seq.shape[2], seq.shape[3]], device=device)
     x_node_rnn = torch.cat((one_frame, seq[:, :-1, :]), dim=1)
 
-    # Compute hidden graph-level representation
+    # Compute hidden graph-level representation with optional truth table
     graph_rnn.reset_hidden()
-    hidden = graph_rnn(x_node_rnn, lens)
+    if hasattr(graph_rnn, 'use_conditioning') and graph_rnn.use_conditioning and truth_table is not None:
+        hidden = graph_rnn(x_node_rnn, lens, truth_table)
+    else:
+        hidden = graph_rnn(x_node_rnn, lens)
 
-    # While this hidden graph representation can be computed via a single
-    # invocation of the NodeRNN, the training for the EdgeRRN is a bit more
-    # involved. Given a graph sequence
-    #
-    #   [(S11), (S21, S22), (S31, S32, S33), ..., (Sn1, ..., Snn)]
-    #
-    # we need to run the EdgeRNN n times to generate each of the adjacency
-    # vectors (S11'), (S21', S22'), (S31', S31', S33'), ... and compute the
-    # loss for each of them. However, we can speed up the training by splitting
-    # the vectors in batches and performing the computations simultaneously:
-    #
-    #       1. time step: Feed batch [S11, S21, S31, ..., Sn1]
-    #       2. time step: Feed batch [ - , S22, S32, ..., Sn2]
-    #       ...
-    #       n. time step: Feed batch [ - ,  - ,  - , ..., Snn]
-    #
-    # Essentially, we want to reshape [batch, nodes, edges] into [batch*nodes,
-    # edges, 1] which is compatible with the EdgeRNN.
-
-    # Incidentally, this can be implemented using the PyTorch packing function.
-    # Suppose we have a batch of zero padded graph sequences, e.g.
-    #
-    #   seq = [[(A11, -, -, -), (A21, A22, -, -), (A31, A32, A33, -), (A41, A42, A43, A44)]    <- graph A
-    #          [(B11, -, -, -), (B21, B22, -, -), ( - ,  - ,  - , -), ( - ,  - ,  - ,  - )]    <- graph B
-    #          [(C11, -, -, -), (C21, C22, -, -), (C31, C32, C33, -), ( - ,  - ,  - ,  - )]]   <- graph C
-    #
-    # encoding graph A with 5 nodes, graph B with 3 nodes and graph C with 4
-    # nodes. First, packing this (along the node axis) yields
-    #
-    #   seq_packed = [(A11,  - ,  - ,  - ), (B11,  - ,  - , -), (C11,  - , -, -),   <- batch 1
-    #                 (A21, A22,  - ,  - ), (B21, B22,  - , -), (C21, C22, -, -),   <- batch 2
-    #                 (A31, A32, A33,  - ), (C31, C32, C33, -),                     <- batch 3
-    #                 (A41, A42, A43, A44)]                                         <- batch 4
-    #
-    # Note that we don't need to sort by sequence length since PyTorch can do
-    # this itself now:
+    # Process the packed sequence
     seq_packed = pack_padded_sequence(seq, lens, batch_first=True, enforce_sorted=False).data
 
-    # Packing once more finally yields the desired effect:
-    #
-    #   [A11, B11, C11, A21, B21, C21, A31, C31, A41,   <- batch 1
-    #    A22, B22, C22, A31, C32, A42,                  <- batch 2
-    #    A33, C33, A43,                                 <- batch 3
-    #    A44]                                           <- batch 4
-    #
-    # However, we won't do this packing here since the EdgeRNN also performs
-    # packing, so we can delegate it there.
-
-    # We now need to compute the sequence lengths of `seq_packed`.
-    # TODO: Do this more efficiently
+    # Compute sequence lengths
     seq_packed_len = []
     m = graph_rnn.input_size
     for l in lens:
@@ -162,31 +146,42 @@ def train_rnn_step(graph_rnn, edge_rnn, data, criterion, optim_graph_rnn, optim_
             seq_packed_len.append(min(i, m))
     seq_packed_len.sort()
 
-    # Add nex axis to tensor to be compatible with EdgeRNN input shape.
-    # This is no longer needed since seq has edge_features dimension
-    # by default.
-    # seq_packed = seq_packed.unsqueeze(2)  # [batch, seq_len, 1]
-
-    # Add SOS token to the edge-level RNN input to prevent it from looking
-    # into the future.
+    # Add SOS token to the edge-level RNN input
     one_frame = torch.ones([seq_packed.shape[0], 1, seq_packed.shape[2]], device=device)
     x_edge_rnn = torch.cat((one_frame, seq_packed[:, :-1, :]), dim=1)
     y_edge_rnn = seq_packed
 
-    # We need to set the hidden state of the first EdgeRNN layer to the
-    # previously computed hidden representation. Since we feed node-packed
-    # data to the EdgeRNN, we also need to pack the hidden representation:
+    # Pack the hidden representation for the EdgeRNN
     hidden_packed = pack_padded_sequence(hidden, lens, batch_first=True, enforce_sorted=False).data
     edge_rnn.set_first_layer_hidden(hidden_packed)
 
-    # Compute edge probabilities
-    y_edge_rnn_pred = edge_rnn(x_edge_rnn, seq_packed_len, return_logits=use_edge_features)  # Edge features use cross entropy loss which reqires logits
+    # For truth table conditioning in EdgeRNN, we need to create a version of the truth table
+    # that matches the packed sequence structure
+    edge_truth_table = None
+    if truth_table is not None and hasattr(edge_rnn, 'use_conditioning') and edge_rnn.use_conditioning:
+        # Create list to hold repeated truth tables
+        repeated_tt = []
+
+        for batch_idx, seq_len in enumerate(lens):
+            # Repeat this sample's truth table for each node in its graph
+            for _ in range(seq_len):
+                repeated_tt.append(truth_table[batch_idx])
+
+        # Stack into tensor
+        if repeated_tt:
+            edge_truth_table = torch.stack(repeated_tt, dim=0)
+
+    # Compute edge probabilities with optional truth table
+    if hasattr(edge_rnn, 'use_conditioning') and edge_rnn.use_conditioning and edge_truth_table is not None:
+        y_edge_rnn_pred = edge_rnn(x_edge_rnn, seq_packed_len, return_logits=use_edge_features,
+                                   truth_table=edge_truth_table)
+    else:
+        y_edge_rnn_pred = edge_rnn(x_edge_rnn, seq_packed_len, return_logits=use_edge_features)
 
     y_edge_rnn = pack_padded_sequence(y_edge_rnn, seq_packed_len, batch_first=True, enforce_sorted=False)
     y_edge_rnn, _ = pad_packed_sequence(y_edge_rnn, batch_first=True)
 
-    # Edge features use Cross Entroy loss which wants the features in
-    # the second dimension, so we have to swap them around
+    # Edge features use Cross Entropy loss
     if use_edge_features:
         y_edge_rnn = torch.swapaxes(y_edge_rnn, 1, 2)
         y_edge_rnn = torch.argmax(y_edge_rnn, dim=1)  # One hot to class labels
@@ -221,21 +216,35 @@ if __name__ == "__main__":
     os.makedirs(os.path.join(base_path, config['train']['checkpoint_dir']), exist_ok=True)
     os.makedirs(os.path.join(base_path, config['train']['log_dir']), exist_ok=True)
 
+    # Calculate truth table size if available
+    tt_size = None
+    if 'truth_table_conditioning' in config['model'] and config['model']['truth_table_conditioning']:
+        n_outputs = config['model'].get('n_outputs', 8)  # Default to 8 outputs
+        n_inputs = config['model'].get('n_inputs', 8)  # Default to 8 inputs
+        tt_size = n_outputs * (2 ** n_inputs)  # Total size of flattened truth table
+        print(f"Using truth table conditioning with size: {tt_size}")
 
     # Create models
     device = torch.device('cuda:{}'.format(args.gpu_id) if torch.cuda.is_available() else 'cpu')
     if config['model']['edge_model'] == 'rnn':
+        # Add tt_size to model parameters if truth table conditioning is enabled
         node_model = GraphLevelRNN(input_size=config['data']['m'],
                                    output_size=config['model']['EdgeRNN']['hidden_size'],
+                                   tt_size=tt_size,
                                    **config['model']['GraphRNN']).to(device)
-        edge_model = EdgeLevelRNN(**config['model']['EdgeRNN']).to(device)
+
+        edge_model = EdgeLevelRNN(tt_size=tt_size,
+                                  **config['model']['EdgeRNN']).to(device)
         step_fn = train_rnn_step
     else:
         node_model = GraphLevelRNN(input_size=config['data']['m'],
                                    output_size=None,  # No output layer needed
+                                   tt_size=tt_size,
                                    **config['model']['GraphRNN']).to(device)
+
         edge_model = EdgeLevelMLP(input_size=config['model']['GraphRNN']['hidden_size'],
                                   output_size=config['data']['m'],
+                                  tt_size=tt_size,
                                   **config['model']['EdgeMLP']).to(device)
         step_fn = train_mlp_step
 
@@ -284,10 +293,6 @@ if __name__ == "__main__":
         max_graphs=config['data'].get('max_graphs')
     )
 
-    # if 'mode' in config['model'] and 'directed' in config['model']['mode']:
-    #     dataset = DirectedGraphDataSet(**config['data'])
-    # else:
-    #     dataset = GraphDataSet(**config['data'])
     data_loader = DataLoader(dataset, batch_size=config['train']['batch_size'])
 
     node_model.train()
@@ -323,7 +328,7 @@ if __name__ == "__main__":
                               datetime.timedelta(seconds=eta)))
                 loss_sum = 0
 
-            if global_step % config['train']['checkpoint_iter'] == 0 or global_step+1 > config['train']['steps']:
+            if global_step % config['train']['checkpoint_iter'] == 0 or global_step + 1 > config['train']['steps']:
                 state = {
                     "global_step": global_step,
                     "config": config,
