@@ -14,6 +14,7 @@ from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 
 from model import GraphLevelRNN, EdgeLevelRNN, EdgeLevelMLP
 
+from aig_dataset import AIGDataset
 
 def train_mlp_step(graph_rnn, edge_mlp, data, criterion, optim_graph_rnn, optim_edge_mlp,
                    scheduler_graph_rnn, scheduler_mlp, device, use_edge_features):
@@ -50,10 +51,29 @@ def train_mlp_step(graph_rnn, edge_mlp, data, criterion, optim_graph_rnn, optim_
     # Edge features use Cross Entroy loss which wants the features in
     # the second dimension, so we have to swap them around
     if use_edge_features:
-        y = torch.swapaxes(y, 1, 3)
-        y_pred = torch.swapaxes(y_pred, 1, 3)
+        # y_pred shape: [batch_size, seq_len+1, m, 3]
+        # y shape: [batch_size, seq_len+1, m, 3] (contains 0.0/1.0 floats)
 
-    loss = criterion(y_pred, y)
+        # 1. Reshape predictions for CrossEntropyLoss: (Batch * Seq * M, Classes=3)
+        num_classes = y_pred.shape[-1]  # Should be 3
+        # Flatten all dimensions except the class dimension
+        y_pred_reshaped = y_pred.reshape(-1, num_classes)
+
+        # 2. Convert target y from one-hot float format to long integer class indices
+        #    and reshape to (Batch * Seq * M)
+        # Find the index (0, 1, or 2) of the '1.0' in the last dimension
+        y_indices = torch.argmax(y, dim=-1)  # Shape: [batch_size, seq_len+1, m]
+        # Flatten all dimensions
+        y_reshaped = y_indices.reshape(-1)  # Shape: [batch_size * (seq_len+1) * m]
+
+        # 3. Calculate loss (ensure target is long type)
+        loss = criterion(y_pred_reshaped, y_reshaped.long())
+
+    else:  # Original BCELoss path (if you were to use binary edges)
+        # Note: BCELoss expects inputs and targets of the same shape,
+        # containing probabilities or logits (depending on if using BCEWithLogitsLoss)
+        loss = criterion(y_pred, y)
+
     loss.backward()
     optim_graph_rnn.step()
     optim_edge_mlp.step()
@@ -184,7 +204,8 @@ def train_rnn_step(graph_rnn, edge_rnn, data, criterion, optim_graph_rnn, optim_
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('config_file', help='Path of the config file to use for training')
+    parser.add_argument('--config_file', help='Path of the config file to use for training',
+                        required=False, default="runs/config_aig.yaml")
     parser.add_argument('-r', '--restore', dest='restore_path', required=False, default=None,
                         help='Checkpoint to continue training from')
     parser.add_argument('--gpu', dest='gpu_id', required=False, default=0, type=int,
@@ -255,10 +276,18 @@ if __name__ == "__main__":
         scheduler_edge_model.load_state_dict(state["scheduler_edge_model"])
         criterion.load_state_dict(state["criterion"])
 
-    if 'mode' in config['model'] and 'directed' in config['model']['mode']:
-        dataset = DirectedGraphDataSet(**config['data'])
-    else:
-        dataset = GraphDataSet(**config['data'])
+    dataset = AIGDataset(
+        graph_file=config['data']['graph_file'],
+        m=config['data']['m'],
+        training=True,
+        use_bfs=config['data']['use_bfs'],
+        max_graphs=config['data'].get('max_graphs')
+    )
+
+    # if 'mode' in config['model'] and 'directed' in config['model']['mode']:
+    #     dataset = DirectedGraphDataSet(**config['data'])
+    # else:
+    #     dataset = GraphDataSet(**config['data'])
     data_loader = DataLoader(dataset, batch_size=config['train']['batch_size'])
 
     node_model.train()
