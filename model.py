@@ -4,9 +4,15 @@ from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 from typing import Optional, Tuple, List, Union
 
 
+import torch
+import torch.nn as nn
+from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
+from typing import Optional, Tuple, List, Union
+
+
 class GraphLevelRNN(nn.Module):
     """
-    A Graph-Level RNN that can be optionally conditioned on truth tables for generating AIGs.
+    A Graph-Level RNN that can optionally predict node types alongside edge connectivity for generating AIGs.
     """
 
     def __init__(
@@ -15,19 +21,22 @@ class GraphLevelRNN(nn.Module):
             embedding_size: int,
             hidden_size: int,
             num_layers: int,
+            predict_node_types: bool = False,
+            num_node_types: int = 4,  # ZERO, PI, AND, PO
             tt_size: Optional[int] = None,
             output_size: Optional[int] = None,
             edge_feature_len: int = 1,
             tt_embedding_size: int = 64
     ):
         """
-        Initialize the Graph-Level RNN with optional truth table conditioning.
+        Initialize the Graph-Level RNN with node type prediction and optional truth table conditioning.
 
         Args:
             input_size: Length of the padded adjacency vector
             embedding_size: Size of the input embedding fed to the GRU
             hidden_size: Hidden size of the GRU
             num_layers: Number of GRU layers
+            num_node_types: Number of different node types in the AIG (default: 4)
             tt_size: Optional size of the truth table (8x256 for 8 outputs, 2^8 input combinations)
                 If None, no truth table conditioning is used
             output_size: Size of the final output. Set to None if the
@@ -41,6 +50,8 @@ class GraphLevelRNN(nn.Module):
         self.input_size = input_size
         self.edge_feature_len = edge_feature_len
         self.use_conditioning = tt_size is not None
+        self.predict_node_types = predict_node_types
+        self.num_node_types = num_node_types
 
         # Adjacency vector processing
         self.linear_in = nn.Linear(input_size * edge_feature_len, embedding_size)
@@ -68,7 +79,17 @@ class GraphLevelRNN(nn.Module):
             batch_first=True
         )
 
-        # Output layers
+        # Node type prediction layer (optional)
+        if predict_node_types:
+            self.node_type_predictor = nn.Sequential(
+                nn.Linear(hidden_size, hidden_size // 2),
+                nn.ReLU(),
+                nn.Linear(hidden_size // 2, num_node_types)
+            )
+        else:
+            self.node_type_predictor = None
+
+        # Output layers for edge prediction
         if output_size:
             self.linear_out1 = nn.Linear(hidden_size, embedding_size)
             self.linear_out2 = nn.Linear(embedding_size, output_size)
@@ -88,9 +109,9 @@ class GraphLevelRNN(nn.Module):
             x: torch.Tensor,
             x_lens: Optional[List[int]] = None,
             truth_table: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """
-        Forward pass with optional truth table conditioning.
+        Forward pass with optional node type prediction and truth table conditioning.
 
         Args:
             x: Input tensor of shape [batch, seq_len, input_size, edge_feature_len].
@@ -105,7 +126,12 @@ class GraphLevelRNN(nn.Module):
                 Only used if model was initialized with tt_size.
 
         Returns:
-            The final hidden state of the GRU of shape [batch, seq_len, hidden_size].
+            If predict_node_types is True:
+                Tuple containing:
+                - hidden: The final hidden state of the GRU of shape [batch, seq_len, hidden_size]
+                - node_types: Node type predictions of shape [batch, seq_len, num_node_types]
+            Otherwise:
+                hidden: The final hidden state of the GRU of shape [batch, seq_len, hidden_size]
         """
         # Flatten edge features
         x = torch.flatten(x, 2, 3)  # [batch, seq_len, input_size * edge_feature_len]
@@ -136,13 +162,19 @@ class GraphLevelRNN(nn.Module):
         if x_lens is not None:
             x, _ = pad_packed_sequence(x, batch_first=True)
 
-        # Optional output layers
+        # Optional output layers for edge prediction
         if self.linear_out1:
-            x = self.relu(self.linear_out1(x))
-            x = self.linear_out2(x)
+            hidden = self.relu(self.linear_out1(x))
+            hidden = self.linear_out2(hidden)
+        else:
+            hidden = x
 
-        return x
-
+        # Optionally predict node types
+        if self.predict_node_types and self.node_type_predictor is not None:
+            node_types = self.node_type_predictor(x)  # [batch, seq_len, num_node_types]
+            return hidden, node_types
+        else:
+            return hidden
 
 class EdgeLevelMLP(nn.Module):
     """

@@ -6,8 +6,15 @@ data:
   max_graphs: null  # Set a number for debugging with fewer graphs
 
 model:
+  predict_node_types: true  # Set to false to disable node type prediction
+  num_node_types: 4  # ZERO, PI, AND, PO
   mode: 'directed-multiclass'
   edge_model: 'mlp'  # Use 'mlp' or 'rnn'
+
+  # Truth table conditioning settings
+  truth_table_conditioning: true
+  n_inputs: 8   # Number of inputs in your AIGs
+  n_outputs: 8  # Number of outputs in your AIGs
 
   GraphRNN:
     embedding_size: 128

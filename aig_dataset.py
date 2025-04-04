@@ -2,7 +2,7 @@
 AIGDataset: Dataset implementation for training GraphRNN models on And-Inverter Graphs.
 
 This module provides the AIGDataset class that extends GraphRNN's DirectedGraphDataSet
-to handle AIG-specific structures and truth tables.
+to handle AIG-specific structures and truth tables, with optional node type information.
 """
 
 import os
@@ -14,7 +14,7 @@ from typing import List, Dict, Tuple, Optional, Any, Union
 
 from extension_data import DirectedGraphDataSet
 
-# Node and edge type constants for AIGs (using the same mappings from your code)
+# Node and edge type constants for AIGs
 NODE_TYPES = {
     "ZERO": 0,
     "PI": 1,    # Primary Input
@@ -27,19 +27,6 @@ EDGE_TYPES = {
     "NONE": 0,
     "REGULAR": 1,
     "INVERTED": 2
-}
-
-# Node type one-hot encodings (from your existing code)
-NODE_TYPE_ENCODING = {
-    "0": [0, 0, 0],
-    "PI": [1, 0, 0],
-    "AND": [0, 1, 0],
-    "PO": [0, 0, 1]
-}
-
-EDGE_TYPE_ENCODING = {
-    "INV": [1, 0],   # Inverted edge
-    "REG": [0, 1]    # Regular edge
 }
 
 
@@ -58,6 +45,7 @@ class AIGDataset(DirectedGraphDataSet):
                  training: bool = True,
                  train_split: float = 0.8,
                  use_bfs: bool = True,
+                 include_node_types: bool = False,
                  max_graphs: Optional[int] = None):
         """
         Initialize the AIG dataset.
@@ -68,6 +56,7 @@ class AIGDataset(DirectedGraphDataSet):
             training: Whether this is for training (True) or testing (False)
             train_split: Percentage of data to use for training
             use_bfs: Whether to use BFS ordering (True) or topological sort (False)
+            include_node_types: Whether to include node type information in the dataset
             max_graphs: Maximum number of graphs to load (None for all)
         """
         self.dataset_type = 'aig-directed-multiclass'
@@ -75,6 +64,7 @@ class AIGDataset(DirectedGraphDataSet):
         self.m = m
         self.use_bfs = use_bfs
         self.graph_file = graph_file
+        self.include_node_types = include_node_types
 
         # Load raw graph data from pickle file
         print(f"Loading AIG graphs from {graph_file}...")
@@ -106,6 +96,7 @@ class AIGDataset(DirectedGraphDataSet):
         self.length = train_size if training else len(self.graphs) - train_size
 
         print(f"Dataset initialized with {self.length} {'training' if training else 'testing'} graphs")
+        print(f"Node type information is {'included' if include_node_types else 'not included'}")
 
     def _preprocess_graphs(self) -> List[nx.DiGraph]:
         """
@@ -179,6 +170,7 @@ class AIGDataset(DirectedGraphDataSet):
     def __getitem__(self, idx):
         """
         Get a specific graph converted to the sequence format required by GraphRNN.
+        Fixed version with performance optimization for tensor creation.
 
         Args:
             idx: Index of the graph to retrieve
@@ -186,9 +178,10 @@ class AIGDataset(DirectedGraphDataSet):
         Returns:
             Dictionary containing:
             - 'x': Tensor of shape [seq_len, input_size, edge_feature_len]
-                 containing the adjacency vectors for each node
+                    containing the adjacency vectors for each node
             - 'len': The actual length of the sequence (number of nodes - 1)
             - 'y': Target truth table tensor if available
+            - 'node_types': Node type labels if include_node_types is True
         """
         g = self.graphs[self.start_idx + idx]
         n = g.number_of_nodes()
@@ -234,8 +227,14 @@ class AIGDataset(DirectedGraphDataSet):
 
             sequence.append(padded)
 
-        # Convert sequence to tensor
-        seq_tensor = torch.tensor(sequence, dtype=torch.float)
+        # PERFORMANCE FIX: Convert list of numpy arrays to a single numpy array first
+        # This avoids the slow tensor creation warning
+        if sequence:
+            sequence_array = np.stack(sequence, axis=0)
+            seq_tensor = torch.tensor(sequence_array, dtype=torch.float)
+        else:
+            # Handle empty sequence case
+            seq_tensor = torch.zeros((0, self.m, 3), dtype=torch.float)
 
         # Pad sequence to max_node_count
         padded_tensor = torch.nn.functional.pad(
@@ -248,11 +247,39 @@ class AIGDataset(DirectedGraphDataSet):
         if 'output_tts' in g.graph and g.graph['output_tts']:
             output_tt = torch.tensor(g.graph['output_tts'], dtype=torch.float)
 
-        return {
+        # Prepare result dictionary
+        result = {
             'x': padded_tensor,
             'len': len(sequence),
             'y': output_tt  # Output truth table for conditioning
         }
+
+        # Add node type information if required
+        if self.include_node_types:
+            # Extract node types from the ordered nodes
+            node_types = []
+            for node_id in node_ordering:
+                node_type = g.nodes[node_id].get('type', 0)  # Default to ZERO if not specified
+                node_types.append(node_type)
+
+            # Convert to tensor and create correct format for GraphRNN
+            # (skip the first node as GraphRNN starts from second node)
+            if len(node_types) > 1:
+                node_types_array = np.array(node_types[1:], dtype=np.int64)
+                node_types_tensor = torch.tensor(node_types_array, dtype=torch.long)
+            else:
+                node_types_tensor = torch.zeros(0, dtype=torch.long)
+
+            # Pad to max_node_count
+            padded_node_types = torch.nn.functional.pad(
+                node_types_tensor,
+                (0, self.max_node_count - len(node_types_tensor)),
+                value=0  # Pad with ZERO type
+            )
+
+            result['node_types'] = padded_node_types
+
+        return result
 
     def _get_bfs_ordering(self, g: nx.DiGraph) -> List[int]:
         """
@@ -302,91 +329,3 @@ class AIGDataset(DirectedGraphDataSet):
                 ordering.append(node)
 
         return ordering
-
-# Usage example:
-if __name__ == "__main__":
-    # Example showing how to create and use the dataset
-    dataset = AIGDataset(
-        graph_file="dataset/small_inputs8.pkl",
-        m=16,  # Set M value based on your AIG structure
-        training=True
-    )
-
-    print(f"Dataset size: {len(dataset)}")
-
-    # Get the first item
-    sample = dataset[0]
-
-    # Check graph structure
-    g = dataset.graphs[dataset.start_idx]
-    num_nodes = g.number_of_nodes()
-    num_inputs = g.graph.get('inputs', 0)
-    num_outputs = g.graph.get('outputs', 0)
-
-    # Count node types
-    node_types = [data.get('type', -1) for _, data in g.nodes(data=True)]
-    type_counts = {
-        'ZERO': node_types.count(NODE_TYPES["ZERO"]),
-        'PI': node_types.count(NODE_TYPES["PI"]),
-        'AND': node_types.count(NODE_TYPES["AND"]),
-        'PO': node_types.count(NODE_TYPES["PO"])
-    }
-
-    # Check shapes
-    x_shape = sample['x'].shape
-    truth_table_length = 2 ** num_inputs if sample['y'] is not None else 0
-
-    print("\n=== Sample Graph Analysis ===")
-    print(f"Total nodes: {num_nodes}")
-    print(f"Inputs: {num_inputs}")
-    print(f"Outputs: {num_outputs}")
-    print(f"Node type counts: {type_counts}")
-
-    print("\n=== Shape Analysis ===")
-    print(f"Sequence shape: {x_shape}")
-    print(f"Expected sequence length: {num_nodes - 1}")
-    print(f"Actual sequence length: {sample['len']}")
-
-    if sample['y'] is not None:
-        print(f"Truth table shape: {sample['y'].shape}")
-        print(f"Expected truth table length: {truth_table_length}")
-
-    # Verify that M is appropriate for this graph
-    max_connections = 0
-    for node_id in g.nodes():
-        in_degree = g.in_degree(node_id)
-        max_connections = max(max_connections, in_degree)
-
-    print(f"\nMaximum in-degree: {max_connections}")
-    print(f"Current M value: {dataset.m}")
-    print(f"Recommended M value: at least {max(max_connections, num_inputs)}")
-
-    # Check if the adjacency sequence makes sense
-    node_ordering = dataset._get_bfs_ordering(g) if dataset.use_bfs else list(nx.topological_sort(g))
-    print(f"\nFirst 10 nodes in ordering: {node_ordering[:min(10, len(node_ordering))]}")
-
-    # Verify edge types
-    edge_types = [data.get('type', EDGE_TYPES["REGULAR"]) for _, _, data in g.edges(data=True)]
-    edge_type_counts = {
-        'REGULAR': edge_types.count(EDGE_TYPES["REGULAR"]),
-        'INVERTED': edge_types.count(EDGE_TYPES["INVERTED"])
-    }
-    print(f"Edge type counts: {edge_type_counts}")
-
-    # Verify adjacency tensor dimensions
-    expected_adjacency_dims = (sample['len'], dataset.m, 3)
-    print(f"Expected x dimensions: {expected_adjacency_dims}")
-    print(f"Actual x dimensions: {x_shape}")
-
-    # Consistency checks
-    checks = []
-    checks.append(("Number of PI nodes matches input count", type_counts['PI'] == num_inputs))
-    checks.append(("Number of PO nodes matches output count", type_counts['PO'] == num_outputs))
-    checks.append(("Sequence length matches node count - 1", sample['len'] == num_nodes - 1))
-    if sample['y'] is not None:
-        checks.append(("Truth table length matches 2^inputs", sample['y'].shape[1] == truth_table_length))
-    checks.append(("M value is sufficient", dataset.m >= max_connections))
-
-    print("\n=== Consistency Checks ===")
-    for check_name, result in checks:
-        print(f"{check_name}: {'✓' if result else '✗'}")
