@@ -28,7 +28,7 @@ model:
 train:
   batch_size: 32
   lr: 0.001
-  steps: 10000
+  steps: 20000
   print_iter: 100
   checkpoint_iter: 1000
   checkpoint_dir: 'checkpoints'
