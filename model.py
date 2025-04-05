@@ -11,85 +11,29 @@ from typing import Optional, Tuple, List, Union
 
 
 class GraphLevelRNN(nn.Module):
-    """
-    A Graph-Level RNN that can optionally predict node types alongside edge connectivity for generating AIGs.
-    """
-
-    def __init__(
-            self,
-            input_size: int,
-            embedding_size: int,
-            hidden_size: int,
-            num_layers: int,
-            predict_node_types: bool = False,
-            num_node_types: int = 4,  # ZERO, PI, AND, PO
-            tt_size: Optional[int] = None,
-            output_size: Optional[int] = None,
-            edge_feature_len: int = 1,
-            tt_embedding_size: int = 64
-    ):
-        """
-        Initialize the Graph-Level RNN with node type prediction and optional truth table conditioning.
-
-        Args:
-            input_size: Length of the padded adjacency vector
-            embedding_size: Size of the input embedding fed to the GRU
-            hidden_size: Hidden size of the GRU
-            num_layers: Number of GRU layers
-            num_node_types: Number of different node types in the AIG (default: 4)
-            tt_size: Optional size of the truth table (8x256 for 8 outputs, 2^8 input combinations)
-                If None, no truth table conditioning is used
-            output_size: Size of the final output. Set to None if the
-                output layer should be skipped.
-            edge_feature_len: Number of features associated with each edge.
-                Default is 1 (i.e. scalar value 0/1 indicating whether the
-                edge is set or not).
-            tt_embedding_size: Size of the truth table embedding when conditioning is used
-        """
+    # --- MODIFIED __init__ ---
+    def __init__(self, input_size, embedding_size, hidden_size, num_layers,
+                 output_size=None, edge_feature_len=1,
+                 predict_node_types=False, num_node_types=None, # NEW args
+                 use_conditioning=False, tt_size=None):       # NEW args
         super().__init__()
         self.input_size = input_size
         self.edge_feature_len = edge_feature_len
-        self.use_conditioning = tt_size is not None
         self.predict_node_types = predict_node_types
-        self.num_node_types = num_node_types
+        self.use_conditioning = use_conditioning
+        self.tt_size = tt_size
 
-        # Adjacency vector processing
-        self.linear_in = nn.Linear(input_size * edge_feature_len, embedding_size)
+        # Adjust input linear layer if conditioning is used
+        lin_in_features = input_size * edge_feature_len
+        if self.use_conditioning and self.tt_size is not None:
+            lin_in_features += self.tt_size # Add truth table size to input features
+
+        self.linear_in = nn.Linear(lin_in_features, embedding_size)
         self.relu = nn.ReLU()
+        self.gru = nn.GRU(input_size=embedding_size, hidden_size=hidden_size,
+                          num_layers=num_layers, batch_first=True)
 
-        # Truth table conditioning (if enabled)
-        if self.use_conditioning:
-            # Assuming tt_size is total size (e.g., 8*256=2048 for 8 outputs with 2^8 combinations)
-            self.tt_embedding = nn.Sequential(
-                nn.Linear(tt_size, tt_embedding_size),
-                nn.ReLU(),
-                nn.Linear(tt_embedding_size, tt_embedding_size),
-                nn.ReLU()
-            )
-            # Combined size with truth table embedding
-            combined_size = embedding_size + tt_embedding_size
-        else:
-            combined_size = embedding_size
-
-        # GRU takes combined embedding (or just adjacency embedding if no conditioning)
-        self.gru = nn.GRU(
-            input_size=combined_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            batch_first=True
-        )
-
-        # Node type prediction layer (optional)
-        if predict_node_types:
-            self.node_type_predictor = nn.Sequential(
-                nn.Linear(hidden_size, hidden_size // 2),
-                nn.ReLU(),
-                nn.Linear(hidden_size // 2, num_node_types)
-            )
-        else:
-            self.node_type_predictor = None
-
-        # Output layers for edge prediction
+        # Optional output layer for original RNN edge model connection
         if output_size:
             self.linear_out1 = nn.Linear(hidden_size, embedding_size)
             self.linear_out2 = nn.Linear(embedding_size, output_size)
@@ -97,181 +41,117 @@ class GraphLevelRNN(nn.Module):
             self.linear_out1 = None
             self.linear_out2 = None
 
+        # --- NEW: Optional node type prediction head ---
+        self.node_type_predictor = None
+        if self.predict_node_types:
+            if num_node_types is None:
+                raise ValueError("num_node_types must be specified if predict_node_types is True")
+            # Simple linear layer on top of GRU hidden state
+            self.node_type_predictor = nn.Linear(hidden_size, num_node_types)
+        # --- END NEW ---
+
         self.hidden = None
+
 
     def reset_hidden(self):
         """Resets the hidden state to 0."""
         # By setting to None, PyTorch will automatically use a zero tensor.
         self.hidden = None
 
-    def forward(
-            self,
-            x: torch.Tensor,
-            x_lens: Optional[List[int]] = None,
-            truth_table: Optional[torch.Tensor] = None
-    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-        """
-        Forward pass with optional node type prediction and truth table conditioning.
-
-        Args:
-            x: Input tensor of shape [batch, seq_len, input_size, edge_feature_len].
-                Should be an adjacency vector describing the connectivity of the
-                previously generated node.
-            x_lens: List of sequence lengths (i.e. number of graph nodes) of
-                each batch entry. Should be on the CPU. This is used to pack
-                the input to get rid of padding and increase efficiency.
-                Set to 'None' to disable packing.
-            truth_table: Optional tensor of shape [batch, tt_size] containing
-                the desired output behavior of the circuit as flattened truth tables.
-                Only used if model was initialized with tt_size.
-
-        Returns:
-            If predict_node_types is True:
-                Tuple containing:
-                - hidden: The final hidden state of the GRU of shape [batch, seq_len, hidden_size]
-                - node_types: Node type predictions of shape [batch, seq_len, num_node_types]
-            Otherwise:
-                hidden: The final hidden state of the GRU of shape [batch, seq_len, hidden_size]
-        """
+    def forward(self, x, x_lens=None, truth_table=None):  # Add truth_table arg
         # Flatten edge features
-        x = torch.flatten(x, 2, 3)  # [batch, seq_len, input_size * edge_feature_len]
+        # x shape: [batch, seq_len, input_size, edge_feature_len]
+        x_flat = torch.flatten(x, 2, 3)  # [batch, seq_len, input_size * edge_feature_len]
 
-        # Process adjacency vectors
-        x = self.relu(self.linear_in(x))  # [batch, seq_len, embedding_dim]
-
-        # If truth table conditioning is enabled and truth table is provided
+        # --- NEW: Concatenate truth table if conditioning ---
         if self.use_conditioning and truth_table is not None:
-            # Embed the truth table
-            tt_embed = self.tt_embedding(truth_table)  # [batch, tt_embedding_size]
-
-            # Expand truth table embedding to match sequence dimension
-            # This broadcasts the truth table embedding to each step of the sequence
-            tt_embed = tt_embed.unsqueeze(1).expand(-1, x.shape[1], -1)  # [batch, seq_len, tt_embedding_size]
-
-            # Concatenate adjacency embedding with truth table embedding
-            x = torch.cat([x, tt_embed], dim=2)  # [batch, seq_len, embedding_dim + tt_embedding_size]
-
-        # Pack data to increase efficiency during training
-        if x_lens is not None:
-            x = pack_padded_sequence(x, x_lens, batch_first=True, enforce_sorted=False)
-
-        # Process through GRU
-        x, self.hidden = self.gru(x, self.hidden)  # Packed [batch, seq_len, hidden_size]
-
-        # Unpack (reintroduces padding)
-        if x_lens is not None:
-            x, _ = pad_packed_sequence(x, batch_first=True)
-
-        # Optional output layers for edge prediction
-        if self.linear_out1:
-            hidden = self.relu(self.linear_out1(x))
-            hidden = self.linear_out2(hidden)
+            # truth_table shape [batch, tt_size] -> [batch, 1, tt_size]
+            tt_expanded = truth_table.unsqueeze(1).expand(-1, x_flat.shape[1], -1)
+            # Concatenate along the feature dimension
+            x_conditioned = torch.cat((x_flat, tt_expanded), dim=2)
         else:
-            hidden = x
+            x_conditioned = x_flat
+        # --- END NEW ---
 
-        # Optionally predict node types
+        x_emb = self.relu(self.linear_in(x_conditioned))  # [batch, seq_len, embedding_dim]
+
+        if x_lens is not None:
+            x_packed = pack_padded_sequence(x_emb, x_lens, batch_first=True, enforce_sorted=False)
+        else:
+            x_packed = x_emb  # Should not happen if x_lens is required
+
+        gru_output, self.hidden = self.gru(x_packed, self.hidden)
+
+        if x_lens is not None:
+            hidden_state, _ = pad_packed_sequence(gru_output, batch_first=True)
+        else:
+            hidden_state = gru_output  # Should not happen
+
+        # --- NEW: Node type prediction ---
+        node_type_logits = None
         if self.predict_node_types and self.node_type_predictor is not None:
-            node_types = self.node_type_predictor(x)  # [batch, seq_len, num_node_types]
-            return hidden, node_types
+            node_type_logits = self.node_type_predictor(hidden_state)  # [batch, seq_len, num_node_types]
+        # --- END NEW ---
+
+        # Optional final output projection (for RNN edge model)
+        final_output = hidden_state  # Default output is hidden state for MLP edge model
+        if self.linear_out1:
+            final_output = self.relu(self.linear_out1(hidden_state))
+            final_output = self.linear_out2(final_output)
+
+        # Return both hidden state (or final projection) and node logits if predicting types
+        if self.predict_node_types:
+            return final_output, node_type_logits
         else:
-            return hidden
+            return final_output
+
 
 class EdgeLevelMLP(nn.Module):
-    """
-    Edge-Level MLP that can be optionally conditioned on truth tables for generating AIGs.
-    """
-
-    def __init__(
-            self,
-            input_size: int,
-            hidden_size: int,
-            output_size: int,
-            tt_size: Optional[int] = None,
-            edge_feature_len: int = 1,
-            tt_embedding_size: int = 64
-    ):
-        """
-        Initialize the Edge-Level MLP with optional truth table conditioning.
-
-        Args:
-            input_size: Size of the hidden state outputted by the graph-level RNN
-            hidden_size: Size of the hidden layer
-            output_size: Number of edges probabilities to output
-            tt_size: Optional size of the truth table (8x256 for 8 outputs, 2^8 input combinations)
-                If None, no truth table conditioning is used
-            edge_feature_len: Number of features associated with each edge.
-                Default is 1 (i.e. scalar value 0/1 indicating whether the
-                edge is set or not).
-            tt_embedding_size: Size of the truth table embedding when conditioning is used
-        """
+    # --- MODIFIED __init__ ---
+    def __init__(self, input_size, hidden_size, output_size, edge_feature_len=1,
+                 use_conditioning=False, tt_size=None): # NEW args
         super().__init__()
         self.edge_feature_len = edge_feature_len
-        self.use_conditioning = tt_size is not None
+        self.use_conditioning = use_conditioning
+        self.tt_size = tt_size
 
-        # Truth table conditioning (if enabled)
-        if self.use_conditioning:
-            self.tt_embedding = nn.Sequential(
-                nn.Linear(tt_size, tt_embedding_size),
-                nn.ReLU(),
-                nn.Linear(tt_embedding_size, tt_embedding_size),
-                nn.ReLU()
-            )
-            # Enhanced input size to account for truth table embedding
-            enhanced_input_size = input_size + tt_embedding_size
-        else:
-            enhanced_input_size = input_size
+        lin1_in_features = input_size # Input is hidden state from GraphLevelRNN
+        # --- NEW: Conditioning Input ---
+        if self.use_conditioning and self.tt_size is not None:
+             lin1_in_features += self.tt_size
+        # --- END NEW ---
 
-        # MLP layers
-        self.linear1 = nn.Linear(enhanced_input_size, hidden_size)
+        self.linear1 = nn.Linear(lin1_in_features, hidden_size)
         self.linear2 = nn.Linear(hidden_size, output_size * edge_feature_len)
         self.relu = nn.ReLU()
-        self.sigmoid = nn.Sigmoid()
+        self.sigmoid = nn.Sigmoid() # Keep for potential BCELoss case
 
-    def forward(
-            self,
-            x: torch.Tensor,
-            return_logits: bool = False,
-            truth_table: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
-        """
-        Forward pass with optional truth table conditioning.
+    # --- MODIFIED forward ---
+    def forward(self, x, return_logits=False, truth_table=None): # Add truth_table
+        # x shape: [batch, seq_len, input_size (hidden_size from GraphRNN)]
+        # truth_table shape: [batch, tt_size]
 
-        Args:
-            x: Input tensor of shape [batch, seq_len, input_size]. Should be the
-                hidden GRU state outputted by the graph-level RNN.
-            return_logits: Set to True to output the logits without activation
-            truth_table: Optional tensor of shape [batch, tt_size] containing
-                the desired output behavior of the circuit as flattened truth tables.
-                Only used if model was initialized with tt_size.
-
-        Returns:
-            The next edge prediction of shape [batch, seq_len, output_size, edge_feature_len].
-        """
-        # If truth table conditioning is enabled and truth table is provided
+        # --- NEW: Concatenate truth table if conditioning ---
         if self.use_conditioning and truth_table is not None:
-            batch_size, seq_len = x.shape[0], x.shape[1]
+             tt_expanded = truth_table.unsqueeze(1).expand(-1, x.shape[1], -1)
+             x_conditioned = torch.cat((x, tt_expanded), dim=2)
+        else:
+             x_conditioned = x
+        # --- END NEW ---
 
-            # Embed the truth table
-            tt_embed = self.tt_embedding(truth_table)  # [batch, tt_embedding_size]
+        h = self.relu(self.linear1(x_conditioned)) # [batch, seq_len, hidden_size]
+        out = self.linear2(h) # [batch, seq_len, output_size * edge_feature_len] (Logits)
 
-            # Expand truth table embedding to match sequence dimension
-            tt_embed = tt_embed.unsqueeze(1).expand(-1, seq_len, -1)  # [batch, seq_len, tt_embedding_size]
-
-            # Concatenate RNN hidden state with truth table embedding
-            x = torch.cat([x, tt_embed], dim=2)  # [batch, seq_len, input_size + tt_embedding_size]
-
-        # Process through MLP
-        x = self.relu(self.linear1(x))
-        x = self.linear2(x)
         if not return_logits:
-            x = self.sigmoid(x)
+             # Apply sigmoid only if not returning logits (for BCELoss compatibility)
+             # CrossEntropyLoss expects raw logits
+             out = self.sigmoid(out)
 
-        # Reshape x to get edge features into separate dimension
-        x = torch.reshape(x, [x.shape[0], x.shape[1], -1,
-                              self.edge_feature_len])  # [batch, seq_len, output_size, edge_feature_len]
+        # Reshape output to separate edge features
+        # [batch, seq_len, output_size, edge_feature_len]
+        out_reshaped = torch.reshape(out, [out.shape[0], out.shape[1], -1, self.edge_feature_len])
 
-        return x
-
+        return out_reshaped
 
 class EdgeLevelRNN(nn.Module):
     """
@@ -283,60 +163,61 @@ class EdgeLevelRNN(nn.Module):
             embedding_size: int,
             hidden_size: int,
             num_layers: int,
-            tt_size: Optional[int] = None,
+            tt_size: Optional[int] = None,        # Argument for TT size
             edge_feature_len: int = 1,
-            tt_embedding_size: int = 64
+            tt_embedding_size: int = 64         # Argument for TT embedding size
     ):
         """
         Initialize the Edge-Level RNN with optional truth table conditioning.
 
         Args:
-            embedding_size: Size of the input embedding fed to the GRU
+            embedding_size: Size of the input embedding fed to the GRU for edge features
             hidden_size: Hidden size of the GRU
             num_layers: Number of GRU layers
-            tt_size: Optional size of the truth table (8x256 for 8 outputs, 2^8 input combinations)
-                If None, no truth table conditioning is used
+            tt_size: Optional size of the truth table (e.g., 8*256). If None, no conditioning.
             edge_feature_len: Number of features associated with each edge.
-                Default is 1 (i.e. scalar value 0/1 indicating whether the
-                edge is set or not).
-            tt_embedding_size: Size of the truth table embedding when conditioning is used
+            tt_embedding_size: Size of the truth table embedding when conditioning is used.
         """
         super().__init__()
         self.num_layers = num_layers
         self.hidden_size = hidden_size
         self.edge_feature_len = edge_feature_len
-        self.use_conditioning = tt_size is not None
+        self.use_conditioning = tt_size is not None # Determine if conditioning is used
 
-        # Truth table conditioning (if enabled)
+        # --- NEW: Truth table conditioning embedding ---
         if self.use_conditioning:
+            # Define embedding layers for the truth table
             self.tt_embedding = nn.Sequential(
                 nn.Linear(tt_size, tt_embedding_size),
                 nn.ReLU(),
                 nn.Linear(tt_embedding_size, tt_embedding_size),
                 nn.ReLU()
             )
-            # Enhanced embedding size to account for truth table info
-            enhanced_embedding_size = embedding_size + tt_embedding_size
+            # The input to the GRU will be the concatenation of edge embedding and TT embedding
+            gru_input_size = embedding_size + tt_embedding_size
         else:
-            enhanced_embedding_size = embedding_size
+            # If not conditioning, GRU input is just the edge embedding size
+            gru_input_size = embedding_size
+        # --- END NEW ---
 
-        # Edge feature embedding
+        # Layer to embed the input edge features
         self.linear_in = nn.Linear(edge_feature_len, embedding_size)
         self.relu = nn.ReLU()
 
-        # GRU takes enhanced embedding (or just edge embedding if no conditioning)
+        # GRU layer now takes potentially combined input size
         self.gru = nn.GRU(
-            input_size=enhanced_embedding_size,
+            input_size=gru_input_size, # Use the calculated size
             hidden_size=hidden_size,
             num_layers=num_layers,
             batch_first=True
         )
 
-        # Output layers
+        # Output layers (remain the same)
         self.linear_out1 = nn.Linear(hidden_size, embedding_size)
         self.linear_out2 = nn.Linear(embedding_size, edge_feature_len)
         self.sigmoid = nn.Sigmoid()
-        self.hidden = None
+        self.hidden = None # Initialize hidden state placeholder
+
 
     def set_first_layer_hidden(self, h: torch.Tensor):
         """
@@ -353,47 +234,20 @@ class EdgeLevelRNN(nn.Module):
             h = h.unsqueeze(0)
         self.hidden = torch.cat([h, zeros], dim=0)  # [num_layers, batch_size, hidden_size]
 
-    def forward(
-            self,
-            x: torch.Tensor,
-            x_lens: Optional[List[int]] = None,
-            return_logits: bool = False,
-            truth_table: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
-        """
-        Forward pass with optional truth table conditioning.
-
-        Args:
-            x: Input tensor of shape [batch, seq_len, edge_feature_len].
-            x_lens: List of sequence lengths (i.e. number of graph nodes) of
-                each batch entry. Should be on the CPU. This is used to pack
-                the input to get rid of padding and increase efficiency.
-                Set to 'None' to disable packing.
-            return_logits: Set to True to output the logits without activation
-            truth_table: Optional tensor of shape [batch, tt_size] containing
-                the desired output behavior of the circuit as flattened truth tables.
-                Only used if model was initialized with tt_size.
-
-        Returns:
-            The next edge prediction of shape [batch, seq_len, edge_feature_len].
-        """
+    def forward(self, x, x_lens=None, return_logits=False, truth_table=None): # Add truth_table
         assert self.hidden is not None, "Hidden state not set!"
 
-        # Edge feature embedding
-        x = self.relu(self.linear_in(x))  # [batch, seq_len, embedding_size]
-
-        # If truth table conditioning is enabled and truth table is provided
+        # --- NEW: Concatenate truth table if conditioning ---
+        # x shape: [batch*nodes, edge_len, edge_feature_len]
+        # truth_table shape: [batch*nodes, tt_size]
         if self.use_conditioning and truth_table is not None:
-            batch_size, seq_len = x.shape[0], x.shape[1]
+             tt_expanded = truth_table.unsqueeze(1).expand(-1, x.shape[1], -1)
+             x_conditioned = torch.cat((x, tt_expanded), dim=2)
+        else:
+             x_conditioned = x
+        # --- END NEW ---
 
-            # Embed the truth table
-            tt_embed = self.tt_embedding(truth_table)  # [batch, tt_embedding_size]
-
-            # Expand truth table embedding to match sequence dimension
-            tt_embed = tt_embed.unsqueeze(1).expand(-1, seq_len, -1)  # [batch, seq_len, tt_embedding_size]
-
-            # Concatenate edge embedding with truth table embedding
-            x = torch.cat([x, tt_embed], dim=2)  # [batch, seq_len, embedding_size + tt_embedding_size]
+        x = self.relu(self.linear_in(x_conditioned)) # [batch*nodes, edge_len, embedding_size]
 
         # Pack data to increase efficiency
         if x_lens is not None:

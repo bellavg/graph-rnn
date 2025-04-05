@@ -188,7 +188,7 @@ class AIGDataset(DirectedGraphDataSet):
 
         # Use either BFS or topological sort to get a node ordering
         if self.use_bfs:
-            node_ordering = self._get_bfs_ordering(g)
+            node_ordering = self.get_bfs_ordering(g)
         else:
             node_ordering = list(nx.topological_sort(g))
 
@@ -281,7 +281,7 @@ class AIGDataset(DirectedGraphDataSet):
 
         return result
 
-    def _get_bfs_ordering(self, g: nx.DiGraph) -> List[int]:
+    def get_bfs_ordering(self, g: nx.DiGraph) -> List[int]:
         """
         Get a BFS ordering of the nodes in a directed graph.
 
