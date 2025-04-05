@@ -1,0 +1,66 @@
+/Users/bellavg/miniconda3/envs/aig-ml/bin/python /Users/bellavg/graph-rnn/main.py
+Using truth table conditioning with size: 2048
+Node type prediction is enabled
+Using 4 node types
+Loading AIG graphs from dataset/small_inputs8_outputs8.pkl...
+Loaded 151 AIG graphs
+Processing graph 151/151...
+Graph preprocessing complete
+Maximum node count: 45
+Dataset initialized with 120 training graphs
+Node type information is included
+[100] total=1.2047, edge=0.1849, node=1.0198 time_per_iter=0.0903s eta=0:29:56.186957
+[200] total=0.6750, edge=0.0941, node=0.5809 time_per_iter=0.0950s eta=0:31:21.185830
+[300] total=0.3395, edge=0.0798, node=0.2597 time_per_iter=0.0946s eta=0:31:03.121923
+[400] total=0.2648, edge=0.0721, node=0.1928 time_per_iter=0.0986s eta=0:32:13.037514
+[500] total=0.1835, edge=0.0676, node=0.1158 time_per_iter=0.1033s eta=0:33:34.971234
+[600] total=0.1101, edge=0.0639, node=0.0462 time_per_iter=0.1027s eta=0:33:13.101685
+[700] total=0.0649, edge=0.0578, node=0.0071 time_per_iter=0.1097s eta=0:35:16.426315
+[800] total=0.0571, edge=0.0528, node=0.0043 time_per_iter=0.1175s eta=0:37:36.680763
+[900] total=0.0498, edge=0.0475, node=0.0023 time_per_iter=0.1187s eta=0:37:47.503974
+[1000] total=0.1145, edge=0.0566, node=0.0579 time_per_iter=0.1205s eta=0:38:09.612692
+Saving checkpoint...
+[1100] total=0.0510, edge=0.0478, node=0.0032 time_per_iter=0.1225s eta=0:38:35.383266
+[1200] total=0.0449, edge=0.0427, node=0.0022 time_per_iter=0.1263s eta=0:39:35.217023
+[1300] total=0.0384, edge=0.0375, node=0.0009 time_per_iter=0.1269s eta=0:39:33.341699
+[1400] total=0.0323, edge=0.0318, node=0.0004 time_per_iter=0.1263s eta=0:39:09.667151
+[1500] total=0.1290, edge=0.0521, node=0.0769 time_per_iter=0.1258s eta=0:38:47.041790
+[1600] total=0.0377, edge=0.0366, node=0.0011 time_per_iter=0.1263s eta=0:38:43.919462
+[1700] total=0.0306, edge=0.0302, node=0.0003 time_per_iter=0.1287s eta=0:39:15.466083
+[1800] total=0.0244, edge=0.0243, node=0.0001 time_per_iter=0.1310s eta=0:39:43.978617
+[1900] total=0.0184, edge=0.0183, node=0.0001 time_per_iter=0.1314s eta=0:39:38.831570
+[2000] total=0.0129, edge=0.0129, node=0.0000 time_per_iter=0.1317s eta=0:39:30.232577
+Saving checkpoint...
+[2100] total=0.0083, edge=0.0083, node=0.0000 time_per_iter=0.1327s eta=0:39:34.644516
+[2200] total=0.0770, edge=0.0337, node=0.0433 time_per_iter=0.1323s eta=0:39:14.080269
+[2300] total=0.0346, edge=0.0310, node=0.0036 time_per_iter=0.1317s eta=0:38:51.821627
+[2400] total=0.0169, edge=0.0167, node=0.0001 time_per_iter=0.1313s eta=0:38:30.613097
+[2500] total=0.0108, edge=0.0107, node=0.0001 time_per_iter=0.1306s eta=0:38:05.018268
+[2600] total=0.0071, edge=0.0070, node=0.0001 time_per_iter=0.1299s eta=0:37:40.299190
+[2700] total=0.0047, edge=0.0046, node=0.0001 time_per_iter=0.1299s eta=0:37:26.814857
+[2800] total=0.0031, edge=0.0030, node=0.0000 time_per_iter=0.1296s eta=0:37:09.677667
+[2900] total=0.0020, edge=0.0020, node=0.0000 time_per_iter=0.1292s eta=0:36:49.431293
+[3000] total=0.0013, edge=0.0013, node=0.0000 time_per_iter=0.1288s eta=0:36:30.231873
+Saving checkpoint...
+[3100] total=0.0010, edge=0.0010, node=0.0000 time_per_iter=0.1287s eta=0:36:15.282802
+[3200] total=0.0009, edge=0.0009, node=0.0000 time_per_iter=0.1295s eta=0:36:14.979498
+[3300] total=0.0008, edge=0.0008, node=0.0000 time_per_iter=0.1293s eta=0:35:58.557028
+[3400] total=0.0007, edge=0.0007, node=0.0000 time_per_iter=0.1292s eta=0:35:45.238672
+[3500] total=0.0006, edge=0.0006, node=0.0000 time_per_iter=0.1291s eta=0:35:29.991223
+[3600] total=0.0006, edge=0.0005, node=0.0000 time_per_iter=0.1300s eta=0:35:31.673995
+[3700] total=0.0005, edge=0.0005, node=0.0000 time_per_iter=0.1308s eta=0:35:31.755258
+[3800] total=0.0004, edge=0.0004, node=0.0000 time_per_iter=0.1309s eta=0:35:20.004509
+[3900] total=0.0004, edge=0.0004, node=0.0000 time_per_iter=0.1321s eta=0:35:27.038216
+[4000] total=0.0004, edge=0.0003, node=0.0000 time_per_iter=0.1330s eta=0:35:27.898200
+Saving checkpoint...
+[4100] total=0.0003, edge=0.0003, node=0.0000 time_per_iter=0.1329s eta=0:35:13.311011
+[4200] total=0.0003, edge=0.0003, node=0.0000 time_per_iter=0.1329s eta=0:34:59.805208
+[4300] total=0.0003, edge=0.0003, node=0.0000 time_per_iter=0.1327s eta=0:34:43.676123
+[4400] total=0.0002, edge=0.0002, node=0.0000 time_per_iter=0.1327s eta=0:34:29.583190
+[4500] total=0.0002, edge=0.0002, node=0.0000 time_per_iter=0.1324s eta=0:34:12.139878
+[4600] total=0.0002, edge=0.0002, node=0.0000 time_per_iter=0.1321s eta=0:33:53.859169
+[4700] total=0.0002, edge=0.0002, node=0.0000 time_per_iter=0.1317s eta=0:33:35.708315
+[4800] total=0.0002, edge=0.0001, node=0.0000 time_per_iter=0.1316s eta=0:33:20.353215
+[4900] total=0.0001, edge=0.0001, node=0.0000 time_per_iter=0.1313s eta=0:33:03.153437
+[5000] total=0.0001, edge=0.0001, node=0.0000 time_per_iter=0.1312s eta=0:32:47.928165
+Saving checkpoint..
