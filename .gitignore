@@ -4,12 +4,13 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+*.aig
 # C extensions
 *.so
-
+dataset/aiger.zip
 *.pth
 *.pkl
+*.DS_Store
 
 # Distribution / packaging
 .Python

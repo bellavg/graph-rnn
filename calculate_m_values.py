@@ -1,120 +1,100 @@
-import data
-import extension_data
-
-import torch
-import random
 import numpy as np
 import networkx as nx
-
 from tqdm import tqdm
+import argparse
 
+# Import your AIGDataset class
+from aig_dataset import AIGDataset
 
-N_ITERS = 9000
-
-def bfs(g):
-
-    a = nx.to_numpy_matrix(g)
-
-    reordering = np.random.permutation(g.number_of_nodes())
-    permuted_graph = nx.from_numpy_matrix(a[reordering][:, reordering])
-
-    comps = [list(comp) for comp in nx.connected_components(permuted_graph)]
-
-    traversal = []
-
-    for comp in comps:
-        successor_listing = [node[1] for node in nx.bfs_successors(permuted_graph, source=comp[0])]
-
-        traversal.append(comp[0])
-
-        for successor_list in successor_listing:
-            for successor in successor_list:
-                traversal.append(successor)
-
-    return permuted_graph, traversal
-
-
-def calculate_m_for_matrix(adj_matrix):
-    """ Returns position of the nonzero value in adj_matrix which is furthest from the principle diagonal """
-
-    return max(abs(x-y) for x, y in np.nonzero(adj_matrix))
-
-
-def bfs_permute_directed(g):
-    """Randomly permutes given DIRECTED graph, performs BFS, and returns
-        the adjacency matrix ordered by BFS traversal.
-
-    :param g NX Graph:          Graph for BFS traversal
-
-    :return np matrix:          Permuted adjacency matrix
+def calculate_m_for_aig_dataset(dataset):
     """
+    Calculates the maximum required 'm' value for the AIGDataset based on its
+    specific BFS ordering and graph structures.
 
-    a = nx.to_numpy_matrix(g)
-    n = g.number_of_nodes()
+    'm' is the maximum lookback distance required in the node sequence, i.e.,
+    the maximum difference between a node's index and the index of its
+    earliest predecessor in the BFS ordering.
 
-    reordering = np.random.permutation(g.number_of_nodes())
-    permuted_graph = nx.from_numpy_matrix(a[reordering][:, reordering])
+    Args:
+        dataset: An initialized AIGDataset object.
 
-    a_reord = a[reordering][:, reordering]
+    Returns:
+        The maximum 'm' value required for this dataset.
+    """
+    overall_max_m = 0
+    print(f"Calculating 'm' for {len(dataset.graphs)} graphs using dataset's BFS ordering...")
 
-    visited_nodes = set()
-    unvisited_nodes = set(permuted_graph.nodes)
+    for g in tqdm(dataset.graphs):
+        if g.number_of_nodes() <= 1:
+            continue # Skip graphs with 0 or 1 node
 
-    traversal = []
-
-    while len(visited_nodes) < n:
-        src = random.choice(tuple(unvisited_nodes))
-        successor_listing = [node[1] for node in nx.bfs_successors(permuted_graph, source=src)]
-
-        traversal.append(src)
-        visited_nodes.add(src)
-        unvisited_nodes.remove(src)
-
-        for successor_list in successor_listing:
-            for successor in successor_list:
-                if successor not in visited_nodes:
-                    traversal.append(successor)
-                    visited_nodes.add(successor)
-                    unvisited_nodes.remove(successor)
-
-    return a_reord[traversal][:, traversal]
-
-
-def calculate_m_value_undirected(dset_name, dataset):
-    gs = dataset.graphs
-    max_M = -1
-
-    for _ in tqdm(range(N_ITERS)):
-        g = gs[np.random.randint(len(gs))]
-        permuted_g, ordering = bfs(g)
-        permuted_adj_mat = torch.tensor(np.tril(nx.adjacency_matrix(permuted_g, ordering).toarray()))
-        max_M = max(max_M, calculate_m_for_matrix(permuted_adj_mat))
-    print(f"M for {dset_name} :: {max_M}")
+        # --- IMPORTANT: Ensure this method exists and is accessible ---
+        # Option 1: Rename _get_bfs_ordering to get_bfs_ordering in aig_dataset.py
+        # Option 2: Access private method (less ideal): node_ordering = dataset._AIGDataset__get_bfs_ordering(g)
+        try:
+            # Assuming you rename it to get_bfs_ordering
+            node_ordering = dataset.get_bfs_ordering(g)
+        except AttributeError:
+             print("\nError: Could not find 'get_bfs_ordering'.")
+             print("Please rename '_get_bfs_ordering' to 'get_bfs_ordering' in aig_dataset.py")
+             return -1 # Indicate error
 
 
-def calculate_m_value_directed(dset_name, dataset):
-    gs = dataset.graphs
-    max_M = -1
-    for _ in tqdm(range(N_ITERS)):
-        permuted_adj_mat = torch.tensor(bfs_permute_directed(gs[np.random.randint(len(gs))]))
-        max_M = max(max_M, calculate_m_for_matrix(permuted_adj_mat))
-    print(f"M for {dset_name} :: {max_M}")
+        if not node_ordering:
+            print(f"Warning: Empty node ordering for graph {g}. Skipping.")
+            continue
 
+        node_to_idx = {node: idx for idx, node in enumerate(node_ordering)}
+        max_m_for_graph = 0
+
+        # Iterate through nodes starting from the second one (index 1)
+        for i in range(1, len(node_ordering)):
+            current_node = node_ordering[i]
+            predecessors = list(g.predecessors(current_node))
+
+            # Find predecessors that appear *before* current_node in the ordering
+            valid_pred_indices = []
+            for p in predecessors:
+                pred_idx = node_to_idx.get(p)
+                # Check if predecessor exists in ordering and comes before current node
+                if pred_idx is not None and pred_idx < i:
+                    valid_pred_indices.append(pred_idx)
+
+            if valid_pred_indices:
+                min_pred_idx = min(valid_pred_indices)
+                # Calculate the lookback distance needed for this node
+                m_for_node = i - min_pred_idx
+                max_m_for_graph = max(max_m_for_graph, m_for_node)
+
+        overall_max_m = max(overall_max_m, max_m_for_graph)
+
+    return overall_max_m
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Calculate 'm' value for AIGDataset.")
+    parser.add_argument('--graph_file', type=str, default="dataset/inputs8_outputs2.pkl",
+                        help='Path to the dataset pickle file (e.g., dataset/inputs8_outputs2.pkl)')
+    # Add other necessary arguments for AIGDataset if needed (e.g., max_graphs)
+    # parser.add_argument('--max_graphs', type=int, default=None, help='Maximum number of graphs to load')
 
-    undirected_dset_names = ["grid-small",
-                             "community-small",
-                             "grid",
-                             "community",
-                             "ba",
-                             "protein"]
+    args = parser.parse_args()
 
-    #for dset_name in undirected_dset_names:
-    #    print(f"Processing: {dset_name}")
-    #    dset = data.GraphDataSet(dset_name)
-    #    calculate_m_value_undirected(dset_name, dset)
+    print(f"Loading dataset from: {args.graph_file}")
+    # Instantiate AIGDataset - set m=None as we are calculating it
+    # Set training=True/False as needed, use_bfs must be True here
+    dset = AIGDataset(
+        graph_file=args.graph_file,
+        m=None, # We are calculating m
+        training=True, # Or False, shouldn't matter for graph structure
+        use_bfs=True, # MUST be True to match the calculation logic
+        # max_graphs=args.max_graphs # Optional: load fewer graphs for faster testing
+    )
 
+    # Calculate and print the m value
+    calculated_m = calculate_m_for_aig_dataset(dset)
 
-    dset = extension_data.DirectedGraphDataSet('ego-directed-multiclass')
-    calculate_m_value_directed('ego-directed-multiclass', dset)
+    if calculated_m != -1:
+        print(f"\n-----------------------------------------")
+        print(f"Calculated maximum 'm' value: {calculated_m}")
+        print(f"-----------------------------------------")
+        print(f"You should set 'm: {calculated_m}' in your config file.")
