@@ -116,7 +116,8 @@ def train_loop(config, node_model, edge_model, step_fn, criterion_edge, criterio
         m=config['data']['m'],
         training=True,
         use_bfs=config['data']['use_bfs'],
-        max_graphs=config['data'].get('max_graphs')
+        max_graphs=config['data'].get('max_graphs'),
+        include_node_types=config['model'].get('predict_node_types'),
     )
     data_loader = DataLoader(dataset, batch_size=config['train']['batch_size'])
 
