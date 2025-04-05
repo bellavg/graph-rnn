@@ -7,7 +7,7 @@ __pycache__/
 *.aig
 # C extensions
 *.so
-
+dataset/aiger.zip
 *.pth
 *.pkl
 
