@@ -14,6 +14,10 @@ from model import GraphLevelRNN, EdgeLevelRNN, EdgeLevelMLP
 from aig_dataset import NODE_TYPES, EDGE_TYPES
 import generate
 from generate import m_seq_to_adj_mat, sample_bernoulli, sample_softmax
+import networkx as nx
+import numpy as np
+from aig_dataset import NODE_TYPES, EDGE_TYPES # Make sure constants are imported
+
 
 # Node type color mapping for visualization
 NODE_TYPE_COLORS = {
@@ -99,120 +103,176 @@ def mlp_edge_gen(edge_mlp, h, num_edges, adj_vec_size, sample_fun, attempts=1, t
     return adj_vec
 
 
-def generate_aig(num_nodes, node_model, edge_model, input_size, edge_gen_function, mode, truth_table=None):
+def generate_aig(num_nodes, node_model, edge_model, input_size, edge_gen_function, mode, config, truth_table=None):
     """
-    Generates an And-Inverter Graph with specific constraints and optional truth table conditioning
+    Generates an And-Inverter Graph and returns it as a NetworkX DiGraph.
+    Includes node types and edge types as attributes.
 
     Args:
-        num_nodes: Number of nodes to generate
-        node_model: Graph-level RNN model
-        edge_model: Edge-level model (MLP or RNN)
-        input_size: Maximum number of previous nodes to connect
-        edge_gen_function: Edge generation method
-        mode: Generation mode (directed-multiclass)
-        truth_table: Optional truth table tensor for conditioning [1, n_outputs * 2^n_inputs]
+        num_nodes: Target number of nodes.
+        node_model: Graph-level RNN model.
+        edge_model: Edge-level model (MLP or RNN).
+        input_size: 'm' value (max lookback).
+        edge_gen_function: Function to generate edges (rnn_edge_gen or mlp_edge_gen).
+        mode: Generation mode ('directed-multiclass').
+        config: The model configuration dictionary.
+        truth_table: Optional truth table tensor for conditioning.
 
     Returns:
-        Adjacency matrix and node types
+        nx.DiGraph: The generated AIG with node/edge type attributes.
+                    Returns None if generation fails or results in an empty graph.
     """
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     node_model.eval()
     edge_model.eval()
 
-    # Use softmax sampling for multi-class edge types
-    sample_fun = sample_softmax if mode == 'directed-multiclass' else sample_bernoulli
+    # Determine sampling function based on mode
+    use_edge_features = config['model']['GraphRNN'].get('edge_feature_len', 1) > 1
+    if use_edge_features and mode == 'directed-multiclass':
+        sample_fun = sample_softmax
+    else:
+        # Fallback or handle binary case if needed
+        sample_fun = sample_bernoulli # Or raise error if only multiclass is expected
 
-    # Initialize adjacency vector and node types
-    adj_vec = torch.ones([1, 1, input_size, node_model.edge_feature_len], device=device)
+    # Initialize graph generation state
+    adj_vec = torch.ones([1, 1, input_size, node_model.edge_feature_len], device=device) # SOS token input
     list_adj_vecs = []
-    node_types = []
+    generated_node_types = [] # Store generated node types
 
-    # Simple heuristic for node type generation
-    def generate_node_type(current_nodes):
-        """
-        Simple node type generation heuristic
-        - First few nodes are PIs
-        - Middle nodes are AND gates
-        - Last few nodes are POs
-        """
-        if len(current_nodes) < 2:
-            return NODE_TYPES['PI']
-        elif len(current_nodes) > num_nodes - 3:
-            return NODE_TYPES['PO']
-        else:
-            return NODE_TYPES['AND']
+    # --- Node Type Generation ---
+    # Determine if node type prediction is enabled
+    predict_node_types = config['model'].get('predict_node_types', False)
 
     node_model.reset_hidden()
 
-    for i in range(1, num_nodes):
-        # Generate node type
-        current_node_type = generate_node_type(node_types)
-        node_types.append(current_node_type)
+    actual_num_nodes = 0
+    for i in range(num_nodes): # Iterate up to num_nodes
+        # --- Generate graph state vector (RNN hidden state) ---
+        node_output = node_model(adj_vec, truth_table=truth_table if truth_table is not None else None)
 
-        # Generate graph state vector with optional truth table
-        if hasattr(node_model, 'use_conditioning') and node_model.use_conditioning and truth_table is not None:
-            h = node_model(adj_vec, truth_table=truth_table)
+        # Unpack node_output based on whether node types are predicted
+        h = None # Hidden state for edge generation
+        node_type_logits = None
+        current_node_type = None
+
+        if predict_node_types and isinstance(node_output, tuple):
+            h, node_type_logits = node_output # h might be projection or hidden state
+            # Sample node type from logits for the current step (index 0 as batch size is 1)
+            # Use argmax for deterministic generation, or sample from softmax for stochastic
+            current_node_type = torch.argmax(node_type_logits[0, 0, :]).item()
         else:
-            h = node_model(adj_vec)
+            h = node_output
+            # Use a heuristic if not predicting types (e.g., mostly AND)
+            # Or get type info from dataset if generating based on existing graph size? - No, generate freely.
+            # Fallback: Assume AND for internal nodes if type prediction is off
+            if i == 0: # First node maybe PI? Or handle differently?
+                 current_node_type = NODE_TYPES['PI'] # Placeholder heuristic
+            else:
+                 current_node_type = NODE_TYPES['AND'] # Placeholder heuristic
 
-        # Generate edges for this node with optional truth table
-        adj_vec = edge_gen_function(
-            edge_model,
-            h,
-            num_edges=min(i, input_size),
-            adj_vec_size=input_size,
-            sample_fun=sample_fun,
-            attempts=1,
-            truth_table=truth_table
-        )
+        generated_node_types.append(current_node_type)
+        actual_num_nodes += 1
 
-        # Process adjacency vector
-        if mode == 'directed-multiclass':
-            # Turn one-hot into class index
-            one_hot = adj_vec[0, 0, :min(num_nodes, input_size), :].cpu().detach().int().numpy()
-            class_vec = np.zeros([min(num_nodes, input_size)])
+        # --- Generate edges for this node ---
+        # Only generate edges if it's not the first node (index 0)
+        if i > 0:
+            # Number of potential predecessors is min(current_index, input_size 'm')
+            num_edges_to_generate = min(i, input_size)
 
-            # Handle cases where there might be no non-zero values in one_hot[:i]
-            nonzero_indices = one_hot[:i].nonzero()
-            if len(nonzero_indices) > 0 and len(nonzero_indices[0]) > 0:
-                class_vec[:i] = nonzero_indices[1]
+            adj_vec_generated = edge_gen_function(
+                edge_model,
+                h, # Pass the hidden state
+                num_edges=num_edges_to_generate,
+                adj_vec_size=input_size, # M value
+                sample_fun=sample_fun,
+                attempts=1,
+                truth_table=truth_table # Pass TT for conditioning edge model too
+            )
 
-            list_adj_vecs.append(class_vec)
+            # --- Store the generated adjacency vector for this step ---
+            # We need to store the connection information (which edge type to which previous node)
+            # The shape is [1, 1, input_size, num_edge_classes]
+            # Convert one-hot to class index for multi-class
+            if use_edge_features and mode == 'directed-multiclass':
+                 # Slice to get relevant connections, convert one-hot to class index
+                adj_slice = adj_vec_generated[0, 0, :num_edges_to_generate, :].cpu().detach()
+                # Find the index of the '1' in the last dimension
+                edge_types_vec = torch.argmax(adj_slice, dim=-1).numpy() # Shape [num_edges_to_generate]
+                list_adj_vecs.append(edge_types_vec)
+            else: # Binary case (not expected for AIG)
+                 list_adj_vecs.append(adj_vec_generated[0, 0, :num_edges_to_generate, 0].cpu().detach().numpy())
+
+            # Check for early stopping (if model outputs only "no edge" for a while)
+            # Check the *last* generated vector
+            if len(list_adj_vecs) > 0 and np.all(list_adj_vecs[-1] == EDGE_TYPES['NONE']) and i > num_nodes // 2:
+                 print(f"INFO: Early stopping at node {i+1} due to no edges.")
+                 break # Stop generation
+
+            # Prepare input for the next iteration (the generated edges)
+            adj_vec = adj_vec_generated
         else:
-            list_adj_vecs.append(adj_vec[0, 0, :min(num_nodes, input_size), 0].cpu().detach().int().numpy())
+            # For the very first node (i=0), add a placeholder empty connection list
+            # Or handle the sequence start differently if GraphRNN expects non-empty first step
+            list_adj_vecs.append(np.array([])) # No predecessors for the first node
+            # Use the initial SOS token for the next step's adj_vec
+            adj_vec = torch.ones([1, 1, input_size, node_model.edge_feature_len], device=device)
 
-        # Early stopping if no more edges
-        if np.array(list_adj_vecs[-1] == 0).all() and i > num_nodes // 2:
-            break
 
-    # Convert to adjacency matrix
-    adj = m_seq_to_adj_mat(np.array(list_adj_vecs), m=input_size)
+    # --- Construct NetworkX Graph ---
+    if actual_num_nodes <= 1:
+        print("Warning: Generated graph has <= 1 node. Returning None.")
+        return None
 
-    # Post-processing for the adjacency matrix
-    adj = adj + adj.T
+    G = nx.DiGraph()
+    node_mapping = list(range(actual_num_nodes)) # Simple integer node IDs
 
-    # Remove isolated nodes
-    if mode == 'directed-multiclass':
-        adj_filtered = adj.copy()
-        non_zero_rows = ~np.all(adj_filtered == 0, axis=1)
-        non_zero_cols = ~np.all(adj_filtered == 0, axis=0)
-        non_zero_indices = non_zero_rows & non_zero_cols
-        adj_filtered = adj_filtered[non_zero_indices][:, non_zero_indices]
+    # Add nodes with types
+    for i in range(actual_num_nodes):
+        G.add_node(node_mapping[i], type=generated_node_types[i])
 
-        # Adjust node types accordingly
-        node_types_filtered = [nt for nt, keep in zip(node_types, non_zero_indices) if keep]
-        node_types = node_types_filtered
-        adj = adj_filtered
+    # Add edges based on list_adj_vecs
+    for target_idx in range(1, actual_num_nodes): # Start from the second node
+        # Connections for node target_idx (which is at index target_idx-1 in list_adj_vecs)
+        edge_types_vec = list_adj_vecs[target_idx-1]
+        num_potential_preds = len(edge_types_vec)
 
-    # Get the lower triangular part
-    adj = np.tril(adj)
+        # Iterate through potential predecessors based on 'm' lookback and sequence order
+        for k in range(num_potential_preds):
+            edge_type = int(edge_types_vec[k])
 
-    # Handle directed multiclass edge types
-    if mode == 'directed-multiclass':
-        adj = (adj % 2) + (adj // 2).T
+            # Skip "No Edge" type
+            if edge_type == EDGE_TYPES['NONE']:
+                continue
 
-    return adj, node_types
+            # Determine the source node index in the original sequence
+            # The k-th entry in edge_types_vec corresponds to the connection
+            # from node target_idx to node target_idx - num_potential_preds + k
+            # (since GraphRNN reverses the order in the adjacency vector input)
+            # Let's re-verify GraphRNN adj vec format: adj_vec[k] connects current node i to node i-m+k
+            # So, edge_types_vec[k] connects target_idx to target_idx - num_potential_preds + k
+            # Wait, the input is reversed: padded[::-1].
+            # Let's assume `list_adj_vecs[i-1]` contains edge types to nodes [i-m, ..., i-1] relative to node i.
+            # The k-th element corresponds to node i-m+k.
+            # Let m = input_size. num_potential_preds = min(target_idx, m)
+            # Start index in original sequence: start = target_idx - num_potential_preds
+            # k-th element connects target_idx to node start + k
+
+            source_idx_relative_to_start = k
+            source_node_absolute_idx = (target_idx - num_potential_preds) + source_idx_relative_to_start
+
+            if 0 <= source_node_absolute_idx < target_idx:
+                source_node = node_mapping[source_node_absolute_idx]
+                target_node = node_mapping[target_idx]
+                # Add edge with type attribute
+                G.add_edge(source_node, target_node, type=edge_type)
+
+    # Add graph attributes (optional, if needed from config)
+    G.graph['n_inputs'] = config['model'].get('n_inputs')
+    G.graph['n_outputs'] = config['model'].get('n_outputs')
+    G.graph['name'] = 'generated_aig'
+
+    return G
 
 
 def visualize_aig(adj_matrix, node_types, output_file='generated_aig.png', truth_table=None):
