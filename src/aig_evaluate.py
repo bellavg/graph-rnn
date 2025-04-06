@@ -290,73 +290,99 @@ def visualize_aig(G, output_file='generated_aig_layered.png', title=None):
 
 import networkx as nx # Make sure networkx is imported
 
-def calculate_aig_structure_validity(G): # Removed node_types argument as base model doesn't predict them
+def calculate_aig_structure_validity(G): # Removed node_types argument
     """
-    Calculates the validity of an AIG based on stricter structural rules:
+    Calculates the validity of an AIG based on stricter structural rules
+    and includes degree distribution counts.
     1. Must be a Directed Acyclic Graph (DAG).
     2. Nodes must have in-degree 0 (PI), 1 (PO - only if out-degree is 0), or 2 (AND).
     3. Must contain at least one potential PI, PO, and AND gate.
     """
     num_nodes = G.number_of_nodes()
     if num_nodes == 0:
-        return {'valid': False, 'reason': 'Empty graph', 'num_nodes': 0}
+        # Return default counts for empty graph to avoid KeyErrors later
+        return {
+            'valid': False, 'reason': 'Empty graph', 'num_nodes': 0, 'num_edges': 0,
+            'is_dag': True, 'num_potential_pis': 0, 'num_potential_ands': 0,
+            'num_potential_pos': 0,
+            'in_degree_counts': {0: 0, 1: 0, 2: 0, 'other': 0}, # ADDED
+            'out_degree_counts': {0: 0, 'other': 0} # ADDED
+        }
 
     # Rule 1: Must be a DAG
     if not nx.is_directed_acyclic_graph(G):
-        return {'valid': False, 'reason': 'Graph contains cycles', 'num_nodes': num_nodes}
+        # Return default counts for cyclic graph
+        return {
+            'valid': False, 'reason': 'Graph contains cycles', 'num_nodes': num_nodes,
+            'num_edges': G.number_of_edges(), 'is_dag': False, 'num_potential_pis': 0,
+            'num_potential_ands': 0, 'num_potential_pos': 0,
+             'in_degree_counts': {0: 0, 1: 0, 2: 0, 'other': 0}, # ADDED
+             'out_degree_counts': {0: 0, 'other': 0} # ADDED
+        }
 
-    # Rule 2: Check in-degrees of all nodes
+    # Initialize checks and counters
     is_structurally_valid = True
     reason = "OK"
     potential_pis = 0
     potential_ands = 0
     potential_pos = 0
+    in_degree_counts = Counter({0: 0, 1: 0, 2: 0, 'other': 0}) # ADDED
+    out_degree_counts = Counter({0: 0, 'other': 0}) # ADDED
 
+    # Rule 2 & Degree Counting: Check degrees of all nodes
     for node in G.nodes():
         in_deg = G.in_degree(node)
         out_deg = G.out_degree(node)
 
+        # Update In-Degree Counts (ADDED)
+        if in_deg in [0, 1, 2]:
+            in_degree_counts[in_deg] += 1
+        else:
+            in_degree_counts['other'] += 1
+
+        # Update Out-Degree Counts (ADDED)
+        if out_deg == 0:
+            out_degree_counts[0] += 1
+        else:
+            out_degree_counts['other'] += 1
+
+        # Check Structural Validity based on In-Degree
         if in_deg == 0:
             potential_pis += 1
-            # Optional: Check if PIs have outgoing edges (they should)
-            # if out_deg == 0:
-            #     is_structurally_valid = False
-            #     reason = f"Potential PI node {node} has no outgoing edges"
-            #     break
         elif in_deg == 1:
-            # Must be a PO, which should have no outgoing edges
-            if out_deg == 0:
+            if out_deg == 0: # Valid PO condition
                 potential_pos += 1
-            else:
-                # If in-degree is 1 but it has outputs, it's not a valid PO/structure
+            else: # Invalid: In-degree 1 but has outputs
                 is_structurally_valid = False
                 reason = f"Node {node} has in-degree 1 but out-degree {out_deg} (expected 0 for PO)"
-                break
-        elif in_deg == 2:
-            # Assumed to be an AND gate
+                # Keep iterating to get full degree counts, but mark as invalid
+        elif in_deg == 2: # Assumed AND gate
             potential_ands += 1
-        else:
-            # Any other in-degree is invalid
+        else: # Invalid in-degree
             is_structurally_valid = False
             reason = f"Node {node} has invalid in-degree {in_deg} (must be 0, 1, or 2)"
-            break
+            # Keep iterating
 
     # Rule 3: Check if we have at least one of each potential type
     has_min_components = (potential_pis > 0 and potential_ands > 0 and potential_pos > 0)
     if is_structurally_valid and not has_min_components:
+        # Update reason if structure is valid but lacks components
         reason = "Graph lacks potential PIs, ANDs, or POs"
 
     final_validity = is_structurally_valid and has_min_components
 
+    # Compile final stats including degree counts
     stats = {
         'num_nodes': num_nodes,
         'num_edges': G.number_of_edges(),
-        'is_dag': True, # Already checked
+        'is_dag': True, # Checked above
         'num_potential_pis': potential_pis,
         'num_potential_ands': potential_ands,
         'num_potential_pos': potential_pos,
         'valid': final_validity,
-        'reason': reason
+        'reason': reason,
+        'in_degree_counts': dict(in_degree_counts), # ADDED (convert Counter to dict)
+        'out_degree_counts': dict(out_degree_counts) # ADDED (convert Counter to dict)
     }
     return stats
 
