@@ -568,12 +568,12 @@ def load_aig_model_from_config(model_path):
 
     # Setup model args, forcing generation-specific settings
     node_model_args = config['model']['GraphRNN'].copy() # Use copy
-    node_model_args['max_level'] = 13
     node_model_args['input_size'] = input_size # Use determined input_size
     node_model_args['edge_feature_len'] = edge_feature_len
     node_model_args['predict_node_types'] = False # Override for generation
     node_model_args['use_conditioning'] = False # Override for generation
     node_model_args['tt_size'] = None # Override for generation
+    node_model_args['max_level'] = 13
 
     if config['model']['edge_model'] == 'rnn':
         edge_model_args = config['model']['EdgeRNN'].copy() # Use copy

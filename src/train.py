@@ -5,7 +5,6 @@ import numpy as np # Needed for debugging print if used
 # Assume NUM_EDGE_FEATURES is available, e.g., from aig_dataset or config
 # If not, determine dynamically from tensor shapes where possible.
 
-# --- train_mlp_step remains unchanged from your current version ---
 def train_mlp_step(graph_rnn, edge_mlp, data,
                    criterion_edge, criterion_node, # Use specific criteria
                    optim_graph_rnn, optim_edge_mlp,
@@ -235,9 +234,8 @@ def train_mlp_step(graph_rnn, edge_mlp, data,
         optim_edge_mlp.step()
 
     # Step schedulers AFTER optimizer steps
-    # CRITICAL FIX: Pass loss to scheduler step for ReduceLROnPlateau
-    scheduler_graph_rnn.step(total_loss) # Pass metric
-    scheduler_mlp.step(total_loss) # Pass metric
+    scheduler_graph_rnn.step()
+    scheduler_mlp.step()
 
     # Return loss dictionary
     return {
@@ -247,29 +245,29 @@ def train_mlp_step(graph_rnn, edge_mlp, data,
     }
 
 
-# --- REVERTED train_rnn_step ---
 def train_rnn_step(graph_rnn, edge_rnn, data,
-                   criterion_edge, criterion_node, # Keep separate criteria
-                   optim_graph_rnn, optim_edge_rnn, # Use correct optimizer name
-                   scheduler_graph_rnn, scheduler_edge_rnn, # Use correct scheduler name
+                   criterion_edge, criterion_node,
+                   optim_graph_rnn, optim_edge_rnn,
+                   scheduler_graph_rnn, scheduler_edge_rnn,
                    device, use_edge_features,
                    predict_node_types, use_conditioning):
-    """ Train GraphRNN with RNN edge model. """
     graph_rnn.zero_grad()
     edge_rnn.zero_grad()
 
-    # Get mandatory data & Keep AIG specifics (levels)
+    # Get mandatory data & NEW: levels
     seq, lens = data['x'].float().to(device), data['len'].cpu()
-    levels_padded = data.get('levels')
+    levels_padded = data.get('levels') # Get levels tensor
     if levels_padded is not None:
-        levels_padded = levels_padded.long().to(device)
+        levels_padded = levels_padded.long().to(device) # Shape: [batch, max_n-1]
+    # --- End NEW ---
 
-    # --- Basic Shape Checks and Setup (Keep AIG specifics) ---
+
+    # --- Basic Shape Checks and Setup ---
     if seq.numel() == 0 or lens.numel() == 0 or torch.all(lens == 0):
-        print("Warning: Received empty batch or batch with all zero lengths. Skipping step.")
-        return {'total': 0.0, 'edge': 0.0, 'node': 0.0}
+         print("Warning: Received empty batch or batch with all zero lengths. Skipping step.")
+         return {'total': 0.0, 'edge': 0.0, 'node': 0.0}
 
-    # Add feature dim if missing (Keep logic from current)
+    # Add feature dim if missing
     if len(seq.shape) == 3:
         print("Warning: Input tensor 'seq' has 3 dims, expected 4. Unsqueezing last dim.")
         seq = seq.unsqueeze(3)
@@ -277,9 +275,9 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
          raise ValueError(f"Input tensor 'seq' has unexpected shape: {seq.shape}. Expected 4 dimensions.")
 
     batch_size, seq_len_padded, effective_m, num_features = seq.shape
-    num_edge_classes = num_features if use_edge_features else 1 # AIG specific
+    num_edge_classes = num_features if use_edge_features else 1
 
-    # Get optional AIG data (node types, truth table)
+    # Get optional data
     node_type_labels = data.get('node_types')
     if predict_node_types and node_type_labels is not None:
         node_type_labels = node_type_labels.long().to(device)
@@ -291,37 +289,40 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
             truth_table = truth_table.view(truth_table.shape[0], -1)
     else:
         truth_table = None
-    # --- End Setup ---
 
-
-    # --- Node RNN Input Prep (Keep AIG specifics: Levels) ---
-    # Add SOS token to the node-level RNN input (Revert to original approach slightly modified)
+    # --- Node RNN Input Prep ---
+    # Input for node RNN uses sequence up to T-1 relative to 'lens'
+    # SOS token needs same effective_m and features dimensions
     one_frame_node = torch.ones([batch_size, 1, effective_m, num_features], device=device)
-    # Input should be SOS + seq[0...n-1]; length is lens+1
-    x_node_rnn = torch.cat((one_frame_node, seq), dim=1) # Shape: [batch, seq_len_padded+1, effective_m, features]
+    # We need seq[:, :max(lens)-1, :, :] potentially? No, lens handles it.
+    # Use seq directly, lengths `lens` will handle the effective length.
+    x_node_rnn = torch.cat((one_frame_node, seq), dim=1)[:, :-1, :, :] # SOS + seq[0...n-1] -> feed lens+1? Check GraphRNN forward
+    # Let's try passing SOS + seq (full), and lens+1 to GraphRNN
+    x_node_rnn_full = torch.cat((one_frame_node, seq), dim=1) # Shape: [batch, seq_len_padded+1, effective_m, features]
     lens_node_rnn = lens + 1 # Lengths including SOS
 
-    # Prepare Levels tensor for GraphRNN input (Keep AIG specific)
+    # --- NEW: Prepare Levels tensor for GraphRNN input ---
+    # (Identical logic to train_mlp_step)
     levels_for_rnn = None
     if levels_padded is not None:
         sos_level = torch.zeros(batch_size, 1, dtype=torch.long, device=device)
-        levels_sliced = levels_padded[:, :seq_len_padded]
-        levels_for_rnn = torch.cat((sos_level, levels_sliced), dim=1)
-        if levels_for_rnn.shape[1] != x_node_rnn.shape[1]:
-            print(f"Warning: Level tensor shape mismatch. Adjusting.")
-            target_len = x_node_rnn.shape[1]
+        levels_sliced = levels_padded[:, :seq_len_padded]  # Shape: [batch, max_n-1]
+        levels_for_rnn = torch.cat((sos_level, levels_sliced), dim=1)  # Shape: [batch, max_n]
+        if levels_for_rnn.shape[1] != x_node_rnn_full.shape[1]:
+            print(
+                f"Warning: Level tensor seq length ({levels_for_rnn.shape[1]}) mismatch with input x seq length ({x_node_rnn_full.shape[1]}). Adjusting.")
+            target_len = x_node_rnn_full.shape[1]
             levels_for_rnn = torch.cat((sos_level, levels_padded[:, :target_len - 1]), dim=1)
             if levels_for_rnn.shape[1] != target_len:
-                print("ERROR: Cannot align level tensor length. Disabling level embedding.")
+                print("ERROR: Cannot align level tensor length. Disabling level embedding for this batch.")
                 levels_for_rnn = None
-    # --- End Node RNN Input ---
 
-    # --- GraphRNN Forward Pass (Keep AIG specifics) ---
+    # --- GraphRNN Forward Pass ---
     graph_rnn.reset_hidden()
-    output = graph_rnn(x_node_rnn, lens_node_rnn,
+    output = graph_rnn(x_node_rnn_full, lens_node_rnn,
                        truth_table=truth_table, levels=levels_for_rnn)
 
-    # Unpack output (Keep AIG specific)
+    # Unpack output
     hidden = None
     node_type_logits = None
     if predict_node_types and isinstance(output, tuple):
@@ -329,122 +330,171 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
     else:
         hidden = output
     # hidden shape: [batch, seq_len_padded+1, hidden_size_rnn]
-    # --- End GraphRNN ---
+    # We need the hidden states corresponding to the *actual* sequence lengths (nodes 0 to n-1)
+    # This hidden state corresponds to inputs SOS, node 0, ..., node n-1
 
-    # --- Edge RNN Processing (Revert towards original packing/loss logic) ---
-    edge_loss = torch.tensor(0.0, device=device)
+    # --- Edge RNN Processing ---
 
+    # Pack the hidden states corresponding to actual nodes (indices 1 to n in hidden)
+    # and the target sequence 'seq' (nodes 1 to n) based on original 'lens'
     try:
-        # Pack the hidden state corresponding to graph nodes (excluding SOS state)
-        # hidden[:, 1:, :] corresponds to states after processing node 0...n-1 inputs
-        hidden_packed_obj = pack_padded_sequence(hidden[:, 1:, :], lens, batch_first=True, enforce_sorted=False)
-        hidden_packed_data = hidden_packed_obj.data # Shape [TotalNodes, HiddenSize]
+        # Pack hidden states (need H for nodes 0 to n-1, which are hidden[:, 1:, :])
+        # Let's pack the hidden state corresponding to input node 0...n-1, which is hidden output steps 1..n
+        hidden_for_edges_packed = pack_padded_sequence(hidden[:, 1:, :], lens, batch_first=True, enforce_sorted=False)
+        hidden_packed_data = hidden_for_edges_packed.data # Shape [TotalNodes, HiddenSize]
 
         # Pack the target edge sequence 'seq' based on 'lens'
         seq_packed_obj = pack_padded_sequence(seq, lens, batch_first=True, enforce_sorted=False)
-        y_edge_rnn = seq_packed_obj.data # Target edge data: Shape [TotalNodes, effective_m, EdgeFeatures]
-
-        total_nodes = y_edge_rnn.shape[0]
-        if total_nodes == 0:
-             print("Warning: Zero total nodes after packing. Skipping edge RNN step.")
-        else:
-             # Prepare EdgeRNN input sequence (x_edge_rnn) = SOS + y_edge_rnn shifted
-             sos_edge = torch.ones(total_nodes, 1, num_features, device=device)
-             x_edge_rnn = torch.cat([sos_edge, y_edge_rnn[:, :-1, :]], dim=1) # Shape [TotalNodes, effective_m, EdgeFeatures]
-
-             # Calculate Edge Sequence Lengths (Revert to original approach)
-             # TODO: Original seq_packed_len calculation was complex and potentially inefficient.
-             # Using the simpler calculation based on graph index and effective_m from the current version is likely better.
-             # Let's keep the current version's logic for edge_seq_lens calculation as it's clearer.
-             edge_seq_lens = []
-             for length_in_batch in lens.tolist():
-                  for i in range(1, length_in_batch + 1):
-                       edge_seq_lens.append(min(i, effective_m))
-             edge_seq_lens_tensor = torch.tensor(edge_seq_lens, dtype=torch.long, device=device)
-
-             # Ensure packed lengths match TotalNodes
-             if len(edge_seq_lens) != total_nodes:
-                  print(f"Warning: Mismatch calculating edge_seq_lens ({len(edge_seq_lens)}) vs total_nodes ({total_nodes}). Clamping.")
-                  edge_seq_lens_tensor = torch.clamp(torch.tensor(edge_seq_lens[:total_nodes], device=device), max=effective_m)
-
-             # Conditional Truth Table for Edge RNN (Keep AIG specific)
-             edge_truth_table = None
-             if use_conditioning and truth_table is not None:
-                 # (Keep the TT repetition logic from current version)
-                 repeated_tt = []
-                 original_indices = hidden_packed_obj.sorted_indices
-                 if original_indices is None: original_indices = torch.arange(batch_size) # Assume original order
-
-                 current_pos = 0
-                 batch_sizes = hidden_packed_obj.batch_sizes
-                 for i in range(len(batch_sizes)):
-                      batch_size_at_step = batch_sizes[i]
-                      original_batch_indices_at_step = original_indices[current_pos : current_pos + batch_size_at_step]
-                      repeated_tt.append(truth_table[original_batch_indices_at_step])
-                      current_pos += batch_size_at_step
-                 if repeated_tt:
-                      edge_truth_table = torch.cat(repeated_tt, dim=0)
-                 if edge_truth_table is not None and edge_truth_table.shape[0] != total_nodes:
-                      print(f"Warning: Truth table repetition mismatch. Disabling TT for edge RNN.")
-                      edge_truth_table = None
-
-
-             # Set Hidden State & Run Edge RNN Forward Pass
-             edge_rnn.set_first_layer_hidden(hidden_packed_data)
-             y_edge_rnn_pred = edge_rnn(
-                 x_edge_rnn,
-                 x_lens=edge_seq_lens_tensor.cpu(), # Use calculated edge lengths
-                 return_logits=True, # CrossEntropyLoss needs logits
-                 truth_table=edge_truth_table if use_conditioning else None
-             ) # Output shape: [TotalNodes, max_edge_seq_len, EdgeFeatures]
-
-             # --- Edge Loss Calculation (Revert towards original) ---
-             # Pad the target sequence (y_edge_rnn)
-             max_pred_len = y_edge_rnn_pred.shape[1]
-             y_edge_rnn_packed_obj = pack_padded_sequence(y_edge_rnn, edge_seq_lens_tensor.cpu(), batch_first=True, enforce_sorted=False)
-             y_edge_rnn_padded, _ = pad_packed_sequence(y_edge_rnn_packed_obj, batch_first=True, total_length=max_pred_len)
-             # y_edge_rnn_padded shape: [TotalNodes, max_pred_len, EdgeFeatures]
-
-             # Create mask based on edge_seq_lens
-             edge_mask = torch.arange(max_pred_len, device=device)[None, :] < edge_seq_lens_tensor[:, None] # [TotalNodes, max_pred_len]
-
-             if use_edge_features: # AIG multiclass case
-                  # CrossEntropyLoss expects [N, C] preds and [N] labels
-                  # Reshape preds: [TotalNodes * max_pred_len, num_classes]
-                  y_pred_flat = y_edge_rnn_pred.reshape(-1, num_edge_classes)
-                  # Convert targets to labels: [TotalNodes * max_pred_len]
-                  y_labels_flat = torch.argmax(y_edge_rnn_padded, dim=-1).reshape(-1)
-                  # Flatten mask: [TotalNodes * max_pred_len]
-                  mask_flat = edge_mask.reshape(-1)
-
-                  # Apply loss only to valid steps
-                  valid_preds = y_pred_flat[mask_flat]
-                  valid_labels = y_labels_flat[mask_flat]
-
-                  if valid_labels.numel() > 0:
-                       edge_loss = criterion_edge(valid_preds, valid_labels.long())
-             else: # Original binary case
-                  print("Warning: Using binary edge loss path for RNN edge model.")
-                  mask_expanded = edge_mask.unsqueeze(-1).expand_as(y_edge_rnn_pred)
-                  if torch.any(mask_expanded):
-                       # Needs BCEWithLogitsLoss or Sigmoid in model + BCELoss
-                       edge_loss = criterion_edge(y_edge_rnn_pred[mask_expanded], y_edge_rnn_padded[mask_expanded])
-
+        # Target edge data (y_edge_rnn)
+        # Shape [TotalNodes, effective_m, EdgeFeatures]
+        y_edge_rnn = seq_packed_obj.data
     except RuntimeError as e:
-         print(f"Error during edge RNN packing/loss: {e}")
-         # Keep edge_loss as 0.0
-    # --- End Edge RNN Processing ---
+         print(f"Error during pack_padded_sequence for hidden/seq: {e}")
+         print(f"hidden shape: {hidden.shape}, seq shape: {seq.shape}, lens: {lens}")
+         return {'total': 0.0, 'edge': 0.0, 'node': 0.0}
 
 
-    # --- Node Loss Calculation (Keep AIG specific) ---
+    # Prepare EdgeRNN input sequence (x_edge_rnn) = SOS + y_edge_rnn shifted
+    # SOS needs shape [TotalNodes, 1, EdgeFeatures]
+    total_nodes = y_edge_rnn.shape[0]
+    if total_nodes == 0: # Handle case where packing resulted in zero nodes
+        print("Warning: Zero total nodes after packing. Skipping edge RNN step.")
+        edge_loss = torch.tensor(0.0, device=device)
+    else:
+        sos_edge = torch.ones(total_nodes, 1, num_features, device=device)
+        # Input sequence for EdgeRNN
+        # Shape [TotalNodes, effective_m, EdgeFeatures]
+        x_edge_rnn = torch.cat([sos_edge, y_edge_rnn[:, :-1, :]], dim=1)
+
+        # --- Calculate Edge Sequence Lengths ---
+        # Length for node `node_idx` (0-based index in packed seq) is min(node_idx + 1, effective_m)
+        # We need the original index within each batch item for this.
+        # This mapping is complex. Let's simplify:
+        # The length of the predecessor sequence for node `i` (1-based index in original graph)
+        # is `min(i, effective_m)`. We need this length for each packed node.
+        # Let's try getting lengths directly related to `lens`.
+        edge_seq_lens = []
+        for length_in_batch in lens.tolist(): # Iterate through original lengths
+             for i in range(1, length_in_batch + 1): # For nodes 1 to n for this graph
+                  # Length of edge vector for node i is number of predecessors to predict
+                  edge_seq_lens.append(min(i, effective_m)) # Use effective_m here
+        edge_seq_lens_tensor = torch.tensor(edge_seq_lens, dtype=torch.long, device=device)
+
+        # Ensure packed lengths match TotalNodes
+        if len(edge_seq_lens) != total_nodes:
+             print(f"Warning: Mismatch between calculated edge_seq_lens ({len(edge_seq_lens)}) and total_nodes ({total_nodes}).")
+             # Fallback or error handling needed
+             # As fallback, create lens based on target shape if possible
+             edge_seq_lens_tensor = torch.clamp(torch.tensor(edge_seq_lens[:total_nodes], device=device), max=effective_m)
+
+
+        # --- Conditional Truth Table for Edge RNN ---
+        edge_truth_table = None
+        if use_conditioning and truth_table is not None:
+            # Repeat graph-level TT for each node in the packed sequence
+            repeated_tt = []
+            # Use indices from packed hidden state (should match seq packing)
+            original_indices = hidden_for_edges_packed.sorted_indices
+            if original_indices is None: original_indices = torch.arange(batch_size) # Assume original order
+
+            current_pos = 0
+            batch_sizes = hidden_for_edges_packed.batch_sizes
+            for i in range(len(batch_sizes)):
+                batch_size_at_step = batch_sizes[i]
+                original_batch_indices_at_step = original_indices[current_pos : current_pos + batch_size_at_step]
+                repeated_tt.append(truth_table[original_batch_indices_at_step])
+                current_pos += batch_size_at_step
+            if repeated_tt:
+                 edge_truth_table = torch.cat(repeated_tt, dim=0) # Shape [TotalNodes, tt_size]
+            # else:
+            #      edge_truth_table = torch.empty((0, tt_size), device=device)
+
+            if edge_truth_table.shape[0] != total_nodes:
+                print(f"Warning: Truth table repetition mismatch: expected {total_nodes}, got {edge_truth_table.shape[0]}.")
+                edge_truth_table = None # Disable if mismatch occurs
+
+
+        # --- Set Hidden State & Run Edge RNN Forward Pass ---
+        edge_rnn.set_first_layer_hidden(hidden_packed_data)
+
+        # Pass edge_truth_table conditionally, return logits
+        y_edge_rnn_pred = edge_rnn(
+            x_edge_rnn,
+            x_lens=edge_seq_lens_tensor.cpu(), # pack_padded needs cpu lengths
+            return_logits=True,
+            truth_table=edge_truth_table if use_conditioning else None
+        ) # Output shape: [TotalNodes, max(edge_seq_lens), EdgeFeatures]
+
+        # --- Edge Loss Calculation ---
+        edge_loss = torch.tensor(0.0, device=device)
+
+        # Pad the target edge sequence (y_edge_rnn) based on edge_seq_lens
+        # Pad to the same max length as y_edge_rnn_pred for comparison
+        max_pred_len = y_edge_rnn_pred.shape[1]
+        try:
+            # MODIFIED LINE: Added .cpu() to the lengths tensor
+            y_edge_rnn_packed_obj = pack_padded_sequence(y_edge_rnn, edge_seq_lens_tensor.cpu(), batch_first=True,
+                                                         enforce_sorted=False)
+            # Pad target to match max length of prediction sequences
+            y_edge_rnn_padded, _ = pad_packed_sequence(y_edge_rnn_packed_obj, batch_first=True,
+                                                       total_length=max_pred_len)
+        except RuntimeError as e:
+             print(f"Error packing/padding y_edge_rnn: {e}")
+             y_edge_rnn_padded = None # Mark as error
+
+        if y_edge_rnn_padded is not None:
+            # Create mask based on edge_seq_lens and max_pred_len
+            edge_mask = torch.arange(max_pred_len, device=device)[None, :] < edge_seq_lens_tensor[:, None] # [TotalNodes, max_pred_len]
+
+            if use_edge_features: # Multi-class
+                 pred_nodes, pred_len, pred_classes = y_edge_rnn_pred.shape
+                 target_nodes, target_len, target_features = y_edge_rnn_padded.shape
+
+                 if pred_nodes != target_nodes or pred_len != target_len:
+                      print(f"Warning: Shape mismatch pred ({y_edge_rnn_pred.shape}) vs target ({y_edge_rnn_padded.shape}). Skipping edge loss.")
+                 else:
+                      num_classes = pred_classes
+                      # Flatten predictions: [TotalNodes * max_pred_len, NumClasses]
+                      y_pred_flat = y_edge_rnn_pred.reshape(-1, num_classes)
+                      # Convert targets to labels: [TotalNodes * max_pred_len]
+                      try:
+                           y_labels_flat = torch.argmax(y_edge_rnn_padded, dim=-1).reshape(-1)
+                      except RuntimeError as e:
+                            print(f"Error argmax/reshape y_edge_rnn_padded: {e}")
+                            y_labels_flat = None
+
+                      if y_labels_flat is not None:
+                           # Flatten mask: [TotalNodes * max_pred_len]
+                           mask_flat = edge_mask.reshape(-1)
+
+                           if y_pred_flat.shape[0] == y_labels_flat.shape[0] == mask_flat.shape[0]:
+                                valid_preds = y_pred_flat[mask_flat]
+                                valid_labels = y_labels_flat[mask_flat]
+                                if valid_labels.numel() > 0:
+                                     edge_loss = criterion_edge(valid_preds, valid_labels.long())
+                           else:
+                                print("Warning: Flattened shape mismatch in RNN edge loss. Skipping.")
+            else: # Binary
+                 print("Warning: Using binary edge loss path for RNN edge model.")
+                 # Expand mask to match 3D shape [Nodes, Len, Features=1]
+                 mask_expanded = edge_mask.unsqueeze(-1).expand_as(y_edge_rnn_pred)
+                 if torch.any(mask_expanded):
+                      edge_loss = criterion_edge(y_edge_rnn_pred[mask_expanded], y_edge_rnn_padded[mask_expanded])
+
+    # --- Node Loss Calculation (Conditional) ---
+    # Node loss calculation is the same as in MLP step
     node_loss = torch.tensor(0.0, device=device)
     if predict_node_types and criterion_node is not None and node_type_logits is not None and node_type_labels is not None:
+        # node_type_logits shape: [batch, seq_len_node_rnn, num_node_types] (seq_len matches lens+1)
         batch_size_n, seq_len_plus_1_n, num_node_classes = node_type_logits.shape
-        logit_mask = torch.arange(seq_len_plus_1_n, device=device)[None, :] < lens_node_rnn[:, None]
 
+        # Mask based on lens_node_rnn (lens+1)
+        logit_mask = torch.arange(seq_len_plus_1_n, device=device)[None, :] < lens_node_rnn[:, None] # [batch, seq+1]
+
+        # Align labels - same logic as MLP step
         aligned_labels = torch.full((batch_size_n, seq_len_plus_1_n), criterion_node.ignore_index, dtype=torch.long, device=device)
         for i in range(batch_size_n):
-             actual_len = lens[i].item()
+             actual_len = lens[i].item() # Original sequence length
              len_to_copy = min(actual_len, node_type_labels.shape[1])
              if len_to_copy > 0:
                   aligned_labels[i, 1 : actual_len + 1] = node_type_labels[i, :len_to_copy]
@@ -454,30 +504,27 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
 
         if valid_labels.numel() > 0:
             node_loss = criterion_node(valid_logits, valid_labels.long())
-    # --- End Node Loss ---
+
 
     # --- Combine Losses and Backpropagate ---
-    total_loss = edge_loss + node_loss # Keep separate loss calculation
+    total_loss = edge_loss + node_loss
 
     if torch.isnan(total_loss) or torch.isinf(total_loss):
          print(f"Warning: Invalid loss detected (NaN or Inf): {total_loss.item()}. Skipping backpropagation.")
-    elif total_loss.requires_grad and total_loss > 0 : # Avoid backprop on zero loss
+    elif total_loss.requires_grad:
         total_loss.backward()
-        # Optional: Gradient clipping (keep commented out unless needed)
+        # Optional: Gradient clipping
         # torch.nn.utils.clip_grad_norm_(graph_rnn.parameters(), max_norm=1.0)
         # torch.nn.utils.clip_grad_norm_(edge_rnn.parameters(), max_norm=1.0)
         optim_graph_rnn.step()
         optim_edge_rnn.step() # Use edge RNN optimizer
 
-    # Step schedulers AFTER optimizer steps
-    # CRITICAL FIX: Pass loss to scheduler step for ReduceLROnPlateau
-    scheduler_graph_rnn.step(total_loss) # Pass metric
-    scheduler_edge_rnn.step(total_loss) # Pass metric
+    # Step schedulers
+    scheduler_graph_rnn.step()
+    scheduler_edge_rnn.step() # Use edge RNN scheduler
 
-    # Return dict with separate losses (Keep AIG specific)
     return {
         'total': total_loss.item() if isinstance(total_loss, torch.Tensor) else total_loss,
         'edge': edge_loss.item() if isinstance(edge_loss, torch.Tensor) else edge_loss,
         'node': node_loss.item() if isinstance(node_loss, torch.Tensor) else node_loss
     }
-# --- End REVERTED train_rnn_step ---
