@@ -552,7 +552,7 @@ def load_aig_model_from_config(model_path):
         try:
              # Load dataset temporarily just to get max_node_count
              # Note: This assumes AIGDataset can be initialized with m=None when training=False
-             temp_dataset = AIGDataset(graph_file=dataset_path, m=None, training=False, use_bfs=False)
+             temp_dataset = AIGDataset(graph_file=dataset_path, training=False)
              max_node_count = temp_dataset.max_node_count
              if max_node_count <= 1: raise ValueError("Max node count from dataset <= 1")
              input_size = max_node_count - 1
@@ -688,9 +688,7 @@ def evaluate_model(model_path, num_graphs=50, min_nodes=10, max_nodes=100,
 
             test_dataset = AIGDataset(
                 graph_file=test_dataset_path,
-                m=m_eval,  # Pass m only if needed
                 training=False,
-                use_bfs=use_bfs_eval,  # Pass the correct use_bfs value
                 include_node_types=config['model'].get('predict_node_types', False)  # Keep this
             )
             test_graphs = test_dataset.graphs[
