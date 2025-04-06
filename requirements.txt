@@ -6,3 +6,5 @@ matplotlib
 tqdm
 aigverse
 tensorboard
+scipy
+pyemd
