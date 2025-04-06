@@ -686,15 +686,20 @@ def evaluate_model(model_path, num_graphs=50, min_nodes=10, max_nodes=100,
     if test_dataset_path:
         try:
             print(f"Loading test dataset from {test_dataset_path}...")
+            # --- START EDIT ---
+            use_bfs_eval = config['data'].get('use_bfs', False)  # Get use_bfs from config, default False
+            m_eval = config['data'].get('m') if use_bfs_eval else None  # Get m only if use_bfs is True
+
             test_dataset = AIGDataset(
                 graph_file=test_dataset_path,
-                m=config['data'].get('m'),
+                m=m_eval,  # Pass m only if needed
                 training=False,
-                include_node_types=config['model'].get('predict_node_types', False)
+                use_bfs=use_bfs_eval,  # Pass the correct use_bfs value
+                include_node_types=config['model'].get('predict_node_types', False)  # Keep this
             )
             test_graphs = test_dataset.graphs[
-                          test_dataset.start_idx:test_dataset.start_idx + min(20, test_dataset.length)]
-            print(f"Loaded {len(test_graphs)} test graphs for comparison")
+                          test_dataset.start_idx: test_dataset.start_idx + test_dataset.length]
+            print(f"Loaded {len(test_graphs)} test graphs for comparison (full test split)")
         except Exception as e:
             print(f"Error loading test dataset: {e}")
 
