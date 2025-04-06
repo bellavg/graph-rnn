@@ -24,7 +24,7 @@ CHECKPOINT_PATH="runs/graphrnn_10999759/base_checkpoints/checkpoint-10000.pth"
 
 # Define the output directory for this evaluation run
 # You might want to make this more specific, e.g., include checkpoint step
-EVAL_OUTPUT_DIR="evaluation_results/eval_run_${SLURM_JOB_ID}"
+EVAL_OUTPUT_DIR="evaluation_results/full_gru_${SLURM_JOB_ID}"
 mkdir -p $EVAL_OUTPUT_DIR
 
 TEST_DATASET_PATH="dataset/inputs8_outputs8max_nodes128max.pkl"
