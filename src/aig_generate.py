@@ -83,12 +83,35 @@ def load_aig_generator_model(model_path):
     except Exception as e:
         raise RuntimeError(f"Error loading model state dict: {e}")
 
+    use_bfs = config['data'].get('use_bfs', True)  # Default to True if missing
+
+    # --- START FIX ---
+    if use_bfs:
+        input_size = config['data']['m']
+        print(f"INFO: Loading model for BFS mode. Input size (m): {input_size}")
+    else:
+        # Need max_node_count for TopSort.
+        # OPTION 1: Pass max_node_count as an argument
+        # OPTION 2: Determine it by loading the dataset here (less efficient)
+        try:
+            # Example: you might need to load the dataset to get this info
+            from aig_dataset import AIGDataset
+            # NOTE: This requires the dataset path from config
+            temp_dataset = AIGDataset(graph_file=config['data']['graph_file'], m=None, training=False, use_bfs=False)
+            max_node_count = temp_dataset.max_node_count
+            if max_node_count <= 1: raise ValueError("Max node count <= 1")
+            input_size = max_node_count - 1
+            print(f"INFO: Loading model for TopSort mode. Input size (max_nodes-1): {input_size}")
+        except Exception as e:
+            raise RuntimeError(f"Could not determine max_node_count for TopSort mode: {e}")
+
     # Mode should be 'directed-multiclass' for AIGs
     mode = config['model'].get('mode', 'directed-multiclass')
     if mode != 'directed-multiclass':
         print(f"Warning: Expected mode 'directed-multiclass', found '{mode}' in config.")
 
     return node_model, edge_model, input_size, edge_gen_function, mode, edge_feature_len
+
 
 # --- Sampling Function ---
 def sample_softmax(x):
