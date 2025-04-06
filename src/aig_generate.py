@@ -277,7 +277,7 @@ def generate_aig_structure(num_nodes, node_model, edge_model, input_size, edge_g
                 # --- Store the generated edge type indices for this step ---
                 adj_slice = adj_vec_generated[0, 0, :num_edges_to_generate, :]
                 edge_indices_vec = torch.argmax(adj_slice, dim=-1).cpu().numpy()
-                print(f"Node {i + 1} edges: {edge_indices_vec}")  # Your print
+                #print(f"Node {i + 1} edges: {edge_indices_vec}")  # Your print
                 list_edge_type_indices.append(edge_indices_vec)
 
                 # Check for early stopping
