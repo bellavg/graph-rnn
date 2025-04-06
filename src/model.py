@@ -84,6 +84,7 @@ class GraphLevelRNN(nn.Module):
             tt_expanded = truth_table.unsqueeze(1).expand(-1, seq_len, -1)
             x = torch.cat((x, tt_expanded), dim=2)
         x = self.relu(self.linear_in(x))
+
         if self.level_embedding is not None and levels is not None:
             if levels.shape[0] == batch_size and levels.shape[1] == seq_len:
                  try:

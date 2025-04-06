@@ -24,7 +24,7 @@ OUTPUT_DIR="runs/graphrnn_${SLURM_JOB_ID}"
 mkdir -p $OUTPUT_DIR
 
 # Config file to use (provide as parameter or default)
-CONFIG_FILE=${1:-"configs/config_aig_base.yaml"}
+CONFIG_FILE=${1:-"configs/config_aig_lstm.yaml"}
 
 # Run the main script
 echo "Using config file: $CONFIG_FILE"
