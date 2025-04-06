@@ -432,10 +432,12 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
         # Pad to the same max length as y_edge_rnn_pred for comparison
         max_pred_len = y_edge_rnn_pred.shape[1]
         try:
-             y_edge_rnn_packed_obj = pack_padded_sequence(y_edge_rnn, edge_seq_lens_tensor, batch_first=True, enforce_sorted=False)
-             # Pad target to match max length of prediction sequences
-             y_edge_rnn_padded, _ = pad_packed_sequence(y_edge_rnn_packed_obj, batch_first=True, total_length=max_pred_len)
-             # y_edge_rnn_padded shape: [TotalNodes, max_pred_len, EdgeFeatures]
+            # MODIFIED LINE: Added .cpu() to the lengths tensor
+            y_edge_rnn_packed_obj = pack_padded_sequence(y_edge_rnn, edge_seq_lens_tensor.cpu(), batch_first=True,
+                                                         enforce_sorted=False)
+            # Pad target to match max length of prediction sequences
+            y_edge_rnn_padded, _ = pad_packed_sequence(y_edge_rnn_packed_obj, batch_first=True,
+                                                       total_length=max_pred_len)
         except RuntimeError as e:
              print(f"Error packing/padding y_edge_rnn: {e}")
              y_edge_rnn_padded = None # Mark as error
