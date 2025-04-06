@@ -223,16 +223,8 @@ def visualize_aig(G, output_file='generated_aig_layered.png', title=None):
 
 
     # --- Use graphviz_layout for hierarchical structure ---
-    try:
-        # Use graphviz for layout if available
-        pos = graphviz_layout(G_to_visualize, prog="dot")
-    except ImportError:
-        print("Warning: pydot or graphviz not found. Falling back to spring_layout.")
-        pos = nx.spring_layout(G_to_visualize, seed=42)
-    except Exception as e:
-        print(f"Warning: graphviz_layout failed ({e}). Falling back to spring_layout.")
-        pos = nx.spring_layout(G_to_visualize, seed=42) # Fallback layout
 
+    pos = graphviz_layout(G_to_visualize, prog="dot")
     plt.figure(figsize=(14, 12)) # Adjust figure size if needed
 
     # Define node color and labels based on degrees within the selected component
