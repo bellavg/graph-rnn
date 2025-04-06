@@ -225,13 +225,16 @@ def main():
         if aig.num_pis() != 8 and aig.num_pos() <=8:
             continue
 
+
         graph_size = aig.num_pis() + aig.num_pos() + aig.num_gates() + 1
         Graph = get_graph(aig, graph_size, pad=False)
+        if Graph.number_of_nodes() > 128:
+            continue
         all_graphs.append(Graph)
 
 
     print("Filtered Dataset Size:", len(all_graphs))
-    save_all_graphs(all_graphs, "./inputs8_outputs8less.pkl")
+    save_all_graphs(all_graphs, "./inputs8_outputs8max_nodes128max.pkl")
 
 
 if __name__ == "__main__":

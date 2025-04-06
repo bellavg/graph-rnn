@@ -7,6 +7,7 @@ import datetime
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import MultiStepLR
 from torch.utils.tensorboard import SummaryWriter
+import pickle
 
 # Assuming these imports are correct relative to your project structure
 from train import train_rnn_step, train_mlp_step
@@ -24,6 +25,8 @@ def parse_args():
                         help='Id of the GPU to use')
     parser.add_argument('--save_dir', dest='save_dir', default="./runs", type=str)
     return parser.parse_args()
+
+
 
 
 def load_config(config_file):
@@ -90,7 +93,7 @@ def setup_models(config, device, max_node_count):
         node_model_output_size = edge_model_args.get('hidden_size') # GraphRNN needs output size for EdgeRNN hidden
         if node_model_output_size is None:
              raise ValueError("Config 'model.EdgeRNN.hidden_size' needed for GraphRNN output.")
-        print("Selected EdgeLevelRNN model.")
+        #print("Selected EdgeLevelRNN model.")
 
     elif edge_model_type == 'mlp':
         if 'EdgeMLP' not in config['model']: raise ValueError("Config missing 'model.EdgeMLP' parameters.")
@@ -106,11 +109,10 @@ def setup_models(config, device, max_node_count):
         # Set input_size based on GraphRNN hidden size
         edge_model_args['input_size'] = config['model']['GraphRNN']['hidden_size']
 
-
         edge_model = EdgeLevelMLP(**edge_model_args).to(device)
         step_fn = train_mlp_step
         node_model_output_size = None # GraphRNN output is just hidden state for MLP
-        print("Selected EdgeLevelMLP model.")
+        #print("Selected EdgeLevelMLP model.")
     else:
         raise ValueError(f"Unsupported edge_model type: {edge_model_type}")
 
@@ -127,10 +129,48 @@ def setup_models(config, device, max_node_count):
     node_model_args['tt_size'] = tt_size
 
     node_model = GraphLevelRNN(**node_model_args).to(device)
-    print("Initialized GraphLevelRNN model.")
+    #print("Initialized GraphLevelRNN model.")
 
     # Return all necessary components
     return node_model, edge_model, step_fn
+
+
+def get_max_node_count_from_pkl(graph_file: str) -> int:
+    """
+    Efficiently loads raw graphs from a pickle file and finds the maximum node count.
+    """
+
+    if not os.path.exists(graph_file):
+        raise FileNotFoundError(f"Dataset file not found: {graph_file}")
+
+    max_nodes = 0
+    loaded_count = 0
+    try:
+        with open(graph_file, 'rb') as f:
+            raw_graphs = pickle.load(f)
+
+        num_to_check = len(raw_graphs)
+
+        for i, g in enumerate(raw_graphs):
+            if i >= num_to_check:
+                break
+            # Basic check if it looks like a graph object
+            if hasattr(g, 'number_of_nodes'):
+                max_nodes = max(max_nodes, g.number_of_nodes())
+                loaded_count += 1
+            else:
+                print(f"Warning: Item {i} in pickle file doesn't seem to be a graph. Skipping.")
+
+        if loaded_count == 0:
+             raise ValueError("No valid graph objects found in the pickle file.")
+
+    except (pickle.UnpicklingError, EOFError) as e:
+        raise IOError(f"Error reading pickle file {graph_file}: {e}")
+    except Exception as e:
+        raise RuntimeError(f"An unexpected error occurred while reading {graph_file}: {e}")
+
+    #print(f"Max node count found: {max_nodes}")
+    return max_nodes
 
 
 def setup_criteria(config, device):
@@ -218,7 +258,7 @@ def train_loop(config, node_model, edge_model, step_fn, criterion_edge, criterio
             include_node_types=predict_node_types,
         )
         data_loader = DataLoader(dataset, batch_size=config['train']['batch_size'], shuffle=True) # Shuffle training data
-        print(f"Dataset loaded for training. Max node count determined: {dataset.max_node_count}")
+        #print(f"Dataset loaded for training. Max node count determined: {dataset.max_node_count}")
     except Exception as e:
          print(f"FATAL: Failed to load dataset: {e}")
          return # Cannot train without data
@@ -234,7 +274,7 @@ def train_loop(config, node_model, edge_model, step_fn, criterion_edge, criterio
 
     while not done:
         epoch += 1
-        print(f"--- Epoch {epoch} ---")
+        #print(f"--- Epoch {epoch} ---")
         epoch_loss_sum = 0
         epoch_steps = 0
 
@@ -307,7 +347,7 @@ def train_loop(config, node_model, edge_model, step_fn, criterion_edge, criterio
         if epoch_steps > 0:
              avg_epoch_loss = epoch_loss_sum / epoch_steps
              writer.add_scalar('loss/epoch_avg_total', avg_epoch_loss, epoch)
-             print(f"--- Epoch {epoch} finished. Avg Loss: {avg_epoch_loss:.4f} ---")
+             #print(f"--- Epoch {epoch} finished. Avg Loss: {avg_epoch_loss:.4f} ---")
 
 
     print("Training loop finished.")
@@ -327,36 +367,27 @@ def main():
     base_path = args.save_dir # Use save_dir as the base path for logs/checkpoints
     os.makedirs(base_path, exist_ok=True)
     device = torch.device(f'cuda:{args.gpu_id}' if torch.cuda.is_available() else 'cpu')
-    print(f"Using device: {device}")
+    #print(f"Using device: {device}")
 
     # --- Determine max_node_count BEFORE setting up models ---
-    print("Determining max_node_count from dataset...")
+    #print("Determining max_node_count from dataset...")
     try:
-        # Load dataset once just to get max_node_count
-        temp_dataset = AIGDataset(
-             graph_file=config['data']['graph_file'],
-             m=config['data'].get('m'), # Pass m if BFS, ignored otherwise
-             training=True, # Load training split for consistency
-             use_bfs=config['data']['use_bfs'],
-             max_graphs=config['data'].get('max_graphs'), # Use same limit as training
-             include_node_types=False # Not needed for just max_node_count
+        # Use the new helper function instead of loading full AIGDataset
+        max_node_count = get_max_node_count_from_pkl(
+            config['data']['graph_file'],
         )
-        max_node_count = temp_dataset.max_node_count
-        del temp_dataset # Free up memory
-        print(f"Determined max_node_count: {max_node_count}")
-    except Exception as e:
-         print(f"FATAL: Failed to load dataset to determine max_node_count: {e}")
-         return 1
+    except (FileNotFoundError, IOError, ValueError, RuntimeError) as e:
+        print(f"FATAL: Failed to determine max_node_count from pickle file: {e}")
+        return 1
 
-    # --- Setup Models, Criteria, Optimizers ---
+        # --- Setup Models, Criteria, Optimizers (Pass the determined max_node_count) ---
     try:
-        # Pass max_node_count to setup_models
-        node_model, edge_model, step_fn = setup_models(config, device, max_node_count)
-        criterion_edge, criterion_node, use_edge_features = setup_criteria(config, device) # Pass config, device only
+        node_model, edge_model, step_fn = setup_models(config, device,
+                                                       max_node_count)  # setup_models now gets the correct count
+        criterion_edge, criterion_node, use_edge_features = setup_criteria(config, device)
     except (ValueError, KeyError) as e:
-         print(f"Error setting up models or criteria: {e}")
-         return 1
-
+        print(f"Error setting up models or criteria: {e}")
+        return 1
     # Setup optimizers and schedulers
     try:
         optim_node_model = torch.optim.Adam(node_model.parameters(), lr=config['train']['lr'])
