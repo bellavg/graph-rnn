@@ -114,49 +114,74 @@ def load_aig_generator_model(model_path):
 
 
 # --- Sampling Function ---
-def sample_softmax(x):
-    """Samples a one-hot vector from softmax probabilities of input logits x."""
-    # Ensure input is a torch tensor for softmax
+# def sample_softmax(x):
+#     """Samples a one-hot vector from softmax probabilities of input logits x."""
+#     # Ensure input is a torch tensor for softmax
+#     if not isinstance(x, torch.Tensor):
+#         x = torch.tensor(x)
+#     # Detach from computation graph before converting to numpy
+#     probabilities = torch.softmax(x.detach(), dim=0).cpu().numpy()
+#     num_classes = probabilities.shape[0]
+#     # Ensure probabilities sum to 1 (handle potential floating point issues)
+#     probabilities = probabilities / np.sum(probabilities)
+#     chosen_class = np.random.choice(range(num_classes), p=probabilities)
+#     one_hot = np.zeros(num_classes)
+#     one_hot[chosen_class] = 1
+#     return one_hot
+def sample_softmax(x, temperature=0.8):  # Lower temperature makes distribution more peaked
     if not isinstance(x, torch.Tensor):
         x = torch.tensor(x)
-    # Detach from computation graph before converting to numpy
-    probabilities = torch.softmax(x.detach(), dim=0).cpu().numpy()
+    probabilities = torch.softmax(x.detach() / temperature, dim=0).cpu().numpy()
     num_classes = probabilities.shape[0]
-    # Ensure probabilities sum to 1 (handle potential floating point issues)
-    probabilities = probabilities / np.sum(probabilities)
+    probabilities = probabilities / np.sum(probabilities)  # Renormalize
     chosen_class = np.random.choice(range(num_classes), p=probabilities)
     one_hot = np.zeros(num_classes)
     one_hot[chosen_class] = 1
     return one_hot
 
 # --- Edge Generation Functions (Simplified: No Conditioning) ---
-def rnn_edge_gen(edge_rnn, h, num_edges, adj_vec_size, sample_fun, edge_feature_len, attempts=None):
+def rnn_edge_gen(edge_rnn, h, num_edges, adj_vec_size, sample_fun, edge_feature_len, attempts=1):
     """Generates edges using RNN method (No conditioning)."""
-    device = h.device # Get device from hidden state tensor
-    adj_vec = torch.zeros([1, 1, adj_vec_size, edge_feature_len], device=device)
+    device = h.device  # Get device from hidden state tensor
 
-    edge_rnn.set_first_layer_hidden(h)
+    best_adj_vec = None
+    best_edge_count = 0
 
-    # SOS token
-    x = torch.ones([1, 1, edge_feature_len], device=device)
+    # Try multiple attempts to generate edges
+    for attempt in range(attempts):
+        adj_vec = torch.zeros([1, 1, adj_vec_size, edge_feature_len], device=device)
+        edge_rnn.set_first_layer_hidden(h)  # Reset hidden state for each attempt
 
-    for i in range(num_edges):
-        # Calculate logits (RNN output before activation)
-        # Assuming edge_rnn.forward can take return_logits=True
-        try:
-             logits = edge_rnn(x, return_logits=True)
-        except TypeError:
-             # Fallback if model doesn't support return_logits
-             print("Warning: EdgeRNN doesn't support return_logits=True, using direct output.")
-             logits = edge_rnn(x)
+        # SOS token
+        x = torch.ones([1, 1, edge_feature_len], device=device)
 
-        # Sample from logits and assign one-hot vector to x and adj_vec
-        # sample_fun returns numpy array, convert back to tensor
-        sampled_one_hot = torch.tensor(sample_fun(logits[0, 0, :]), dtype=torch.float, device=device)
-        x[0, 0, :] = sampled_one_hot
-        adj_vec[0, 0, i, :] = sampled_one_hot
+        for i in range(num_edges):
+            # Calculate logits (RNN output before activation)
+            try:
+                logits = edge_rnn(x, return_logits=True)
+            except TypeError:
+                # Fallback if model doesn't support return_logits
+                print("Warning: EdgeRNN doesn't support return_logits=True, using direct output.")
+                logits = edge_rnn(x)
 
-    return adj_vec
+            # Sample from logits and assign one-hot vector to x and adj_vec
+            sampled_one_hot = torch.tensor(sample_fun(logits[0, 0, :]), dtype=torch.float, device=device)
+            x[0, 0, :] = sampled_one_hot
+            adj_vec[0, 0, i, :] = sampled_one_hot
+
+        # Count how many non-zero (edge class 1 or 2) edges were generated
+        edge_count = torch.sum(torch.argmax(adj_vec[0, 0, :num_edges, :], dim=-1) > 0).item()
+
+        # If this attempt has more edges than the best so far, keep it
+        if best_adj_vec is None or edge_count > best_edge_count:
+            best_adj_vec = adj_vec.clone()
+            best_edge_count = edge_count
+
+        # If we've found at least one edge, we can stop trying
+        if edge_count > 0:
+            break
+
+    return best_adj_vec  # Return the best attempt
 
 def mlp_edge_gen(edge_mlp, h, num_edges, adj_vec_size, sample_fun, edge_feature_len, attempts=1):
     """Generates edges using MLP method (No conditioning)."""
@@ -246,7 +271,7 @@ def generate_aig_structure(num_nodes, node_model, edge_model, input_size, edge_g
                     adj_vec_size=input_size, # M value
                     sample_fun=sample_fun,
                     edge_feature_len=edge_feature_len,
-                    attempts=1, # Can increase if needed
+                    attempts=5, # Can increase if needed
                 ) # Shape: [1, 1, input_size, edge_feature_len]
 
                 # --- Store the generated edge type indices for this step ---
@@ -255,13 +280,19 @@ def generate_aig_structure(num_nodes, node_model, edge_model, input_size, edge_g
                 adj_slice = adj_vec_generated[0, 0, :num_edges_to_generate, :]
                 # Find the index of the '1' in the last dimension -> [num_edges_to_generate]
                 edge_indices_vec = torch.argmax(adj_slice, dim=-1).cpu().numpy()
+                print(f"Node {i + 1} edges: {edge_indices_vec}")  # Print the edge types being generated
                 list_edge_type_indices.append(edge_indices_vec)
 
                 # Check for early stopping (if model outputs only "no edge" class=0 for a while)
-                if len(list_edge_type_indices) > 0 and np.all(list_edge_type_indices[-1] == 0) and i > num_nodes // 2:
-                     print(f"INFO: Early stopping at node {i+1} due to only generating 'No Edge'.")
-                     actual_num_nodes -= 1 # Decrement count as this node wasn't fully added
-                     break # Stop generation
+                if len(list_edge_type_indices) > 0 and np.all(list_edge_type_indices[-1] == 0):
+                    consecutive_no_edge_nodes += 1
+                    if consecutive_no_edge_nodes >= 3 and i > num_nodes // 3:  # Require 3 consecutive
+                        print(
+                            f"INFO: Early stopping at node {i + 1} after {consecutive_no_edge_nodes} consecutive 'No Edge' nodes.")
+                        actual_num_nodes -= consecutive_no_edge_nodes  # Remove all no-edge nodes
+                        break
+                else:
+                    consecutive_no_edge_nodes = 0  # Reset counter when we see edge
 
                 # Prepare input for the next iteration (the generated edges)
                 adj_vec_input = adj_vec_generated
@@ -312,11 +343,11 @@ def generate_aig_structure(num_nodes, node_model, edge_model, input_size, edge_g
                 # print(f"Debug: Invalid source index {source_node_idx} for target {target_idx} (k={k}, num_preds={num_potential_preds})")
 
 
-    # Optional: Remove isolated nodes (nodes with no incoming or outgoing edges)
-    # isolated_nodes = list(nx.isolates(G))
-    # if isolated_nodes:
-    #     print(f"Removing {len(isolated_nodes)} isolated nodes: {isolated_nodes}")
-    #     G.remove_nodes_from(isolated_nodes)
+    #Optional: Remove isolated nodes (nodes with no incoming or outgoing edges)
+    isolated_nodes = list(nx.isolates(G))
+    if isolated_nodes:
+        print(f"Removing {len(isolated_nodes)} isolated nodes: {isolated_nodes}")
+        G.remove_nodes_from(isolated_nodes)
 
     if G.number_of_nodes() == 0:
         print("Warning: Graph became empty after removing isolated nodes.")
