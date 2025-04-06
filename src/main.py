@@ -102,7 +102,6 @@ def setup_models(config, device, max_node_count):
 
         edge_model_args = config['model']['EdgeMLP'].copy() # Avoid modifying original config
         edge_model_args['edge_feature_len'] = edge_feature_len
-        edge_model_args['use_conditioning'] = use_conditioning
         edge_model_args['tt_size'] = tt_size
         # Key Change: Set output_size based on effective_input_size
         edge_model_args['output_size'] = effective_input_size
