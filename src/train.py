@@ -57,6 +57,7 @@ def train_mlp_step(graph_rnn, edge_mlp, data,
     y = torch.cat((s, zero_frame), dim=1) # Shape: [batch, seq_len_padded+1, effective_m, features]
 
     lens_with_sos = lens + 1
+    lens_with_sos = lens_with_sos.to(device)
 
     # --- GraphRNN Forward Pass ---
     graph_rnn.reset_hidden()
@@ -396,6 +397,8 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
 
         if y_edge_rnn_padded is not None:
             # Create mask based on edge_seq_lens and max_pred_len
+
+            edge_seq_lens_tensor =   edge_seq_lens_tensor.to(device)
             edge_mask = torch.arange(max_pred_len, device=device)[None, :] < edge_seq_lens_tensor[:, None] # [TotalNodes, max_pred_len]
 
             if use_edge_features: # Multi-class
