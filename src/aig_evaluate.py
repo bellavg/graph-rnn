@@ -785,9 +785,6 @@ def evaluate_model(model_path, num_graphs=50, min_nodes=10, max_nodes=100,
     in_degree_distribution = {k: sum(s['in_degree_counts'].get(k, 0) for s in all_stats) for k in [0, 1, 2, 'other']}
     out_degree_distribution = {k: sum(s['out_degree_counts'].get(k, 0) for s in all_stats) for k in [0, 'other']}
 
-    avg_potential_inputs = sum(s['potential_inputs'] for s in all_stats) / len(all_stats) if all_stats else 0
-    avg_potential_outputs = sum(s['potential_outputs'] for s in all_stats) / len(all_stats) if all_stats else 0
-    avg_potential_ands = sum(s['potential_ands'] for s in all_stats) / len(all_stats) if all_stats else 0
 
     # Extract model info
     checkpoint_name = os.path.basename(model_path)
@@ -807,10 +804,7 @@ def evaluate_model(model_path, num_graphs=50, min_nodes=10, max_nodes=100,
         'avg_edges': sum(s['num_edges'] for s in all_stats) / len(all_stats) if all_stats else 0,
         'in_degree_distribution': in_degree_distribution,
         'out_degree_distribution': out_degree_distribution,
-        'avg_potential_inputs': avg_potential_inputs,
-        'avg_potential_outputs': avg_potential_outputs,
-        'avg_potential_ands': avg_potential_ands,
-        # Add advanced metrics
+
         'graph_metrics': metric_results
     }
 
@@ -830,9 +824,7 @@ def evaluate_model(model_path, num_graphs=50, min_nodes=10, max_nodes=100,
     print(f"Average nodes: {summary['avg_nodes']:.2f}")
     print(f"Average edges: {summary['avg_edges']:.2f}")
     print("\nNode type distribution:")
-    print(f"  Potential inputs (in-degree 0): {avg_potential_inputs:.2f}")
-    print(f"  Potential AND gates (in-degree 2): {avg_potential_ands:.2f}")
-    print(f"  Potential outputs (out-degree 0, in-degree 1): {avg_potential_outputs:.2f}")
+
 
     # Print graph metrics
     if metric_results:
