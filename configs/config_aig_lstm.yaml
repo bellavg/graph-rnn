@@ -32,7 +32,7 @@ model:
     rnn_type: 'lstm'
     embedding_size: 256
     hidden_size: 512
-    num_layers: 4
+    num_layers: 3
     edge_feature_len: 3  # <-- CORRECT (None, Regular, Inverted)
 
   EdgeMLP: # Settings used if edge_model is 'mlp'
@@ -43,7 +43,7 @@ model:
     rnn_type: 'lstm'
     embedding_size: 128
     hidden_size: 256
-    num_layers: 4
+    num_layers: 3
     edge_feature_len: 3 # <-- CORRECT
 
 
