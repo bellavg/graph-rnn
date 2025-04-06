@@ -703,7 +703,7 @@ def evaluate_model(model_path, num_graphs=50, min_nodes=10, max_nodes=100,
         node_types = None  # Assuming generate_aig_structure doesn't return types
 
         # Calculate validity directly on the generated graph G
-        stats = calculate_aig_structure_validity(G, node_types=node_types)
+        stats = calculate_aig_structure_validity(G)
         stats['graph_id'] = i
         # --- END FIX ---
 
