@@ -14,7 +14,7 @@ module purge
 module load 2024
 module load Anaconda3/2024.06-1
 
-conda env create aig-rnn
+conda create -n aig-rnn python=3.12
 source activate aig-rnn
 pip install -r requirements.txt
 
