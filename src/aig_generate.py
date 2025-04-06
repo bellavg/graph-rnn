@@ -250,100 +250,110 @@ def generate_aig_structure(num_nodes, node_model, edge_model, input_size, edge_g
     node_model.reset_hidden()
     actual_num_nodes = 0
 
-    with torch.no_grad(): # Ensure no gradients are computed during generation
-        for i in range(num_nodes): # Iterate up to num_nodes
+    # --- Initialize consecutive_no_edge_nodes HERE ---
+    consecutive_no_edge_nodes = 0
+
+    with torch.no_grad():  # Ensure no gradients are computed during generation
+        for i in range(num_nodes):  # Iterate up to num_nodes
             # --- Generate graph state vector (RNN hidden state) ---
-            # Node model should not predict node types or use conditioning here
-            h = node_model(adj_vec_input) # h shape depends on edge model type
+            h = node_model(adj_vec_input)  # h shape depends on edge model type
 
             actual_num_nodes += 1
 
             # --- Generate edges for this node ---
-            # Only generate edges if it's not the first node (index 0)
             if i > 0:
-                # Number of potential predecessors is min(current_index, input_size 'm')
                 num_edges_to_generate = min(i, input_size)
 
                 adj_vec_generated = edge_gen_function(
                     edge_model,
-                    h, # Pass the hidden state
+                    h,  # Pass the hidden state
                     num_edges=num_edges_to_generate,
-                    adj_vec_size=input_size, # M value
+                    adj_vec_size=input_size,  # M value
                     sample_fun=sample_fun,
                     edge_feature_len=edge_feature_len,
-                    attempts=5, # Can increase if needed
-                ) # Shape: [1, 1, input_size, edge_feature_len]
+                    attempts=5,  # Your increased attempts
+                )  # Shape: [1, 1, input_size, edge_feature_len]
 
                 # --- Store the generated edge type indices for this step ---
-                # Convert the generated one-hot vectors to class indices (0, 1, or 2)
-                # Slice to get relevant connections: [1, 1, num_edges_to_generate, edge_feature_len]
                 adj_slice = adj_vec_generated[0, 0, :num_edges_to_generate, :]
-                # Find the index of the '1' in the last dimension -> [num_edges_to_generate]
                 edge_indices_vec = torch.argmax(adj_slice, dim=-1).cpu().numpy()
-                print(f"Node {i + 1} edges: {edge_indices_vec}")  # Print the edge types being generated
+                print(f"Node {i + 1} edges: {edge_indices_vec}")  # Your print
                 list_edge_type_indices.append(edge_indices_vec)
 
-                # Check for early stopping (if model outputs only "no edge" class=0 for a while)
+                # Check for early stopping
                 if len(list_edge_type_indices) > 0 and np.all(list_edge_type_indices[-1] == 0):
-                    consecutive_no_edge_nodes += 1
-                    if consecutive_no_edge_nodes >= 3 and i > num_nodes // 3:  # Require 3 consecutive
+                    consecutive_no_edge_nodes += 1  # Safe to increment now
+                    # Your modified stopping condition
+                    if consecutive_no_edge_nodes >= 3 and i > num_nodes // 3:
                         print(
-                            f"INFO: Early stopping at node {i + 1} after {consecutive_no_edge_nodes} consecutive 'No Edge' nodes.")
-                        actual_num_nodes -= consecutive_no_edge_nodes  # Remove all no-edge nodes
+                            f"INFO: Early stopping at node {i + 1} after {consecutive_no_edge_nodes} consecutive 'No Edge' nodes."
+                        )
+                        # Adjust actual node count before breaking
+                        actual_num_nodes -= consecutive_no_edge_nodes
+                        actual_num_nodes = max(1, actual_num_nodes)  # Ensure at least 1 node remains
                         break
                 else:
-                    consecutive_no_edge_nodes = 0  # Reset counter when we see edge
+                    consecutive_no_edge_nodes = 0  # Reset counter
 
-                # Prepare input for the next iteration (the generated edges)
+                # Prepare input for the next iteration
                 adj_vec_input = adj_vec_generated
-            else:
-                # For the very first node (i=0), add a placeholder empty connection list
-                list_edge_type_indices.append(np.array([], dtype=int)) # No predecessors for the first node
-                # Use the initial SOS token for the next step's input
+            else:  # i == 0
+                # For the very first node, add placeholder and use initial SOS for next input
+                list_edge_type_indices.append(np.array([], dtype=int))
                 adj_vec_input = torch.ones([1, 1, input_size, edge_feature_len], device=device)
-
+                # consecutive_no_edge_nodes remains 0 here
 
     # --- Construct NetworkX Graph ---
+    # Check node count *after* potential early stopping
     if actual_num_nodes <= 1:
-        print("Warning: Generated graph has <= 1 node. Returning None.")
+        print("Warning: Generated graph has <= 1 node after generation/stopping. Returning None.")
         return None
 
     G = nx.DiGraph()
-    # Add nodes first (simple integer IDs)
-    for i in range(actual_num_nodes):
-        G.add_node(i) # Add nodes without type attribute
+    # Add nodes up to the potentially reduced actual_num_nodes
+    for node_idx in range(actual_num_nodes):
+        G.add_node(node_idx)  # Add nodes without type attribute for now
 
     # Add edges based on list_edge_type_indices
-    # list_edge_type_indices[k] contains edge info *for* node k+1
-    for target_idx in range(1, actual_num_nodes): # Start from the second node (index 1)
-        edge_indices_vec = list_edge_type_indices[target_idx-1] # Indices for edges *to* target_idx
+    # Ensure target_idx loop respects the potentially reduced actual_num_nodes
+    # The number of edge vectors corresponds to nodes 1 through actual_num_nodes-1 (or fewer if stopped early)
+    max_target_idx_for_edges = min(len(list_edge_type_indices) + 1, actual_num_nodes)
+
+    for target_idx in range(1, max_target_idx_for_edges):
+        edge_indices_vec = list_edge_type_indices[target_idx - 1]
         num_potential_preds = len(edge_indices_vec)
 
-        # Iterate through potential predecessors based on 'm' lookback and sequence order
-        # The k-th entry in edge_indices_vec corresponds to the connection attempt
-        # from potential source node (target_idx - num_potential_preds + k) to target_idx.
-        # This needs to precisely match the dataset creation logic.
         for k in range(num_potential_preds):
-            edge_type = int(edge_indices_vec[k]) # Should be 0, 1, or 2
-
-            # Skip "No Edge" type (assuming index 0 is NO_EDGE)
-            if edge_type == 0: # Corresponds to EDGE_TYPES['NONE']
+            edge_type = int(edge_indices_vec[k])
+            if edge_type == 0:  # Skip "No Edge"
                 continue
 
-            # Determine the source node index
-            # Source node index = first possible predecessor index + k
-            first_possible_pred_idx = target_idx - num_potential_preds
-            source_node_idx = first_possible_pred_idx + k
+            # Determine source node index based on topological sort and lookback 'm' (input_size)
+            # This assumes the k-th prediction corresponds to the k-th *possible* predecessor
+            # within the lookback window of size input_size.
+            # The first possible predecessor for target_idx is max(0, target_idx - input_size)
+            # However, the sequence was generated based on `num_edges_to_generate = min(target_idx, input_size)`
+            # predecessors relative to target_idx.
+            # The k-th element in `edge_indices_vec` corresponds to the connection attempt
+            # from node `target_idx - num_edges_to_generate + k`. Let's verify this logic.
+            # Example: target=5, m=4. num_edges=min(5,4)=4. preds considered: 1,2,3,4.
+            # edge_indices_vec[0] -> connection from node 5-4+0 = 1
+            # edge_indices_vec[1] -> connection from node 5-4+1 = 2
+            # edge_indices_vec[2] -> connection from node 5-4+2 = 3
+            # edge_indices_vec[3] -> connection from node 5-4+3 = 4 -> Seems correct.
+
+            source_node_idx = (target_idx - num_edges_to_generate) + k  # num_edges_to_generate used here
 
             # Ensure source node index is valid and precedes target node
             if 0 <= source_node_idx < target_idx:
-                # Add the directed edge with its type (1 or 2)
+                # Add the directed edge with its type (1=Regular, 2=Inverted)
                 G.add_edge(source_node_idx, target_idx, type=edge_type)
             # else:
-                # print(f"Debug: Invalid source index {source_node_idx} for target {target_idx} (k={k}, num_preds={num_potential_preds})")
+            # Debug print if needed
+            # print(f"Debug: Invalid edge attempted from {source_node_idx} to {target_idx}")
 
-
-    #Optional: Remove isolated nodes (nodes with no incoming or outgoing edges)
+    # Optional: Remove isolated nodes (your addition)
+    # Ensure this happens *after* all edges are potentially added
     isolated_nodes = list(nx.isolates(G))
     if isolated_nodes:
         print(f"Removing {len(isolated_nodes)} isolated nodes: {isolated_nodes}")
