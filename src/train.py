@@ -57,7 +57,6 @@ def train_mlp_step(graph_rnn, edge_mlp, data,
     y = torch.cat((s, zero_frame), dim=1) # Shape: [batch, seq_len_padded+1, effective_m, features]
 
     lens_with_sos = lens + 1
-    lens_with_sos = lens_with_sos.to(device)
 
     # --- GraphRNN Forward Pass ---
     graph_rnn.reset_hidden()
@@ -126,10 +125,11 @@ def train_mlp_step(graph_rnn, edge_mlp, data,
                 y_labels_flat = None # Mark as error
 
             if y_labels_flat is not None:
-                # Create mask to ignore loss on padding tokens based on lens_with_sos
-                # Mask should have same dimensions as y_pred/y_padded before flattening
-                # Shape: [Batch, Seq, M]
-                mask = torch.arange(pred_seq, device=device)[None, :] < lens_with_sos[:, None] # [Batch, Seq]
+                # --- ADD THIS LINE ---
+                # Move lengths to GPU for mask comparison
+                lens_with_sos_gpu = lens_with_sos.to(device)
+                # --- MODIFY THIS LINE (use lens_with_sos_gpu) ---
+                mask = torch.arange(pred_seq, device=device)[None, :] < lens_with_sos_gpu[:, None]  # [Batch, Seq]
                 mask = mask.unsqueeze(-1).expand(-1, -1, effective_m) # [Batch, Seq, M]
                 mask_flat = mask.reshape(-1) # [Batch * Seq * M]
 
@@ -294,7 +294,7 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
     # and the target sequence 'seq' (nodes 1 to n) based on original 'lens'
     try:
         # Pack hidden states (need H for nodes 0 to n-1, which are hidden[:, 1:, :])
-        # Let's pack the hidden state corresponding to input node 0..n-1, which is hidden output steps 1..n
+        # Let's pack the hidden state corresponding to input node 0...n-1, which is hidden output steps 1..n
         hidden_for_edges_packed = pack_padded_sequence(hidden[:, 1:, :], lens, batch_first=True, enforce_sorted=False)
         hidden_packed_data = hidden_for_edges_packed.data # Shape [TotalNodes, HiddenSize]
 
@@ -397,8 +397,6 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
 
         if y_edge_rnn_padded is not None:
             # Create mask based on edge_seq_lens and max_pred_len
-
-            edge_seq_lens_tensor =   edge_seq_lens_tensor.to(device)
             edge_mask = torch.arange(max_pred_len, device=device)[None, :] < edge_seq_lens_tensor[:, None] # [TotalNodes, max_pred_len]
 
             if use_edge_features: # Multi-class
