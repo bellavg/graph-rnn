@@ -30,7 +30,10 @@ CONFIG_FILE=${1:-"configs/config_aig_base.yaml"}
 echo "Using config file: $CONFIG_FILE"
 echo "Output directory: $OUTPUT_DIR"
 
-srun python -u --config_file configs/config_aig_base.yaml --restore new_runs/graphrnn_11003135/base_checkpoints/checkpoint-10000.pth --save_dir new_runs/graphrnn_11003135_continued
+srun python -u src/main.py \
+ --config_file configs/config_aig_base.yaml \
+ --restore new_runs/graphrnn_11003135/base_checkpoints/checkpoint-10000.pth \
+ --save_dir new_runs/graphrnn_11003135_continued
 
 # Print job completion message
 echo "Job finished at $(date)"
