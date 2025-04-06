@@ -27,8 +27,6 @@ def parse_args():
     return parser.parse_args()
 
 
-
-
 def load_config(config_file):
     with open(config_file, 'r') as f:
         config = yaml.safe_load(f)
@@ -45,93 +43,83 @@ def load_config(config_file):
 
 
 # MODIFIED setup_models function
-def setup_models(config, device, max_node_count):
+def setup_models(config, device, max_node_count, max_level): # ADDED max_level
     """
     Initializes the GraphRNN and Edge models based on the config,
-    using the correct dimensions derived from max_node_count and use_bfs.
+    using the correct dimensions derived from max_node_count and use_bfs,
+    and passing max_level for positional encoding.
     """
-    use_bfs = config['data']['use_bfs']
-    edge_feature_len = config['model']['GraphRNN'].get('edge_feature_len', NUM_EDGE_FEATURES) # Use constant or config
+    # Determine use_bfs (hardcoded to False based on previous dataset modification)
+    use_bfs = False # Keep consistent with modified AIGDataset
+    edge_feature_len = config['model']['GraphRNN'].get('edge_feature_len', NUM_EDGE_FEATURES)
 
-    # --- Determine Effective Input/Output Size based on mode ---
-    if use_bfs:
-        effective_input_size = config['data']['m']
-        print(f"INFO: Using BFS mode. Effective input/output size (m): {effective_input_size}")
-    else:
-        # For Topological Sort, effective size is max predecessors
-        if max_node_count <= 1:
-             raise ValueError("max_node_count must be greater than 1 for training.")
-        effective_input_size = max_node_count - 1
-        print(f"INFO: Using Topological Sort mode. Effective input/output size (max_node_count - 1): {effective_input_size}")
-        if 'm' in config['data']:
-             print(f"Warning: 'data.m' ({config['data']['m']}) is ignored when use_bfs is false.")
+    # Determine Effective Input/Output Size for TopSort
+    if max_node_count <= 1:
+        raise ValueError("max_node_count must be greater than 1 for training.")
+    effective_input_size = max_node_count - 1
+    #print(f"INFO: Using Topological Sort mode. Effective input/output size (max_node_count - 1): {effective_input_size}")
 
-    # --- Optional features ---
-    # These are passed to models but don't affect dimensions calculated above
+    # --- Keep Optional features setup (predict_node_types, use_conditioning, etc.) ---
+    # ... (as before) ...
     predict_node_types = config['model'].get('predict_node_types', False)
     use_conditioning = config['model'].get('truth_table_conditioning', False)
     num_node_types = config['model'].get('num_node_types', None)
     tt_size = None
     if use_conditioning:
-        n_outputs = config['model'].get('n_outputs', 2) # Default or read from config
-        n_inputs = config['model'].get('n_inputs', 8)  # Default or read from config
-        tt_size = n_outputs * (2 ** n_inputs)
-        print(f"Truth table conditioning enabled with size: {tt_size}")
+        # ... (tt_size calculation as before) ...
+        n_outputs = config['model'].get('n_outputs', 2); n_inputs = config['model'].get('n_inputs', 8)
+        tt_size = n_outputs * (2 ** n_inputs); print(f"TT conditioning enabled: size {tt_size}")
 
-    # --- Initialize Edge Model and select Step Function ---
-    edge_model_type = config['model'].get('edge_model', 'mlp').lower() # Default to mlp
+
+    # --- Initialize Edge Model and select Step Function (as before) ---
+    edge_model_type = config['model'].get('edge_model', 'mlp').lower()
+    node_model_output_size = None # Default for MLP
+    edge_model = None
+    step_fn = None
 
     if edge_model_type == 'rnn':
-        if 'EdgeRNN' not in config['model']: raise ValueError("Config missing 'model.EdgeRNN' parameters.")
-        edge_model_args = config['model']['EdgeRNN'].copy() # Avoid modifying original config
+        if 'EdgeRNN' not in config['model']: raise ValueError("Config missing 'model.EdgeRNN'.")
+        edge_model_args = config['model']['EdgeRNN'].copy()
         edge_model_args['edge_feature_len'] = edge_feature_len
-        edge_model_args['use_conditioning'] = use_conditioning
         edge_model_args['tt_size'] = tt_size
-
         edge_model = EdgeLevelRNN(**edge_model_args).to(device)
         step_fn = train_rnn_step
-        node_model_output_size = edge_model_args.get('hidden_size') # GraphRNN needs output size for EdgeRNN hidden
-        if node_model_output_size is None:
-             raise ValueError("Config 'model.EdgeRNN.hidden_size' needed for GraphRNN output.")
+        node_model_output_size = edge_model_args.get('hidden_size')
+        if node_model_output_size is None: raise ValueError("Config 'model.EdgeRNN.hidden_size' needed.")
         #print("Selected EdgeLevelRNN model.")
 
     elif edge_model_type == 'mlp':
-        if 'EdgeMLP' not in config['model']: raise ValueError("Config missing 'model.EdgeMLP' parameters.")
+        if 'EdgeMLP' not in config['model']: raise ValueError("Config missing 'model.EdgeMLP'.")
         if 'GraphRNN' not in config['model'] or 'hidden_size' not in config['model']['GraphRNN']:
-             raise ValueError("Config 'model.GraphRNN.hidden_size' needed for EdgeMLP input.")
-
-        edge_model_args = config['model']['EdgeMLP'].copy() # Avoid modifying original config
+             raise ValueError("Config 'model.GraphRNN.hidden_size' needed.")
+        edge_model_args = config['model']['EdgeMLP'].copy()
         edge_model_args['edge_feature_len'] = edge_feature_len
         edge_model_args['tt_size'] = tt_size
-        # Key Change: Set output_size based on effective_input_size
-        edge_model_args['output_size'] = effective_input_size
-        # Set input_size based on GraphRNN hidden size
+        edge_model_args['output_size'] = effective_input_size # Correctly set based on TopSort
         edge_model_args['input_size'] = config['model']['GraphRNN']['hidden_size']
-
         edge_model = EdgeLevelMLP(**edge_model_args).to(device)
         step_fn = train_mlp_step
-        node_model_output_size = None # GraphRNN output is just hidden state for MLP
-        #print("Selected EdgeLevelMLP model.")
+        node_model_output_size = None # Correct for MLP
+        print("Selected EdgeLevelMLP model.")
     else:
         raise ValueError(f"Unsupported edge_model type: {edge_model_type}")
 
     # --- Initialize Node Model ---
-    if 'GraphRNN' not in config['model']: raise ValueError("Config missing 'model.GraphRNN' parameters.")
-    node_model_args = config['model']['GraphRNN'].copy() # Avoid modifying original config
-    # Key Change: Set input_size based on effective_input_size
-    node_model_args['input_size'] = effective_input_size
+    if 'GraphRNN' not in config['model']: raise ValueError("Config missing 'model.GraphRNN'.")
+    node_model_args = config['model']['GraphRNN'].copy()
+    node_model_args['input_size'] = effective_input_size # Correctly set based on TopSort
     node_model_args['edge_feature_len'] = edge_feature_len
-    node_model_args['output_size'] = node_model_output_size # Set based on edge model type
+    node_model_args['output_size'] = node_model_output_size # Set based on edge model
     node_model_args['predict_node_types'] = predict_node_types
     node_model_args['num_node_types'] = num_node_types
-    node_model_args['use_conditioning'] = use_conditioning
     node_model_args['tt_size'] = tt_size
+    node_model_args['max_level'] = max_level # ADDED: Pass max_level
 
     node_model = GraphLevelRNN(**node_model_args).to(device)
     #print("Initialized GraphLevelRNN model.")
 
-    # Return all necessary components
     return node_model, edge_model, step_fn
+
 
 
 def get_max_node_count_from_pkl(graph_file: str) -> int:
@@ -236,31 +224,16 @@ def restore_checkpoint(path, device, node_model, edge_model,
 # MODIFIED train_loop function
 def train_loop(config, node_model, edge_model, step_fn, criterion_edge, criterion_node,
                optim_node_model, optim_edge_model, scheduler_node_model, scheduler_edge_model,
-               device, # Removed use_edge_features, predict_node_types, use_conditioning (get from config inside loop if needed)
+               device,
+               dataset, # ACCEPT dataset object as argument
                global_step, writer, base_path):
+
+    data_loader = DataLoader(dataset, batch_size=config['train']['batch_size'], shuffle=True)
 
     # Determine these flags once from config
     predict_node_types = config['model'].get('predict_node_types', False)
     use_conditioning = config['model'].get('truth_table_conditioning', False)
     use_edge_features = config['model']['GraphRNN'].get('edge_feature_len', NUM_EDGE_FEATURES) > 1
-
-    print("Starting training loop...")
-    # Dataset is instantiated here using the config
-    try:
-        dataset = AIGDataset(
-            graph_file=config['data']['graph_file'],
-            # Pass m only if use_bfs is true, otherwise it's ignored by AIGDataset
-            m=config['data']['m'] if config['data']['use_bfs'] else None,
-            training=True,
-            use_bfs=config['data']['use_bfs'],
-            max_graphs=config['data'].get('max_graphs'), # Optional limit
-            include_node_types=predict_node_types,
-        )
-        data_loader = DataLoader(dataset, batch_size=config['train']['batch_size'], shuffle=True) # Shuffle training data
-        #print(f"Dataset loaded for training. Max node count determined: {dataset.max_node_count}")
-    except Exception as e:
-         print(f"FATAL: Failed to load dataset: {e}")
-         return # Cannot train without data
 
     # Ensure models are in training mode
     node_model.train()
@@ -379,14 +352,30 @@ def main():
         print(f"FATAL: Failed to determine max_node_count from pickle file: {e}")
         return 1
 
-        # --- Setup Models, Criteria, Optimizers (Pass the determined max_node_count) ---
+    max_level = 0  # Default
     try:
-        node_model, edge_model, step_fn = setup_models(config, device,
-                                                       max_node_count)  # setup_models now gets the correct count
+        #print("Initializing main dataset instance...")
+        dataset = AIGDataset(
+            graph_file=config['data']['graph_file'],
+            training=True,  # Create the full dataset instance
+            # train_split is used internally by dataset for slicing later
+            max_graphs=config['data'].get('max_graphs'),
+            include_node_types=config['model'].get('predict_node_types', False)
+        )
+        max_level = dataset.max_level  # Get max_level
+        #print(f"Dataset initialized. Determined max_level: {max_level}")
+    except Exception as e:
+        print(f"FATAL: Failed to initialize main dataset: {e}. Cannot proceed.")
+        return 1
+
+    try:
+        # MODIFIED: Pass max_level
+        node_model, edge_model, step_fn = setup_models(config, device, max_node_count, max_level)
         criterion_edge, criterion_node, use_edge_features = setup_criteria(config, device)
     except (ValueError, KeyError) as e:
-        print(f"Error setting up models or criteria: {e}")
+        print(f"Error setting up models or criteria: {e}");
         return 1
+
     # Setup optimizers and schedulers
     try:
         optim_node_model = torch.optim.Adam(node_model.parameters(), lr=config['train']['lr'])
@@ -424,7 +413,8 @@ def main():
                criterion_edge, criterion_node,
                optim_node_model, optim_edge_model,
                scheduler_node_model, scheduler_edge_model,
-               device, # Pass only device, flags derived from config inside loop
+               device,
+               dataset,  # Pass the initialized dataset object
                global_step, writer, base_path)
 
     print("Main function finished.")
