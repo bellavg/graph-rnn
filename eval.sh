@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=aig-eval
+#SBATCH --job-name=gru-eval
 #SBATCH --partition=gpu_a100     # Specify the appropriate partition here (adjust if needed)
 #SBATCH --gpus=1                 # Request 1 GPU (adjust if evaluation is faster/slower)
 #SBATCH --time=00:59:00          # Adjust time based on expected evaluation duration (e.g., 1 hour)
