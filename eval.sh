@@ -20,11 +20,11 @@ source activate aig-rnn
 # --- Evaluation Specific Settings ---
 
 # Define the checkpoint to evaluate
-CHECKPOINT_PATH="runs/graphrnn_10996984/base_checkpoints/checkpoint-9000.pth"
+CHECKPOINT_PATH="runs/graphrnn_10999759/base_checkpoints/checkpoint-10000.pth."
 
 # Define the output directory for this evaluation run
 # You might want to make this more specific, e.g., include checkpoint step
-EVAL_OUTPUT_DIR="evaluation_results/eval_run_${SLURM_JOB_ID}"
+EVAL_OUTPUT_DIR="evaluation_results/gru_lvl_${SLURM_JOB_ID}"
 mkdir -p $EVAL_OUTPUT_DIR
 
 TEST_DATASET_PATH="dataset/inputs8_outputs8max_nodes128max.pkl"
@@ -42,7 +42,7 @@ srun python -u src/aig_evaluate.py \
     --output_dir $EVAL_OUTPUT_DIR \
     --num_graphs 1000 \
     --min_nodes 12 \
-    --max_nodes 128 \
+    --max_nodes 64 \
     --test_dataset $TEST_DATASET_PATH \
 
 
