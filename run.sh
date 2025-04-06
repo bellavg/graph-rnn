@@ -2,7 +2,7 @@
 #SBATCH --job-name=graph-rnn
 #SBATCH --partition=gpu_a100     # Specify the appropriate partition here
 #SBATCH --gpus=1
-#SBATCH --time=08:00:00
+#SBATCH --time=04:00:00
 #SBATCH --output=slurm_logs/graphrnn_%j.out
 
 
@@ -30,7 +30,7 @@ CONFIG_FILE=${1:-"configs/config_aig_base.yaml"}
 echo "Using config file: $CONFIG_FILE"
 echo "Output directory: $OUTPUT_DIR"
 
-srun python src/main.py \
+srun python -u src/main.py \
     --config_file=$CONFIG_FILE \
     --save_dir=$OUTPUT_DIR
 
