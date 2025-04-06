@@ -10,6 +10,7 @@ import pickle
 import numpy as np
 import networkx as nx
 import torch
+from collections import defaultdict, Counter
 from typing import List, Dict, Tuple, Optional, Any, Union
 
 from extension_data import DirectedGraphDataSet
@@ -86,121 +87,167 @@ def _calculate_levels(g: nx.DiGraph) -> (Dict[int, int], int):
 
     return levels, max_level
 
+import numpy as np
+import torch
+from collections import Counter # Import Counter
+import networkx as nx # Ensure networkx is imported
+from typing import List, Dict, Tuple, Optional, Any, Union # Ensure these are imported
+
+# ... (other imports, constants like NODE_TYPES, EDGE_TYPES, NUM_EDGE_FEATURES, _calculate_levels) ...
+
 class AIGDataset(torch.utils.data.Dataset):
 
-    # --- MODIFIED __init__ ---
     def __init__(self,
                  graph_file: str,
-                 training: bool = True,      # Removed m, use_bfs defaults to False
+                 training: bool = True,
                  train_split: float = 0.9,
                  include_node_types: bool = False,
                  max_graphs: Optional[int] = None):
-        """
-        Initialize the AIG dataset using Topological Sort. Calculates node levels.
 
-        Args:
-            graph_file: Path to the pickle file containing AIG graph data.
-            training: Whether this is for training (True) or testing (False).
-            train_split: Percentage of data to use for training.
-            include_node_types: Whether to include node type info (requires model support).
-            max_graphs: Maximum number of graphs to load (None for all).
-        """
         # Basic setup
-        self.dataset_type = 'aig-directed-multiclass'
-        self.max_node_count = -1
-        self.use_bfs = False # Hardcoded as per user request
         self.graph_file = graph_file
         self.include_node_types = include_node_types
-        self.m_internal = None # Effective M for TopSort = max_nodes - 1
-
-        #print("INFO: Initializing AIGDataset for Topological Sort only.")
+        self.m_internal = None # Will be calculated later
 
         # Load raw graph data
-        if training:
-            print(f"Loading AIG graphs from {graph_file}...")
+        print(f"Loading AIG graphs from {graph_file}...")
         if not os.path.exists(graph_file):
              raise FileNotFoundError(f"Dataset file not found: {graph_file}")
         with open(graph_file, 'rb') as f:
-            self.raw_graphs = pickle.load(f)
+            # Store raw graphs first
+            self.raw_graphs_temp = pickle.load(f) # Load into a temporary variable
 
-        # Limit number of graphs
-        if max_graphs is not None and max_graphs < len(self.raw_graphs):
-            self.raw_graphs = self.raw_graphs[:max_graphs]
-            print(f"Limited to {max_graphs} graphs")
+        # Limit number of graphs if needed
+        if max_graphs is not None and max_graphs < len(self.raw_graphs_temp):
+             self.raw_graphs_temp = self.raw_graphs_temp[:max_graphs]
+             print(f"Limited to {max_graphs} graphs for processing.")
 
-        # Preprocess graphs
-        self.graphs = self._preprocess_graphs()
-
-        # Determine maximum node count
+        # Preprocess graphs (populates self.graphs)
+        print("Preprocessing graphs...")
+        self.graphs = self._preprocess_graphs() # self.graphs is now List[nx.DiGraph]
         if not self.graphs:
              raise ValueError("No graphs loaded or preprocessed successfully.")
+        # Clear temporary raw graphs if memory is a concern
+        # del self.raw_graphs_temp
+
+        # Determine maximum node count from processed graphs
+        self.max_node_count = 0
         for g in self.graphs:
-            if isinstance(g, nx.DiGraph):
-                 self.max_node_count = max(self.max_node_count, g.number_of_nodes())
-            else:
-                 print(f"Warning: Item in self.graphs is not a DiGraph: {type(g)}. Skipping for max_node_count.")
+             if isinstance(g, nx.DiGraph): self.max_node_count = max(self.max_node_count, g.number_of_nodes())
         print(f"Maximum node count in processed dataset: {self.max_node_count}")
-        if self.max_node_count <= 0:
-             raise ValueError("Maximum node count is not positive. Check dataset and preprocessing.")
+        if self.max_node_count <= 0: raise ValueError("Max node count <= 0.")
 
-        # Calculate effective M for TopSort
-        if self.max_node_count <= 1:
-             self.m_internal = 1
-        else:
-             self.m_internal = self.max_node_count - 1
-        print(f"INFO: Topological Sort mode. Effective input size (max_nodes-1): {self.m_internal}")
+        # Calculate effective M for TopSort (NOW self.m_internal is set)
+        self.m_internal = max(1, self.max_node_count - 1)
+        print(f"INFO: Topological Sort mode. Effective input size (m_internal): {self.m_internal}")
 
-        # --- Calculate levels and max_level ---
-        #print("Calculating node levels for all graphs...")
+        # Calculate levels and max_level (Requires self.graphs)
+        print("Calculating node levels...")
         self.max_level = 0
-        graphs_with_levels = []
-        for i, g in enumerate(self.graphs):
-            if isinstance(g, nx.DiGraph) and g.number_of_nodes() > 0:
-                try:
-                    # Calculate levels using the helper function
-                    node_to_level, graph_max_level = _calculate_levels(g)
-                    g.graph['levels'] = node_to_level # Store levels in graph attributes
-                    self.max_level = max(self.max_level, graph_max_level)
-                    graphs_with_levels.append(g) # Keep graphs where levels were calculated
-                except Exception as e:
-                    print(f"\nWarning: Failed to calculate levels for graph {i}: {e}. Skipping graph.")
-            elif isinstance(g, nx.DiGraph) and g.number_of_nodes() == 0:
-                 print(f"Warning: Skipping empty graph {i}.")
-            # Else: non-graph object already warned about earlier
+        # ... (Keep your existing level calculation logic here, iterating through self.graphs) ...
+        # Ensure graphs without levels are handled or removed from self.graphs
+        print(f"Maximum node level across dataset: {self.max_level}")
 
-        self.graphs = graphs_with_levels # Update self.graphs to only include valid ones
-        if not self.graphs:
-            raise ValueError("No graphs remaining after level calculation and filtering.")
-        #print(f"Maximum node level across dataset: {self.max_level}")
-        # --- END Level Calculation ---
+        # --- MOVED & CORRECTED: Calculate Edge Type Counts ---
+        print("Calculating edge type counts for class weighting...")
+        edge_type_counts = Counter({i: 0 for i in range(NUM_EDGE_FEATURES)}) # Initialize counter
+        total_potential_edges = 0
 
-        # Set up train/test split
-        np.random.seed(42)
-        np.random.shuffle(self.graphs) # Now self.graphs is guaranteed to be a list
+        # Determine the range of graphs to use for weights (training split)
         train_size = int(len(self.graphs) * train_split)
+        start_idx_weights = 0
+        num_graphs_for_weights = train_size if training else len(self.graphs) # Use all if not training? Or just train split always? Let's use train split always for consistency.
+
+        print(f"Calculating weights based on {num_graphs_for_weights} training graphs...")
+        for i in range(num_graphs_for_weights):
+            g = self.graphs[start_idx_weights + i]
+            n = g.number_of_nodes()
+            if n <= 1: continue
+
+            try:
+                node_ordering = list(nx.topological_sort(g))
+            except nx.NetworkXUnfeasible:
+                continue
+
+            node_to_idx = {node_id: i for i, node_id in enumerate(node_ordering)}
+            adj_tensor = np.zeros((n, n, NUM_EDGE_FEATURES), dtype=np.float32)
+            for u, v, data in g.edges(data=True):
+                 try: source_idx, target_idx = node_to_idx[u], node_to_idx[v]
+                 except KeyError: continue
+                 edge_type = data.get('type', EDGE_TYPES["REGULAR"])
+                 if 0 <= edge_type < NUM_EDGE_FEATURES: adj_tensor[target_idx, source_idx, edge_type] = 1.0
+                 else: adj_tensor[target_idx, source_idx, 0] = 1.0 # Default NO_EDGE
+
+            # Count edges using self.m_internal
+            for target_idx in range(1, n):
+                 num_preds_considered = min(target_idx, self.m_internal) # Use self.m_internal
+                 # Get slice relative to adj_tensor shape: connections from 0 to target_idx-1
+                 all_prev_connections = adj_tensor[target_idx, 0:target_idx, :]
+                 # Extract the relevant slice based on num_preds_considered
+                 connections_slice = all_prev_connections[-num_preds_considered:, :] if num_preds_considered > 0 else np.zeros((0,NUM_EDGE_FEATURES))
+
+                 for k in range(num_preds_considered):
+                      edge_class = np.argmax(connections_slice[k, :])
+                      edge_type_counts[edge_class] += 1
+                      total_potential_edges += 1
+
+                 # Count padding implicitly as "NONE" edges up to self.m_internal
+                 padding_len = self.m_internal - num_preds_considered # Use self.m_internal
+                 if padding_len > 0:
+                    edge_type_counts[EDGE_TYPES["NONE"]] += padding_len
+                    total_potential_edges += padding_len
+
+        # Calculate weights
+        total_edges_counted = sum(edge_type_counts.values())
+        self.edge_weights = torch.zeros(NUM_EDGE_FEATURES)
+        # ... (Keep your weight calculation logic: inverse freq or effective num samples) ...
+        # Example using Effective Num Samples:
+        if total_edges_counted > 0:
+            print(f"Total edge slots considered for weights: {total_potential_edges}")
+            print(f"Raw edge counts: {dict(edge_type_counts)}")
+            beta = 0.9999
+            for i in range(NUM_EDGE_FEATURES):
+                 if edge_type_counts[i] == 0:
+                      print(f"Warning: Edge type {i} has zero count.")
+                      self.edge_weights[i] = 1.0
+                 else:
+                      effective_num = 1.0 - np.power(beta, edge_type_counts[i])
+                      weights = (1.0 - beta) / effective_num
+                      self.edge_weights[i] = weights
+            # Normalize weights
+            self.edge_weights = self.edge_weights / torch.sum(self.edge_weights) * NUM_EDGE_FEATURES
+            print(f"Calculated edge weights: {self.edge_weights.tolist()}")
+        else:
+             print("Warning: No edges found to calculate weights. Using default weights.")
+             self.edge_weights = torch.ones(NUM_EDGE_FEATURES)
+        # --- END Weight Calculation ---
+
+
+        # Set up train/test split indices (needed for __len__ and __getitem__)
+        np.random.seed(42) # Ensure consistent shuffle for split
+        # Note: self.graphs might have been filtered during level calculation, use final list
+        np.random.shuffle(self.graphs)
+        final_num_graphs = len(self.graphs)
+        train_size = int(final_num_graphs * train_split)
         self.start_idx = 0 if training else train_size
-        self.length = train_size if training else len(self.graphs) - train_size
+        self.length = train_size if training else final_num_graphs - train_size
         print(f"Dataset ready: {self.length} graphs ({'training' if training else 'testing'} split). Ordering: Topological Sort")
 
 
     def _preprocess_graphs(self) -> List[nx.DiGraph]:
-        """
-        Process the raw graphs loaded from the pickle file into NetworkX DiGraphs
-        with standardized integer node/edge types and node labels from 0 to N-1.
-
-        Returns:
-            List of preprocessed NetworkX DiGraphs.
-        """
+        # IMPORTANT: This function should now use self.raw_graphs_temp
+        # and return the list of processed nx.DiGraph objects
         processed_graphs = []
         skipped_count = 0
-        num_raw_graphs = len(self.raw_graphs)
+        # Use the temporary storage here
+        num_raw_graphs = len(self.raw_graphs_temp)
 
-        #print(f"Preprocessing {num_raw_graphs} raw graphs...")
-
-        for i, g_raw in enumerate(self.raw_graphs):
-            # Basic check: Ensure it's a NetworkX graph object
+        for i, g_raw in enumerate(self.raw_graphs_temp):
+            # ... (Keep your existing preprocessing logic here) ...
+            # Make sure it appends processed graphs to processed_graphs list
+             # Basic check: Ensure it's a NetworkX graph object
             if not isinstance(g_raw, nx.Graph):  # Check for base Graph class
-                print(f"\nWarning: Skipping item {i} - not a NetworkX graph object (type: {type(g_raw)}).")
+                # print(f"\nWarning: Skipping item {i} - not a NetworkX graph object (type: {type(g_raw)}).")
                 skipped_count += 1
                 continue
 
@@ -209,7 +256,7 @@ class AIGDataset(torch.utils.data.Dataset):
                 g_raw = g_raw.to_directed()  # Convert if undirected
 
             if not nx.is_directed_acyclic_graph(g_raw):
-                print(f"\nWarning: Skipping graph {i} - not a DAG.")
+                # print(f"\nWarning: Skipping graph {i} - not a DAG.")
                 skipped_count += 1
                 continue
 
@@ -263,7 +310,7 @@ class AIGDataset(torch.utils.data.Dataset):
                 try:
                     u_new, v_new = node_mapping[u_old], node_mapping[v_old]
                 except KeyError:
-                    print(f"\nWarning: Skipping edge ({u_old}, {v_old}) - node ID not found in mapping.")
+                    # print(f"\nWarning: Skipping edge ({u_old}, {v_old}) - node ID not found in mapping.")
                     continue
 
                 # Determine integer edge type
@@ -288,11 +335,7 @@ class AIGDataset(torch.utils.data.Dataset):
 
             processed_graphs.append(g_processed)
 
-            # Optional: Print progress less frequently
-            # if (i + 1) % 100 == 0 or (i + 1) == num_raw_graphs:
-            #     print(f"Processed {i + 1}/{num_raw_graphs} graphs...", end='\r')
-
-        #print(f"\nGraph preprocessing complete. {len(processed_graphs)} graphs processed, {skipped_count} skipped.")
+        print(f"Graph preprocessing complete. {len(processed_graphs)} graphs processed, {skipped_count} skipped.")
         return processed_graphs
 
     def __len__(self):
