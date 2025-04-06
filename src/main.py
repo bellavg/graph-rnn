@@ -364,7 +364,7 @@ def main():
     try:
         node_model, edge_model, step_fn = setup_models(config, device, max_node_count, max_level)
         # REMOVED criterion_node from return value
-        criterion_edge, use_edge_features = setup_criteria(config, device)
+        criterion_edge, use_edge_features = setup_criteria(config, device, dataset)
     except (ValueError, KeyError) as e:
         print(f"Error setting up models or criteria: {e}");
         return 1
