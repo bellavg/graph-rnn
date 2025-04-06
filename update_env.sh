@@ -15,5 +15,7 @@ module load Anaconda3/2024.06-1
 source activate aig-rnn
 pip install scipy
 pip install pyemb
+pip install pydot
+pip install Graphviz
 
 echo "Environment created and activated"

@@ -10,6 +10,10 @@ from tqdm import tqdm
 from model import *
 import json
 from aig_generate import *
+import networkx as nx
+import matplotlib.pyplot as plt
+# Required for graphviz layout
+from networkx.drawing.nx_pydot import graphviz_layout
 
 # Import required modules - you may need to adjust these imports based on your project structure
 # AIG dataset includes NODE_TYPES, EDGE_TYPES constants
@@ -180,230 +184,180 @@ def create_random_truth_table(n_outputs=2, n_inputs=8, device='cpu'):
     return flattened, table
 
 
-def visualize_aig(adj_matrix, output_file='generated_aig.png', node_types=None, title=None):
+def visualize_aig(G, output_file='generated_aig_layered.png', title=None):
     """
-    Visualize an AIG graph based on its adjacency matrix
+    Visualize the connected components of an AIG using a layered layout
+    (requires Graphviz and pydot), excluding isolated nodes.
 
     Args:
-        adj_matrix: Adjacency matrix where values indicate edge types
-        output_file: File to save visualization
-        node_types: Optional list of node types corresponding to each node
-        title: Optional title for the plot
+        G: NetworkX DiGraph object representing the AIG.
+        output_file: File to save visualization.
+        title: Optional title for the plot.
     """
-    G = nx.DiGraph()
+    if G is None or G.number_of_nodes() == 0:
+        print("Cannot visualize empty or None graph.")
+        return
 
-    # Add nodes
-    for i in range(adj_matrix.shape[0]):
-        G.add_node(i)
+    # --- START: Exclude isolated nodes ---
+    isolated_nodes = list(nx.isolates(G))
+    if isolated_nodes:
+        print(f"Visualization: Excluding {len(isolated_nodes)} isolated nodes: {isolated_nodes}")
+        # Create a subgraph containing only the non-isolated nodes
+        nodes_to_keep = [n for n in G.nodes() if n not in isolated_nodes]
+        G_connected = G.subgraph(nodes_to_keep)
+        if G_connected.number_of_nodes() == 0:
+             print("Graph has no connected nodes to visualize.")
+             return # Or handle as needed, e.g., save an empty plot
+    else:
+        G_connected = G # No isolates, use the original graph
+    # --- END: Exclude isolated nodes ---
 
-    # Add edges with types
-    for i in range(adj_matrix.shape[0]):
-        for j in range(adj_matrix.shape[1]):
-            if adj_matrix[i, j] > 0:
-                G.add_edge(j, i, type=int(adj_matrix[i, j]))
+    # --- Use graphviz_layout for hierarchical structure ---
+    try:
+        pos = graphviz_layout(G_connected, prog="dot") # Use G_connected
+    except ImportError:
+        print("Warning: pydot or graphviz not found. Falling back to spring_layout.")
+        pos = nx.spring_layout(G_connected, seed=42) # Use G_connected
+    except Exception as e:
+        print(f"Warning: graphviz_layout failed ({e}). Falling back to spring_layout.")
+        pos = nx.spring_layout(G_connected, seed=42) # Use G_connected
 
-    # Create layout
-    pos = nx.spring_layout(G, seed=42)
+    plt.figure(figsize=(12, 10)) # Adjust figure size if needed
 
-    # Create plot
-    plt.figure(figsize=(12, 10))
-
-    # Define node color based on types or connectivity
+    # Define node color and labels based on connectivity (using G_connected)
     node_colors = []
     node_labels = {}
+    # Iterate through the nodes present in the connected subgraph
+    for node in G_connected.nodes(): # Use G_connected
+        in_deg = G_connected.in_degree(node) # Use G_connected
+        out_deg = G_connected.out_degree(node) # Use G_connected
 
-    if node_types is not None:
-        # Use explicit node types if provided
-        type_to_color = {
-            NODE_TYPES.get('ZERO', 0): 'gray',
-            NODE_TYPES.get('PI', 1): 'lightgreen',
-            NODE_TYPES.get('AND', 2): 'lightblue',
-            NODE_TYPES.get('PO', 3): 'salmon'
-        }
-
-        for i, node_type in enumerate(node_types):
-            color = type_to_color.get(node_type, 'lightgray')
-            node_colors.append(color)
-
-            # Create label based on type
-            if node_type == NODE_TYPES.get('PI', 1):
-                node_labels[i] = f"PI{i}"
-            elif node_type == NODE_TYPES.get('AND', 2):
-                node_labels[i] = f"AND{i}"
-            elif node_type == NODE_TYPES.get('PO', 3):
-                node_labels[i] = f"PO{i}"
-            else:
-                node_labels[i] = f"{i}"
-    else:
-        # Infer node types based on connectivity
-        for node in G.nodes():
-            in_deg = G.in_degree(node)
-            out_deg = G.out_degree(node)
-
-            if in_deg == 0:
-                # Possible input
-                node_colors.append('lightgreen')
-                node_labels[node] = f"IN{node}"
-            elif in_deg == 2:
-                # Possible AND gate
-                node_colors.append('lightblue')
-                node_labels[node] = f"AND{node}"
-            elif in_deg == 1 and out_deg == 0:
-                # Possible output
-                node_colors.append('salmon')
-                node_labels[node] = f"OUT{node}"
-            else:
-                # Other type
-                node_colors.append('lightgray')
-                node_labels[node] = str(node)
-
-    # Draw nodes
-    nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=500)
-
-    # Draw edges with different styles for edge types
-    # Edge type 1: Regular edge
-    # Edge type 2: Inverted edge
-    edge_colors = []
-    edge_styles = []
-
-    for u, v, data in G.edges(data=True):
-        edge_type = data.get('type', 1)
-        if edge_type == 1:
-            edge_colors.append('black')
-            edge_styles.append('solid')
-        elif edge_type == 2:
-            edge_colors.append('red')
-            edge_styles.append('dashed')
+        # Note: Degree checks might be less meaningful if PIs/POs were isolated and removed
+        if in_deg == 0:
+            node_colors.append('lightgreen') # Input
+            node_labels[node] = f"PI {node}"
+        elif in_deg == 2:
+            node_colors.append('lightblue') # AND
+            node_labels[node] = f"AND {node}"
+        elif in_deg == 1 and out_deg == 0:
+            node_colors.append('salmon') # Output
+            node_labels[node] = f"PO {node}"
         else:
-            edge_colors.append('gray')
-            edge_styles.append('dotted')
+            node_colors.append('lightgray') # Intermediate/Other
+            node_labels[node] = f"{node}" # Just node number
 
-    # Draw edges
-    for i, (u, v) in enumerate(G.edges()):
-        nx.draw_networkx_edges(
-            G, pos,
-            edgelist=[(u, v)],
-            width=1.5,
-            edge_color=edge_colors[i],
-            style=edge_styles[i],
-            arrowsize=15
-        )
+    # Draw nodes using G_connected
+    nx.draw_networkx_nodes(G_connected, pos, node_color=node_colors, node_size=400, alpha=0.9)
 
-    # Draw labels
-    nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=10)
+    # Draw edges with styles based on 'type' attribute (using G_connected)
+    regular_edges = [(u, v) for u, v, d in G_connected.edges(data=True) if d.get('type') == 1]
+    inverted_edges = [(u, v) for u, v, d in G_connected.edges(data=True) if d.get('type') == 2]
+    other_edges = [(u, v) for u, v, d in G_connected.edges(data=True) if d.get('type') not in [1, 2]]
 
-    # Add legend
+    nx.draw_networkx_edges(G_connected, pos, edgelist=regular_edges, width=1.0, edge_color='black', style='solid', arrows=True, arrowsize=10)
+    nx.draw_networkx_edges(G_connected, pos, edgelist=inverted_edges, width=1.0, edge_color='red', style='dashed', arrows=True, arrowsize=10)
+    if other_edges:
+        print(f"Warning: Found edges with unexpected types in connected subgraph: {other_edges}")
+        nx.draw_networkx_edges(G_connected, pos, edgelist=other_edges, width=0.5, edge_color='gray', style='dotted', arrows=True, arrowsize=10)
+
+    # Draw labels using G_connected
+    nx.draw_networkx_labels(G_connected, pos, labels=node_labels, font_size=8)
+
+    # Add legend (copied from your provided code)
     legend_elements = [
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='lightgreen',
-                   markersize=10, label='Input (PI)'),
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='lightblue',
-                   markersize=10, label='AND Gate'),
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='salmon',
-                   markersize=10, label='Output (PO)'),
+        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='lightgreen', markersize=8, label='Input (PI)'),
+        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='lightblue', markersize=8, label='AND Gate'),
+        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='salmon', markersize=8, label='Output (PO)'),
         plt.Line2D([0], [0], color='black', linestyle='solid', label='Regular Edge'),
         plt.Line2D([0], [0], color='red', linestyle='dashed', label='Inverted Edge')
     ]
+    plt.legend(handles=legend_elements, loc='upper right', fontsize='small')
 
-    plt.legend(handles=legend_elements, loc='upper right')
-
-    # Add title
-    if title:
-        plt.title(title)
-    else:
-        plt.title('Generated AIG Graph')
-
-    plt.tight_layout()
+    plt.title(title if title else 'Generated AIG (Layered Layout, Connected Only)')
     plt.axis('off')
+    plt.tight_layout()
     plt.savefig(output_file, dpi=300)
     plt.close()
+    print(f"Generated graph visualization saved to {output_file}")
 
-    return G
+    # Return the original G or the connected subgraph? Return G_connected for consistency.
+    return G_connected
 
 
 # ==========================================
 # Evaluation Functions
 # ==========================================
 
-def calculate_aig_structure_validity(G, node_types=None):
+import networkx as nx # Make sure networkx is imported
+
+def calculate_aig_structure_validity(G): # Removed node_types argument as base model doesn't predict them
     """
-    Calculate the validity of an AIG based on graph structure.
-
-    Args:
-        G: NetworkX DiGraph object representing the AIG
-        node_types: Optional list of node types
-
-    Returns:
-        dict: Statistics about the graph structure
+    Calculates the validity of an AIG based on stricter structural rules:
+    1. Must be a Directed Acyclic Graph (DAG).
+    2. Nodes must have in-degree 0 (PI), 1 (PO - only if out-degree is 0), or 2 (AND).
+    3. Must contain at least one potential PI, PO, and AND gate.
     """
-    if G.number_of_nodes() == 0:
-        return {
-            'num_nodes': 0,
-            'valid': False,
-            'reason': 'Empty graph'
-        }
+    num_nodes = G.number_of_nodes()
+    if num_nodes == 0:
+        return {'valid': False, 'reason': 'Empty graph', 'num_nodes': 0}
 
-    # Count nodes by in-degree and out-degree
-    in_degree_counts = {0: 0, 1: 0, 2: 0, 'other': 0}
-    out_degree_counts = {0: 0, 'other': 0}
+    # Rule 1: Must be a DAG
+    if not nx.is_directed_acyclic_graph(G):
+        return {'valid': False, 'reason': 'Graph contains cycles', 'num_nodes': num_nodes}
+
+    # Rule 2: Check in-degrees of all nodes
+    is_structurally_valid = True
+    reason = "OK"
+    potential_pis = 0
+    potential_ands = 0
+    potential_pos = 0
 
     for node in G.nodes():
         in_deg = G.in_degree(node)
         out_deg = G.out_degree(node)
 
-        # Count in-degrees
-        if in_deg in in_degree_counts:
-            in_degree_counts[in_deg] += 1
+        if in_deg == 0:
+            potential_pis += 1
+            # Optional: Check if PIs have outgoing edges (they should)
+            # if out_deg == 0:
+            #     is_structurally_valid = False
+            #     reason = f"Potential PI node {node} has no outgoing edges"
+            #     break
+        elif in_deg == 1:
+            # Must be a PO, which should have no outgoing edges
+            if out_deg == 0:
+                potential_pos += 1
+            else:
+                # If in-degree is 1 but it has outputs, it's not a valid PO/structure
+                is_structurally_valid = False
+                reason = f"Node {node} has in-degree 1 but out-degree {out_deg} (expected 0 for PO)"
+                break
+        elif in_deg == 2:
+            # Assumed to be an AND gate
+            potential_ands += 1
         else:
-            in_degree_counts['other'] += 1
+            # Any other in-degree is invalid
+            is_structurally_valid = False
+            reason = f"Node {node} has invalid in-degree {in_deg} (must be 0, 1, or 2)"
+            break
 
-        # Count out-degrees
-        if out_deg == 0:
-            out_degree_counts[0] += 1
-        else:
-            out_degree_counts['other'] += 1
+    # Rule 3: Check if we have at least one of each potential type
+    has_min_components = (potential_pis > 0 and potential_ands > 0 and potential_pos > 0)
+    if is_structurally_valid and not has_min_components:
+        reason = "Graph lacks potential PIs, ANDs, or POs"
 
-    # If node types are provided, count the actual node types
-    node_type_counts = None
-    if node_types is not None:
-        node_type_counts = {}
-        for nt in node_types:
-            node_type_counts[nt] = node_type_counts.get(nt, 0) + 1
+    final_validity = is_structurally_valid and has_min_components
 
-    # Identify potential node types based on connectivity
-    potential_inputs = in_degree_counts[0]  # Nodes with no incoming edges
-    potential_ands = in_degree_counts[2]  # Nodes with exactly 2 incoming edges
-    potential_outputs = sum(1 for n in G.nodes() if G.out_degree(n) == 0 and G.in_degree(n) == 1)
-
-    # Expected numbers based on training (8 inputs, 2 outputs)
-    expected_inputs = 8
-    expected_outputs = 2
-
-    # Calculate structural validity metrics
     stats = {
-        'num_nodes': G.number_of_nodes(),
+        'num_nodes': num_nodes,
         'num_edges': G.number_of_edges(),
-        'in_degree_counts': in_degree_counts,
-        'out_degree_counts': out_degree_counts,
-        'potential_inputs': potential_inputs,
-        'potential_ands': potential_ands,
-        'potential_outputs': potential_outputs,
-        'expected_inputs': expected_inputs,
-        'expected_outputs': expected_outputs,
-        'has_expected_inputs': potential_inputs >= expected_inputs,
-        'has_expected_outputs': potential_outputs >= expected_outputs,
-        'has_ands': potential_ands > 0,
+        'is_dag': True, # Already checked
+        'num_potential_pis': potential_pis,
+        'num_potential_ands': potential_ands,
+        'num_potential_pos': potential_pos,
+        'valid': final_validity,
+        'reason': reason
     }
-
-    if node_type_counts:
-        stats['node_type_counts'] = node_type_counts
-
-    # Determine overall validity based on structure
-    # A graph is structurally valid if it at least has some nodes with 
-    # connectivity that resembles inputs, outputs, and AND gates
-    stats['valid'] = (stats['has_expected_inputs'] and
-                      stats['has_expected_outputs'] and
-                      stats['has_ands'])
-
     return stats
 
 
