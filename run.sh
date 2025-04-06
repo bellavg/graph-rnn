@@ -6,9 +6,6 @@
 #SBATCH --output=slurm_logs/graphrnn_%j.out
 
 
-# Change to the parent directory if needed
-cd ..
-
 # Create log directories if they don't exist
 mkdir -p slurm_logs
 mkdir -p runs
@@ -22,11 +19,6 @@ module load Anaconda3/2024.06-1
 source activate  aig-rnn
 
 # Print environment info
-echo "Job started at $(date)"
-echo "SLURM_JOB_ID: $SLURM_JOB_ID"
-echo "Running on node: $(hostname)"
-echo "GPU information: $(nvidia-smi -L)"
-
 # Set output directory with job ID
 OUTPUT_DIR="runs/graphrnn_${SLURM_JOB_ID}"
 mkdir -p $OUTPUT_DIR
