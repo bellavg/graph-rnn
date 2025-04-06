@@ -78,7 +78,7 @@ class GraphLevelRNN(nn.Module):
             # Store the target sequence length *before* packing
             # This should match the padding length used for the target 'y' in train.py
             target_padded_length = x.shape[1]
-            x = pack_padded_sequence(x, x_lens, batch_first=True, enforce_sorted=False)
+            x = pack_padded_sequence(x, x_lens.cpu(), batch_first=True, enforce_sorted=False)
 
         x, self.hidden = self.gru(x, self.hidden)
 
