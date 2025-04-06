@@ -517,83 +517,118 @@ def compute_graph_metrics(graphs, test_graphs=None):
 
     return results
 
+# In src/aig_evaluate.py
+
+# Make sure these are imported if not already
+from model import GraphLevelRNN, EdgeLevelRNN, EdgeLevelMLP
+from aig_dataset import AIGDataset # Needed to determine max_node_count
+import os # Needed for os.path.exists
+
 def load_aig_model_from_config(model_path):
     """
-    Load AIG-specific models from checkpoint
-
-    Args:
-        model_path: Path to model checkpoint
-
-    Returns:
-        Loaded models and configuration details
+    Load AIG-specific models from checkpoint, determining correct input size.
     """
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    state = torch.load(model_path, map_location=device)
-    config = state['config']
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Checkpoint file not found: {model_path}")
 
-    input_size = config['data']['m']
+    try:
+        state = torch.load(model_path, map_location=device)
+        config = state['config']
+    except Exception as e:
+        raise RuntimeError(f"Error loading model state from {model_path}: {e}")
 
-    # Check if the model supports truth table conditioning
-    tt_size = None
-    if 'truth_table_conditioning' in config['model'] and config['model']['truth_table_conditioning']:
-        n_outputs = config['model'].get('n_outputs', 8)
-        n_inputs = config['model'].get('n_inputs', 8)
-        tt_size = n_outputs * (2 ** n_inputs)
+    # --- START FIX for input_size ---
+    use_bfs = config['data'].get('use_bfs', True) # Default to True if missing
 
-    if config['model']['edge_model'] == 'rnn':
-        node_model = GraphLevelRNN(
-            input_size=config['data']['m'],
-            output_size=config['model']['EdgeRNN']['hidden_size'],
-            tt_size=tt_size,
-            **config['model']['GraphRNN']
-        ).to(device)
-        edge_model = EdgeLevelRNN(
-            tt_size=tt_size,
-            **config['model']['EdgeRNN']
-        ).to(device)
-        edge_gen_function = rnn_edge_gen
-    else:
-        node_model = GraphLevelRNN(
-            input_size=config['data']['m'],
-            output_size=None,
-            tt_size=tt_size,
-            **config['model']['GraphRNN']
-        ).to(device)
-        edge_model = EdgeLevelMLP(
-            input_size=config['model']['GraphRNN']['hidden_size'],
-            output_size=config['data']['m'],
-            tt_size=tt_size,
-            **config['model']['EdgeMLP']
-        ).to(device)
-        edge_gen_function = mlp_edge_gen
-
-    node_model.load_state_dict(state['node_model'])
-    edge_model.load_state_dict(state['edge_model'])
-
-    mode = config['model']['mode'] if 'mode' in config['model'] else 'directed-multiclass'
-    use_bfs = config['data'].get('use_bfs', True)  # Default to True if missing
-
-    # --- START FIX ---
     if use_bfs:
-        input_size = config['data']['m']
+        # Use 'm' only if BFS mode is specified
+        input_size = config['data'].get('m') # Use .get() for safety
+        if input_size is None:
+             raise ValueError("Config key 'data.m' is required when use_bfs is true.")
         print(f"INFO: Loading model for BFS mode. Input size (m): {input_size}")
     else:
-        # Need max_node_count for TopSort.
-        # OPTION 1: Pass max_node_count as an argument
-        # OPTION 2: Determine it by loading the dataset here (less efficient)
+        # Need max_node_count for TopSort. Determine from dataset.
+        print("INFO: Config indicates TopSort mode. Determining max_node_count from dataset...")
+        dataset_path = config['data'].get('graph_file')
+        if not dataset_path or not os.path.exists(dataset_path):
+             raise FileNotFoundError(f"Dataset file '{dataset_path}' specified in config not found.")
         try:
-            # Example: you might need to load the dataset to get this info
-            from aig_dataset import AIGDataset
-            # NOTE: This requires the dataset path from config
-            temp_dataset = AIGDataset(graph_file=config['data']['graph_file'], m=None, training=False, use_bfs=False)
-            max_node_count = temp_dataset.max_node_count
-            if max_node_count <= 1: raise ValueError("Max node count <= 1")
-            input_size = max_node_count - 1
-            print(f"INFO: Loading model for TopSort mode. Input size (max_nodes-1): {input_size}")
+             # Load dataset temporarily just to get max_node_count
+             # Note: This assumes AIGDataset can be initialized with m=None when training=False
+             temp_dataset = AIGDataset(graph_file=dataset_path, m=None, training=False, use_bfs=False)
+             max_node_count = temp_dataset.max_node_count
+             if max_node_count <= 1: raise ValueError("Max node count from dataset <= 1")
+             input_size = max_node_count - 1
+             print(f"INFO: Loading model for TopSort mode. Input size (max_nodes-1): {input_size}")
         except Exception as e:
-            raise RuntimeError(f"Could not determine max_node_count for TopSort mode: {e}")
+             raise RuntimeError(f"Could not determine max_node_count for TopSort mode from {dataset_path}: {e}")
+    # --- END FIX for input_size ---
 
-    return node_model, edge_model, input_size, edge_gen_function, mode, tt_size
+    # Assume edge_feature_len is correctly set in the config used for training
+    edge_feature_len = config['model']['GraphRNN'].get('edge_feature_len', 3)
+    if edge_feature_len != 3:
+         print(f"Warning: Expected edge_feature_len=3 for AIGs, found {edge_feature_len} in config.")
+
+    # Setup model args, forcing generation-specific settings
+    node_model_args = config['model']['GraphRNN'].copy() # Use copy
+    node_model_args['input_size'] = input_size # Use determined input_size
+    node_model_args['edge_feature_len'] = edge_feature_len
+    node_model_args['predict_node_types'] = False # Override for generation
+    node_model_args['use_conditioning'] = False # Override for generation
+    node_model_args['tt_size'] = None # Override for generation
+
+    if config['model']['edge_model'] == 'rnn':
+        edge_model_args = config['model']['EdgeRNN'].copy() # Use copy
+        edge_model_args['edge_feature_len'] = edge_feature_len
+        edge_model_args['use_conditioning'] = False # Override for generation
+        edge_model_args['tt_size'] = None # Override for generation
+
+        node_model = GraphLevelRNN(
+            output_size=edge_model_args['hidden_size'], # RNN edge model needs output size
+            **node_model_args # Pass modified args
+        ).to(device)
+        edge_model = EdgeLevelRNN(**edge_model_args).to(device) # Pass modified args
+        # Import edge_gen_function from aig_generate
+        from aig_generate import rnn_edge_gen
+        edge_gen_function = rnn_edge_gen
+        print("Using RNN edge model for generation.")
+    else: # Assume MLP
+        edge_model_args = config['model']['EdgeMLP'].copy() # Use copy
+        edge_model_args['edge_feature_len'] = edge_feature_len
+        edge_model_args['use_conditioning'] = False # Override for generation
+        edge_model_args['tt_size'] = None # Override for generation
+        # Set MLP output_size based on the *correct* input_size
+        edge_model_args['output_size'] = input_size # Use determined input_size
+        # Set input_size based on GraphRNN hidden size (this should be in config)
+        edge_model_args['input_size'] = config['model']['GraphRNN']['hidden_size']
+
+
+        node_model = GraphLevelRNN(
+            output_size=None, # MLP edge model uses hidden state directly
+            **node_model_args # Pass modified args
+        ).to(device)
+        edge_model = EdgeLevelMLP(**edge_model_args).to(device) # Pass modified args
+        # Import edge_gen_function from aig_generate
+        from aig_generate import mlp_edge_gen
+        edge_gen_function = mlp_edge_gen
+        print("Using MLP edge model for generation.")
+
+    try:
+        node_model.load_state_dict(state['node_model'])
+        edge_model.load_state_dict(state['edge_model'])
+        print("Model weights loaded successfully.")
+    except Exception as e:
+        raise RuntimeError(f"Error loading model state dict: {e}")
+
+    # Mode should be 'directed-multiclass' for AIGs
+    mode = config['model'].get('mode', 'directed-multiclass')
+    if mode != 'directed-multiclass':
+        print(f"Warning: Expected mode 'directed-multiclass', found '{mode}' in config.")
+
+    # Return necessary items for evaluation
+    # Note: tt_size is returned as None because conditioning is forced off during generation
+    return node_model, edge_model, input_size, edge_gen_function, mode, None, config # Return config too
 
 
 
