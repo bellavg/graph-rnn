@@ -128,12 +128,14 @@ def load_aig_generator_model(model_path):
 #     one_hot = np.zeros(num_classes)
 #     one_hot[chosen_class] = 1
 #     return one_hot
-def sample_softmax(x, temperature=0.8):  # Lower temperature makes distribution more peaked
+def sample_softmax(x, temperature=1.0): # Set back to 1.0 for standard softmax
     if not isinstance(x, torch.Tensor):
         x = torch.tensor(x)
+    # When temp=1.0, this is just standard softmax
     probabilities = torch.softmax(x.detach() / temperature, dim=0).cpu().numpy()
     num_classes = probabilities.shape[0]
-    probabilities = probabilities / np.sum(probabilities)  # Renormalize
+    # Renormalization might still be needed due to floating point
+    probabilities = probabilities / np.sum(probabilities)
     chosen_class = np.random.choice(range(num_classes), p=probabilities)
     one_hot = np.zeros(num_classes)
     one_hot[chosen_class] = 1
