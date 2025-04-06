@@ -360,8 +360,8 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
                 current_pos += batch_size_at_step
             if repeated_tt:
                  edge_truth_table = torch.cat(repeated_tt, dim=0) # Shape [TotalNodes, tt_size]
-            else:
-                 edge_truth_table = torch.empty((0, tt_size), device=device)
+            # else:
+            #      edge_truth_table = torch.empty((0, tt_size), device=device)
 
             if edge_truth_table.shape[0] != total_nodes:
                 print(f"Warning: Truth table repetition mismatch: expected {total_nodes}, got {edge_truth_table.shape[0]}.")

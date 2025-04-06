@@ -73,14 +73,18 @@ class GraphLevelRNN(nn.Module):
 
         x = self.relu(self.linear_in(x))  # [batch, seq_len, embedding_dim]
 
+        target_padded_length = None
         if x_lens is not None:
+            # Store the target sequence length *before* packing
+            # This should match the padding length used for the target 'y' in train.py
+            target_padded_length = x.shape[1]
             x = pack_padded_sequence(x, x_lens, batch_first=True, enforce_sorted=False)
-         # Should not happen if x_lens is required
 
         x, self.hidden = self.gru(x, self.hidden)
 
         if x_lens is not None:
-            x, _ = pad_packed_sequence(x, batch_first=True)
+            # --- EDIT: Add total_length argument ---
+            x, _ = pad_packed_sequence(x, batch_first=True, total_length=target_padded_length)
 
         # --- NEW: Node type prediction ---
         node_type_logits = None
