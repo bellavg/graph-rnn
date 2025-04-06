@@ -10,6 +10,7 @@ from tqdm import tqdm
 from model import *
 import json
 from aig_generate import *
+from collections import Counter
 import networkx as nx
 import matplotlib.pyplot as plt
 # Required for graphviz layout
@@ -186,8 +187,8 @@ def create_random_truth_table(n_outputs=2, n_inputs=8, device='cpu'):
 
 def visualize_aig(G, output_file='generated_aig_layered.png', title=None):
     """
-    Visualize the connected components of an AIG using a layered layout
-    (requires Graphviz and pydot), excluding isolated nodes.
+    Visualize the largest weakly connected component of an AIG using a layered layout,
+    if it contains at least 10 nodes.
 
     Args:
         G: NetworkX DiGraph object representing the AIG.
@@ -198,90 +199,105 @@ def visualize_aig(G, output_file='generated_aig_layered.png', title=None):
         print("Cannot visualize empty or None graph.")
         return
 
-    # --- START: Exclude isolated nodes ---
-    isolated_nodes = list(nx.isolates(G))
-    if isolated_nodes:
-        print(f"Visualization: Excluding {len(isolated_nodes)} isolated nodes: {isolated_nodes}")
-        # Create a subgraph containing only the non-isolated nodes
-        nodes_to_keep = [n for n in G.nodes() if n not in isolated_nodes]
-        G_connected = G.subgraph(nodes_to_keep)
-        if G_connected.number_of_nodes() == 0:
-             print("Graph has no connected nodes to visualize.")
-             return # Or handle as needed, e.g., save an empty plot
-    else:
-        G_connected = G # No isolates, use the original graph
-    # --- END: Exclude isolated nodes ---
+    # --- START: Find and select the largest weakly connected component ---
+    connected_components = list(nx.weakly_connected_components(G))
+
+    if not connected_components:
+        print("Graph has no nodes after initial check (should not happen if G is not empty). Cannot visualize.")
+        return
+
+    # Find the largest component
+    largest_component_nodes = max(connected_components, key=len)
+    largest_component_size = len(largest_component_nodes)
+
+    # Check if the largest component meets the minimum size requirement
+    min_connected_nodes = 10
+    if largest_component_size < min_connected_nodes:
+        print(f"Largest connected component has {largest_component_size} nodes, which is less than the minimum required {min_connected_nodes}. Skipping visualization.")
+        return # Don't visualize if the largest component is too small
+
+    # Create a subgraph containing only the nodes from the largest component
+    G_to_visualize = G.subgraph(largest_component_nodes).copy() # Use copy to avoid modifying original subgraph view
+    print(f"Visualizing largest component with {G_to_visualize.number_of_nodes()} nodes.")
+    # --- END: Component selection ---
+
 
     # --- Use graphviz_layout for hierarchical structure ---
     try:
-        pos = graphviz_layout(G_connected, prog="dot") # Use G_connected
+        # Use graphviz for layout if available
+        pos = graphviz_layout(G_to_visualize, prog="dot")
     except ImportError:
         print("Warning: pydot or graphviz not found. Falling back to spring_layout.")
-        pos = nx.spring_layout(G_connected, seed=42) # Use G_connected
+        pos = nx.spring_layout(G_to_visualize, seed=42)
     except Exception as e:
         print(f"Warning: graphviz_layout failed ({e}). Falling back to spring_layout.")
-        pos = nx.spring_layout(G_connected, seed=42) # Use G_connected
+        pos = nx.spring_layout(G_to_visualize, seed=42) # Fallback layout
 
-    plt.figure(figsize=(12, 10)) # Adjust figure size if needed
+    plt.figure(figsize=(14, 12)) # Adjust figure size if needed
 
-    # Define node color and labels based on connectivity (using G_connected)
+    # Define node color and labels based on degrees within the selected component
     node_colors = []
     node_labels = {}
-    # Iterate through the nodes present in the connected subgraph
-    for node in G_connected.nodes(): # Use G_connected
-        in_deg = G_connected.in_degree(node) # Use G_connected
-        out_deg = G_connected.out_degree(node) # Use G_connected
+    for node in G_to_visualize.nodes(): # Iterate through nodes in the subgraph
+        in_deg = G_to_visualize.in_degree(node) # Calculate degree on the subgraph
+        out_deg = G_to_visualize.out_degree(node) # Calculate degree on the subgraph
 
-        # Note: Degree checks might be less meaningful if PIs/POs were isolated and removed
+        # Determine node type based on degrees within the component
         if in_deg == 0:
-            node_colors.append('lightgreen') # Input
-            node_labels[node] = f"PI {node}"
+            node_colors.append('lightgreen') # Potential Input within the component
+            node_labels[node] = f"PI? {node}"
         elif in_deg == 2:
-            node_colors.append('lightblue') # AND
-            node_labels[node] = f"AND {node}"
+             # Check if it might be an AND gate (can still have outputs)
+             node_colors.append('lightblue') # Potential AND within the component
+             node_labels[node] = f"AND? {node}"
         elif in_deg == 1 and out_deg == 0:
-            node_colors.append('salmon') # Output
-            node_labels[node] = f"PO {node}"
-        else:
-            node_colors.append('lightgray') # Intermediate/Other
-            node_labels[node] = f"{node}" # Just node number
+             node_colors.append('salmon') # Potential Output within the component
+             node_labels[node] = f"PO? {node}"
+        elif in_deg == 1 and out_deg > 0:
+             node_colors.append('yellow') # Potential Buffer/Intermediate within the component
+             node_labels[node] = f"BUF? {node}"
+        else: # Handles other in_degrees or cases
+             node_colors.append('lightgray') # Intermediate/Other within the component
+             node_labels[node] = f"{node}" # Just node number
 
-    # Draw nodes using G_connected
-    nx.draw_networkx_nodes(G_connected, pos, node_color=node_colors, node_size=400, alpha=0.9)
+    # Draw nodes of the selected component
+    nx.draw_networkx_nodes(G_to_visualize, pos, node_color=node_colors, node_size=400, alpha=0.9)
 
-    # Draw edges with styles based on 'type' attribute (using G_connected)
-    regular_edges = [(u, v) for u, v, d in G_connected.edges(data=True) if d.get('type') == 1]
-    inverted_edges = [(u, v) for u, v, d in G_connected.edges(data=True) if d.get('type') == 2]
-    other_edges = [(u, v) for u, v, d in G_connected.edges(data=True) if d.get('type') not in [1, 2]]
+    # Draw edges of the selected component with styles based on 'type' attribute
+    regular_edges = [(u, v) for u, v, d in G_to_visualize.edges(data=True) if d.get('type') == 1]
+    inverted_edges = [(u, v) for u, v, d in G_to_visualize.edges(data=True) if d.get('type') == 2]
+    other_edges = [(u, v) for u, v, d in G_to_visualize.edges(data=True) if d.get('type') not in [1, 2]]
 
-    nx.draw_networkx_edges(G_connected, pos, edgelist=regular_edges, width=1.0, edge_color='black', style='solid', arrows=True, arrowsize=10)
-    nx.draw_networkx_edges(G_connected, pos, edgelist=inverted_edges, width=1.0, edge_color='red', style='dashed', arrows=True, arrowsize=10)
+    nx.draw_networkx_edges(G_to_visualize, pos, edgelist=regular_edges, width=1.0, edge_color='black', style='solid', arrows=True, arrowsize=10, connectionstyle='arc3,rad=0.1')
+    nx.draw_networkx_edges(G_to_visualize, pos, edgelist=inverted_edges, width=1.0, edge_color='red', style='dashed', arrows=True, arrowsize=10, connectionstyle='arc3,rad=0.1')
     if other_edges:
-        print(f"Warning: Found edges with unexpected types in connected subgraph: {other_edges}")
-        nx.draw_networkx_edges(G_connected, pos, edgelist=other_edges, width=0.5, edge_color='gray', style='dotted', arrows=True, arrowsize=10)
+        print(f"Warning: Found edges with unexpected types in visualized component: {other_edges}")
+        nx.draw_networkx_edges(G_to_visualize, pos, edgelist=other_edges, width=0.5, edge_color='gray', style='dotted', arrows=True, arrowsize=10, connectionstyle='arc3,rad=0.1')
 
-    # Draw labels using G_connected
-    nx.draw_networkx_labels(G_connected, pos, labels=node_labels, font_size=8)
+    # Draw labels for the selected component
+    nx.draw_networkx_labels(G_to_visualize, pos, labels=node_labels, font_size=8)
 
-    # Add legend (copied from your provided code)
+    # Add legend
     legend_elements = [
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='lightgreen', markersize=8, label='Input (PI)'),
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='lightblue', markersize=8, label='AND Gate'),
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='salmon', markersize=8, label='Output (PO)'),
-        plt.Line2D([0], [0], color='black', linestyle='solid', label='Regular Edge'),
-        plt.Line2D([0], [0], color='red', linestyle='dashed', label='Inverted Edge')
+        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='lightgreen', markersize=8, label='In-Deg 0 (PI?)'),
+        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='lightblue', markersize=8, label='In-Deg 2 (AND?)'),
+        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='yellow', markersize=8, label='In-Deg 1, Out>0 (BUF?)'),
+        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='salmon', markersize=8, label='In-Deg 1, Out=0 (PO?)'),
+        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='lightgray', markersize=8, label='Other'),
+        plt.Line2D([0], [0], color='black', linestyle='solid', label='Regular Edge (type 1)'),
+        plt.Line2D([0], [0], color='red', linestyle='dashed', label='Inverted Edge (type 2)')
     ]
     plt.legend(handles=legend_elements, loc='upper right', fontsize='small')
 
-    plt.title(title if title else 'Generated AIG (Layered Layout, Connected Only)')
+    plt.title(title if title else f'Generated AIG (Largest Component >= {min_connected_nodes} nodes)')
     plt.axis('off')
     plt.tight_layout()
     plt.savefig(output_file, dpi=300)
     plt.close()
     print(f"Generated graph visualization saved to {output_file}")
 
-    # Return the original G or the connected subgraph? Return G_connected for consistency.
-    return G_connected
+    # Return the visualized subgraph
+    return G_to_visualize
 
 
 # ==========================================
