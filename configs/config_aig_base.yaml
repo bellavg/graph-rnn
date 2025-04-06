@@ -21,8 +21,8 @@ model:
     edge_feature_len: 3 # <-- CORRECT
 
   EdgeRNN: # Settings used if edge_model is 'rnn'
-    embedding_size: 64
-    hidden_size: 256
+    embedding_size: 256
+    hidden_size: 512
     num_layers: 3
     edge_feature_len: 3 # <-- CORRECT
 
