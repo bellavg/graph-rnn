@@ -228,7 +228,7 @@ def main():
 
         graph_size = aig.num_pis() + aig.num_pos() + aig.num_gates() + 1
         Graph = get_graph(aig, graph_size, pad=False)
-        if Graph.number_of_nodes() > 128:
+        if Graph.number_of_nodes() > 64:
             continue
         all_graphs.append(Graph)
 

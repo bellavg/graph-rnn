@@ -2,7 +2,7 @@
 #SBATCH --job-name=graph-rnn
 #SBATCH --partition=gpu_a100     # Specify the appropriate partition here
 #SBATCH --gpus=1
-#SBATCH --time=04:00:00
+#SBATCH --time=14:00:00
 #SBATCH --output=slurm_logs/graphrnn_%j.out
 
 

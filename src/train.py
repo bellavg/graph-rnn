@@ -9,12 +9,17 @@ def train_mlp_step(graph_rnn, edge_mlp, data,
                    criterion_edge, criterion_node, # Use specific criteria
                    optim_graph_rnn, optim_edge_mlp,
                    scheduler_graph_rnn, scheduler_mlp, device,
-                   use_edge_features, predict_node_types, use_conditioning): # Pass flags
+                   use_edge_features, predict_node_types, use_conditioning):
     graph_rnn.zero_grad()
     edge_mlp.zero_grad()
 
-    # Get mandatory data
+    # Get mandatory data & NEW: levels
     s, lens = data['x'].float().to(device), data['len'].cpu() # s: [batch, seq_len_padded, effective_m, features]
+    levels_padded = data.get('levels') # Get levels tensor
+    if levels_padded is not None:
+        levels_padded = levels_padded.long().to(device) # Shape: [batch, max_n-1]
+    # --- End NEW ---
+
 
     # --- Basic Shape Checks and Setup ---
     if s.numel() == 0 or lens.numel() == 0 or torch.all(lens == 0):
@@ -58,12 +63,32 @@ def train_mlp_step(graph_rnn, edge_mlp, data,
 
     lens_with_sos = lens + 1
 
+    # --- NEW: Prepare Levels tensor for GraphRNN input ---
+    levels_for_rnn = None
+    if levels_padded is not None:
+        # levels_padded corresponds to nodes 1 to max_n-1
+        # We need levels for input steps 0 (SOS) to max_n-1
+        sos_level = torch.zeros(batch_size, 1, dtype=torch.long, device=device)  # Assign level 0 to SOS token
+        # Slice padded levels to match max sequence length `seq_len_padded` = max_n-1
+        levels_sliced = levels_padded[:, :seq_len_padded]  # Shape: [batch, max_n-1]
+        levels_for_rnn = torch.cat((sos_level, levels_sliced), dim=1)  # Shape: [batch, max_n]
+        # Ensure shape matches x's sequence dim
+        if levels_for_rnn.shape[1] != x.shape[1]:
+            print(
+                f"Warning: Level tensor seq length ({levels_for_rnn.shape[1]}) mismatch with input x seq length ({x.shape[1]}). Adjusting.")
+            # Adjust padding/slicing if necessary, though above logic should work if max_n is consistent
+            target_len = x.shape[1]
+            levels_for_rnn = torch.cat((sos_level, levels_padded[:, :target_len - 1]), dim=1)
+            if levels_for_rnn.shape[1] != target_len:  # Check again after adjustment
+                print("ERROR: Cannot align level tensor length. Disabling level embedding for this batch.")
+                levels_for_rnn = None  # Disable if alignment fails
+    # --- End NEW ---
+
     # --- GraphRNN Forward Pass ---
     graph_rnn.reset_hidden()
-    output = graph_rnn(x, lens_with_sos, truth_table=truth_table if use_conditioning else None)
+    output = graph_rnn(x, lens_with_sos, truth_table=truth_table, levels=levels_for_rnn)
 
     # Unpack output
-    hidden = None
     node_type_logits = None
     if predict_node_types and isinstance(output, tuple):
         hidden, node_type_logits = output
@@ -226,12 +251,16 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
                    scheduler_graph_rnn, scheduler_edge_rnn,
                    device, use_edge_features,
                    predict_node_types, use_conditioning):
-    """Train GraphRNN with RNN edge model."""
     graph_rnn.zero_grad()
     edge_rnn.zero_grad()
 
-    # Get mandatory data
-    seq, lens = data['x'].float().to(device), data['len'].cpu() # seq: [batch, seq_len_padded, effective_m, features]
+    # Get mandatory data & NEW: levels
+    seq, lens = data['x'].float().to(device), data['len'].cpu()
+    levels_padded = data.get('levels') # Get levels tensor
+    if levels_padded is not None:
+        levels_padded = levels_padded.long().to(device) # Shape: [batch, max_n-1]
+    # --- End NEW ---
+
 
     # --- Basic Shape Checks and Setup ---
     if seq.numel() == 0 or lens.numel() == 0 or torch.all(lens == 0):
@@ -272,10 +301,26 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
     x_node_rnn_full = torch.cat((one_frame_node, seq), dim=1) # Shape: [batch, seq_len_padded+1, effective_m, features]
     lens_node_rnn = lens + 1 # Lengths including SOS
 
+    # --- NEW: Prepare Levels tensor for GraphRNN input ---
+    # (Identical logic to train_mlp_step)
+    levels_for_rnn = None
+    if levels_padded is not None:
+        sos_level = torch.zeros(batch_size, 1, dtype=torch.long, device=device)
+        levels_sliced = levels_padded[:, :seq_len_padded]  # Shape: [batch, max_n-1]
+        levels_for_rnn = torch.cat((sos_level, levels_sliced), dim=1)  # Shape: [batch, max_n]
+        if levels_for_rnn.shape[1] != x_node_rnn_full.shape[1]:
+            print(
+                f"Warning: Level tensor seq length ({levels_for_rnn.shape[1]}) mismatch with input x seq length ({x_node_rnn_full.shape[1]}). Adjusting.")
+            target_len = x_node_rnn_full.shape[1]
+            levels_for_rnn = torch.cat((sos_level, levels_padded[:, :target_len - 1]), dim=1)
+            if levels_for_rnn.shape[1] != target_len:
+                print("ERROR: Cannot align level tensor length. Disabling level embedding for this batch.")
+                levels_for_rnn = None
+
     # --- GraphRNN Forward Pass ---
     graph_rnn.reset_hidden()
-    output = graph_rnn(x_node_rnn_full, lens_node_rnn, # Pass lens+1
-                       truth_table=truth_table if use_conditioning else None)
+    output = graph_rnn(x_node_rnn_full, lens_node_rnn,
+                       truth_table=truth_table, levels=levels_for_rnn)
 
     # Unpack output
     hidden = None

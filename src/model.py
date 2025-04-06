@@ -1,35 +1,46 @@
-import torch
-import torch.nn as nn
-from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
-from typing import Optional, Tuple, List, Union
 
 
 import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 from typing import Optional, Tuple, List, Union
+
 
 
 class GraphLevelRNN(nn.Module):
     # --- MODIFIED __init__ ---
     def __init__(self, input_size, embedding_size, hidden_size, num_layers,
                  output_size=None, edge_feature_len=1,
-                 predict_node_types=False, num_node_types=None, # NEW args
-                 use_conditioning=False, tt_size=None):       # NEW args
+                 predict_node_types=False, num_node_types=None,
+                 use_conditioning=False, tt_size=None,
+                 max_level=None): # ADDED max_level argument
         super().__init__()
         self.input_size = input_size
+        self.embedding_size = embedding_size # Store for level embedding
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
         self.edge_feature_len = edge_feature_len
         self.predict_node_types = predict_node_types
         self.use_conditioning = use_conditioning
         self.tt_size = tt_size
+        self.max_level = max_level # ADDED
 
         # Adjust input linear layer if conditioning is used
         lin_in_features = input_size * edge_feature_len
         if self.use_conditioning and self.tt_size is not None:
-            lin_in_features += self.tt_size # Add truth table size to input features
+            lin_in_features += self.tt_size
 
         self.linear_in = nn.Linear(lin_in_features, embedding_size)
         self.relu = nn.ReLU()
+
+        # --- NEW: Level Positional Embedding ---
+        self.level_embedding = None
+        if self.max_level is not None and self.max_level >= 0:
+             # Add 1 to max_level because levels are 0-indexed
+             self.level_embedding = nn.Embedding(self.max_level + 1, embedding_size)
+             print(f"INFO: GraphLevelRNN using level embedding up to level {self.max_level}")
+        # --- END NEW ---
+
         self.gru = nn.GRU(input_size=embedding_size, hidden_size=hidden_size,
                           num_layers=num_layers, batch_first=True)
 
@@ -41,37 +52,51 @@ class GraphLevelRNN(nn.Module):
             self.linear_out1 = None
             self.linear_out2 = None
 
-        # --- NEW: Optional node type prediction head ---
+        # Optional node type prediction head
         self.node_type_predictor = None
         if self.predict_node_types:
             if num_node_types is None:
                 raise ValueError("num_node_types must be specified if predict_node_types is True")
-            # Simple linear layer on top of GRU hidden state
             self.node_type_predictor = nn.Linear(hidden_size, num_node_types)
-        # --- END NEW ---
 
         self.hidden = None
-
 
     def reset_hidden(self):
-        """Resets the hidden state to 0."""
-        # By setting to None, PyTorch will automatically use a zero tensor.
         self.hidden = None
 
-    def forward(self, x, x_lens=None, truth_table=None):  # Add truth_table arg
-        # Flatten edge features
+    # --- MODIFIED forward ---
+    def forward(self, x, x_lens=None, truth_table=None, levels=None): # ADDED levels argument
         # x shape: [batch, seq_len, input_size, edge_feature_len]
+        # levels shape: [batch, seq_len] (should align with x's seq_len after SOS)
+
+        batch_size, seq_len, _, _ = x.shape
+
+        # Flatten edge features
         x = torch.flatten(x, 2, 3)  # [batch, seq_len, input_size * edge_feature_len]
 
-        # --- NEW: Concatenate truth table if conditioning ---
+        # Concatenate truth table if conditioning
         if self.use_conditioning and truth_table is not None:
-            # truth_table shape [batch, tt_size] -> [batch, 1, tt_size]
-            tt_expanded = truth_table.unsqueeze(1).expand(-1, x.shape[1], -1)
-            # Concatenate along the feature dimension
+            tt_expanded = truth_table.unsqueeze(1).expand(-1, seq_len, -1)
             x = torch.cat((x, tt_expanded), dim=2)
-        # --- END NEW ---
 
+        # Initial embedding
         x = self.relu(self.linear_in(x))  # [batch, seq_len, embedding_dim]
+
+        # --- NEW: Add Level Embedding ---
+        if self.level_embedding is not None and levels is not None:
+            if levels.shape[0] == batch_size and levels.shape[1] == seq_len:
+                try:
+                    # Ensure levels are within embedding range
+                    clamped_levels = torch.clamp(levels, 0, self.max_level)
+                    lvl_emb = self.level_embedding(clamped_levels) # Shape: [batch, seq_len, embedding_dim]
+                    x = x + lvl_emb # Add level embedding to node embedding
+                except IndexError as e:
+                    print(f"Warning: Index error during level embedding lookup (levels out of range? Max level: {self.max_level}): {e}")
+                except Exception as e:
+                    print(f"Warning: Error adding level embedding: {e}")
+            else:
+                 print(f"Warning: Shape mismatch between input x ({x.shape}) and levels ({levels.shape}). Skipping level embedding.")
+        # --- END NEW ---
 
         target_padded_length = None
         if x_lens is not None:
