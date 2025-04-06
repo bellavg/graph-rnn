@@ -628,8 +628,8 @@ def load_aig_model_from_config(model_path):
 
     # Return necessary items for evaluation
     # Note: tt_size is returned as None because conditioning is forced off during generation
-    return node_model, edge_model, input_size, edge_gen_function, mode, None, config # Return config too
-
+    #return node_model, edge_model, input_size, edge_gen_function, mode, None, config # Return config too
+    return node_model, edge_model, input_size, edge_gen_function, mode, None, config, edge_feature_len
 
 
 def evaluate_model(model_path, num_graphs=50, min_nodes=10, max_nodes=100,
@@ -666,7 +666,7 @@ def evaluate_model(model_path, num_graphs=50, min_nodes=10, max_nodes=100,
     if not model_result:
         return {"error": f"Failed to load model from {model_path}"}
 
-    node_model, edge_model, input_size, edge_gen_function, mode, tt_size, config = model_result
+    node_model, edge_model, input_size, edge_gen_function, mode, tt_size, config, edge_feature_len = model_result
 
     # Override config setting with explicit parameter if provided
     if predict_node_types is not None:
