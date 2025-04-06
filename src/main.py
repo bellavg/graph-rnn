@@ -5,9 +5,10 @@ import os
 import time
 import datetime
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import MultiStepLR
+
 from torch.utils.tensorboard import SummaryWriter
 import pickle
+from torch.optim.lr_scheduler import ReduceLROnPlateau, MultiStepLR
 
 # Assuming these imports are correct relative to your project structure
 from train import train_rnn_step, train_mlp_step
@@ -386,12 +387,16 @@ def main():
     try:
         optim_node_model = torch.optim.Adam(node_model.parameters(), lr=config['train']['lr'])
         optim_edge_model = torch.optim.Adam(edge_model.parameters(), lr=config['train']['lr'])
-        scheduler_node_model = MultiStepLR(optim_node_model,
-                                           milestones=config['train']['lr_schedule_milestones'],
-                                           gamma=config['train']['lr_schedule_gamma'])
-        scheduler_edge_model = MultiStepLR(optim_edge_model,
-                                           milestones=config['train']['lr_schedule_milestones'],
-                                           gamma=config['train']['lr_schedule_gamma'])
+        scheduler_node_model = ReduceLROnPlateau(optim_node_model,
+                                                 mode='min',  # 'min' for loss, 'max' for accuracy
+                                                 factor=0.1,  # Factor by which the learning rate will be reduced
+                                                 patience=50,
+                                                 )  # Print a message when LR is reduced
+        scheduler_edge_model = ReduceLROnPlateau(optim_edge_model,
+                                                 mode='min',
+                                                 factor=0.1,
+                                                 patience=50,
+                                                 )
     except KeyError as e:
         print(f"Error setting up optimizers/schedulers: Missing key {e} in config['train']")
         return 1

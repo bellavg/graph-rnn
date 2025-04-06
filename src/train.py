@@ -514,14 +514,13 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
     elif total_loss.requires_grad:
         total_loss.backward()
         # Optional: Gradient clipping
-        # torch.nn.utils.clip_grad_norm_(graph_rnn.parameters(), max_norm=1.0)
-        # torch.nn.utils.clip_grad_norm_(edge_rnn.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(graph_rnn.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(edge_rnn.parameters(), max_norm=1.0)
         optim_graph_rnn.step()
         optim_edge_rnn.step() # Use edge RNN optimizer
+        scheduler_graph_rnn.step(total_loss)  # Pass the metric
+        scheduler_edge_rnn.step(total_loss)  # Pass the metric
 
-    # Step schedulers
-    scheduler_graph_rnn.step()
-    scheduler_edge_rnn.step() # Use edge RNN scheduler
 
     return {
         'total': total_loss.item() if isinstance(total_loss, torch.Tensor) else total_loss,
