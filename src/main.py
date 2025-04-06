@@ -390,12 +390,12 @@ def main():
         scheduler_node_model = ReduceLROnPlateau(optim_node_model,
                                                  mode='min',  # 'min' for loss, 'max' for accuracy
                                                  factor=0.1,  # Factor by which the learning rate will be reduced
-                                                 patience=50,
+                                                 patience=200,
                                                  )  # Print a message when LR is reduced
         scheduler_edge_model = ReduceLROnPlateau(optim_edge_model,
                                                  mode='min',
                                                  factor=0.1,
-                                                 patience=50,
+                                                 patience=200,
                                                  )
     except KeyError as e:
         print(f"Error setting up optimizers/schedulers: Missing key {e} in config['train']")
