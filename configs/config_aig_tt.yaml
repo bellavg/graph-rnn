@@ -2,7 +2,7 @@ data:
   dataset_type: 'aig-directed-multiclass'
   m: 16  # Adjust based on your graph analysis
   graph_file: 'dataset/inputs8_outputs2.pkl'  # Update with your actual file path
-  use_bfs: true
+  use_bfs: false
   max_graphs: null  # Set a number for debugging with fewer graphs
 
 model:

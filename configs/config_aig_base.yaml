@@ -1,29 +1,29 @@
 data:
   dataset_type: 'aig-directed-multiclass'
-  m: 16  # Adjust based on your graph analysis
-  graph_file: 'dataset/inputs8_outputs2.pkl'  # Update with your actual file path
-  use_bfs: true
-  max_graphs: null  # Set a number for debugging with fewer graphs
+  #m: 16  # Adjust based on your graph analysis  <-- CAN BE REMOVED/IGNORED
+  graph_file: 'dataset/inputs8_outputs8less.pkl'  # Update with your actual file path <-- CHECK PATH
+  use_bfs: false  # <--- CORRECT for Topological Sort
+  max_graphs: null
 
 model:
-  mode: 'directed-multiclass'
-  edge_model: 'mlp'  # Use 'mlp' or 'rnn'
+  mode: 'directed-multiclass' # Correct for AIGs
+  edge_model: 'mlp'  # Use 'mlp' or 'rnn' <-- CURRENT CHOICE (See discussion below)
 
   GraphRNN:
     embedding_size: 128
     hidden_size: 256
     num_layers: 3
-    edge_feature_len: 3  # 3 edge types for AIGs
+    edge_feature_len: 3  # <-- CORRECT (None, Regular, Inverted)
 
-  EdgeMLP:
+  EdgeMLP: # Settings used if edge_model is 'mlp'
     hidden_size: 256
-    edge_feature_len: 3
+    edge_feature_len: 3 # <-- CORRECT
 
-  EdgeRNN:
+  EdgeRNN: # Settings used if edge_model is 'rnn'
     embedding_size: 64
     hidden_size: 256
     num_layers: 3
-    edge_feature_len: 3
+    edge_feature_len: 3 # <-- CORRECT
 
 train:
   batch_size: 32

@@ -221,8 +221,8 @@ def main():
             print(f"Failed to load {filename}: {e}")
             continue
 
-        # Only allow AIGs with 8 inputs and 2 outputs
-        if aig.num_pis() != 8 and aig.num_pos() !=2:
+        # Only allow AIGs with 8 inputs and less than 8 outputs
+        if aig.num_pis() != 8 and aig.num_pos() <=8:
             continue
 
         graph_size = aig.num_pis() + aig.num_pos() + aig.num_gates() + 1
@@ -231,7 +231,7 @@ def main():
 
 
     print("Filtered Dataset Size:", len(all_graphs))
-    save_all_graphs(all_graphs, "./inputs8_outputs2.pkl")
+    save_all_graphs(all_graphs, "./inputs8_outputs8less.pkl")
 
 
 if __name__ == "__main__":

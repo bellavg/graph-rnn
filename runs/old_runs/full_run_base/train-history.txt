@@ -1,0 +1,211 @@
+/Users/bellavg/miniconda3/envs/aig-ml/bin/python /Users/bellavg/graph-rnn/main.py
+Loaded config:
+data:
+  dataset_type: aig-directed-multiclass
+  m: 16
+  graph_file: dataset/inputs8_outputs2.pkl
+  use_bfs: true
+  max_graphs: null
+model:
+  mode: directed-multiclass
+  edge_model: mlp
+  GraphRNN:
+    embedding_size: 128
+    hidden_size: 256
+    num_layers: 3
+    edge_feature_len: 3
+  EdgeMLP:
+    hidden_size: 256
+    edge_feature_len: 3
+  EdgeRNN:
+    embedding_size: 64
+    hidden_size: 256
+    num_layers: 3
+    edge_feature_len: 3
+train:
+  batch_size: 32
+  lr: 0.001
+  steps: 15000
+  print_iter: 100
+  checkpoint_iter: 1000
+  checkpoint_dir: runs/base_checkpoints
+  log_dir: runs/base_logs
+  lr_schedule_milestones:
+  - 3000
+  - 6000
+  - 9000
+  lr_schedule_gamma: 0.3
+
+Loading AIG graphs from dataset/inputs8_outputs2.pkl...
+Loaded 10028 AIG graphs
+Processing graph 10028/10028...
+Graph preprocessing complete
+Maximum node count: 52
+Dataset initialized with 8022 training graphs
+Node type information is not included
+[100] loss=0.2018 time_per_iter=0.0963s eta=0:23:55
+[200] loss=0.1450 time_per_iter=0.0794s eta=0:19:34
+[300] loss=0.1416 time_per_iter=0.0813s eta=0:19:55
+[400] loss=0.1409 time_per_iter=0.0773s eta=0:18:49
+[500] loss=0.1420 time_per_iter=0.0759s eta=0:18:20
+[600] loss=0.1386 time_per_iter=0.0743s eta=0:17:50
+[700] loss=0.1392 time_per_iter=0.0743s eta=0:17:42
+[800] loss=0.1245 time_per_iter=0.0736s eta=0:17:25
+[900] loss=0.1182 time_per_iter=0.0734s eta=0:17:14
+[1000] loss=0.1146 time_per_iter=0.0735s eta=0:17:09
+Saving checkpoint...
+[1100] loss=0.1102 time_per_iter=0.0762s eta=0:17:38
+[1200] loss=0.1074 time_per_iter=0.0760s eta=0:17:28
+[1300] loss=0.1045 time_per_iter=0.0757s eta=0:17:17
+[1400] loss=0.1033 time_per_iter=0.0760s eta=0:17:13
+[1500] loss=0.1030 time_per_iter=0.0763s eta=0:17:09
+[1600] loss=0.1006 time_per_iter=0.0759s eta=0:16:56
+[1700] loss=0.1011 time_per_iter=0.0758s eta=0:16:48
+[1800] loss=0.1001 time_per_iter=0.0755s eta=0:16:36
+[1900] loss=0.0992 time_per_iter=0.0754s eta=0:16:27
+[2000] loss=0.0999 time_per_iter=0.0752s eta=0:16:17
+Saving checkpoint...
+[2100] loss=0.0976 time_per_iter=0.0756s eta=0:16:14
+[2200] loss=0.0982 time_per_iter=0.0759s eta=0:16:11
+[2300] loss=0.0976 time_per_iter=0.0798s eta=0:16:53
+[2400] loss=0.0967 time_per_iter=0.0848s eta=0:17:48
+[2500] loss=0.0979 time_per_iter=0.0861s eta=0:17:56
+[2600] loss=0.0960 time_per_iter=0.0861s eta=0:17:47
+[2700] loss=0.0965 time_per_iter=0.0864s eta=0:17:42
+[2800] loss=0.0964 time_per_iter=0.0864s eta=0:17:34
+[2900] loss=0.0957 time_per_iter=0.0862s eta=0:17:22
+[3000] loss=0.0969 time_per_iter=0.0859s eta=0:17:11
+Saving checkpoint...
+[3100] loss=0.0946 time_per_iter=0.0861s eta=0:17:04
+[3200] loss=0.0947 time_per_iter=0.0858s eta=0:16:52
+[3300] loss=0.0951 time_per_iter=0.0855s eta=0:16:40
+[3400] loss=0.0942 time_per_iter=0.0857s eta=0:16:34
+[3500] loss=0.0954 time_per_iter=0.0859s eta=0:16:27
+[3600] loss=0.0944 time_per_iter=0.0861s eta=0:16:21
+[3700] loss=0.0941 time_per_iter=0.0863s eta=0:16:15
+[3800] loss=0.0948 time_per_iter=0.0864s eta=0:16:07
+[3900] loss=0.0941 time_per_iter=0.0865s eta=0:16:00
+[4000] loss=0.0950 time_per_iter=0.0868s eta=0:15:54
+Saving checkpoint...
+[4100] loss=0.0944 time_per_iter=0.0874s eta=0:15:52
+[4200] loss=0.0939 time_per_iter=0.0879s eta=0:15:49
+[4300] loss=0.0945 time_per_iter=0.0893s eta=0:15:55
+[4400] loss=0.0941 time_per_iter=0.0900s eta=0:15:54
+[4500] loss=0.0947 time_per_iter=0.0908s eta=0:15:53
+[4600] loss=0.0940 time_per_iter=0.0916s eta=0:15:52
+[4700] loss=0.0937 time_per_iter=0.0926s eta=0:15:53
+[4800] loss=0.0942 time_per_iter=0.0971s eta=0:16:30
+[4900] loss=0.0939 time_per_iter=0.0992s eta=0:16:41
+[5000] loss=0.0943 time_per_iter=0.0998s eta=0:16:38
+Saving checkpoint...
+[5100] loss=0.0941 time_per_iter=0.1000s eta=0:16:30
+[5200] loss=0.0932 time_per_iter=0.1000s eta=0:16:20
+[5300] loss=0.0941 time_per_iter=0.1003s eta=0:16:12
+[5400] loss=0.0938 time_per_iter=0.1002s eta=0:16:02
+[5500] loss=0.0939 time_per_iter=0.1003s eta=0:15:52
+[5600] loss=0.0939 time_per_iter=0.1003s eta=0:15:42
+[5700] loss=0.0928 time_per_iter=0.1012s eta=0:15:41
+[5800] loss=0.0940 time_per_iter=0.1013s eta=0:15:32
+[5900] loss=0.0935 time_per_iter=0.1015s eta=0:15:23
+[6000] loss=0.0937 time_per_iter=0.1016s eta=0:15:14
+Saving checkpoint...
+[6100] loss=0.0935 time_per_iter=0.1017s eta=0:15:05
+[6200] loss=0.0922 time_per_iter=0.1016s eta=0:14:54
+[6300] loss=0.0933 time_per_iter=0.1016s eta=0:14:44
+[6400] loss=0.0931 time_per_iter=0.1016s eta=0:14:34
+[6500] loss=0.0930 time_per_iter=0.1016s eta=0:14:23
+[6600] loss=0.0932 time_per_iter=0.1016s eta=0:14:13
+[6700] loss=0.0920 time_per_iter=0.1019s eta=0:14:05
+[6800] loss=0.0933 time_per_iter=0.1021s eta=0:13:57
+[6900] loss=0.0930 time_per_iter=0.1020s eta=0:13:46
+[7000] loss=0.0930 time_per_iter=0.1020s eta=0:13:36
+Saving checkpoint...
+[7100] loss=0.0930 time_per_iter=0.1020s eta=0:13:25
+[7200] loss=0.0919 time_per_iter=0.1638s eta=0:21:17
+[7300] loss=0.0931 time_per_iter=0.1675s eta=0:21:29
+[7400] loss=0.0929 time_per_iter=0.1696s eta=0:21:28
+[7500] loss=0.0930 time_per_iter=0.1706s eta=0:21:19
+[7600] loss=0.0928 time_per_iter=0.1707s eta=0:21:03
+[7700] loss=0.0918 time_per_iter=0.1714s eta=0:20:50
+[7800] loss=0.0930 time_per_iter=0.1708s eta=0:20:30
+[7900] loss=0.0926 time_per_iter=0.1701s eta=0:20:07
+[8000] loss=0.0929 time_per_iter=0.1699s eta=0:19:49
+Saving checkpoint...
+[8100] loss=0.0925 time_per_iter=0.1691s eta=0:19:26
+[8200] loss=0.0919 time_per_iter=0.1685s eta=0:19:05
+[8300] loss=0.0928 time_per_iter=0.1691s eta=0:18:52
+[8400] loss=0.0924 time_per_iter=0.1688s eta=0:18:33
+[8500] loss=0.0927 time_per_iter=0.1683s eta=0:18:13
+[8600] loss=0.0925 time_per_iter=0.1676s eta=0:17:52
+[8700] loss=0.0918 time_per_iter=0.1672s eta=0:17:33
+[8800] loss=0.0927 time_per_iter=0.1667s eta=0:17:13
+[8900] loss=0.0923 time_per_iter=0.1667s eta=0:16:57
+[9000] loss=0.0925 time_per_iter=0.1667s eta=0:16:40
+Saving checkpoint...
+[9100] loss=0.0925 time_per_iter=0.1662s eta=0:16:20
+[9200] loss=0.0914 time_per_iter=0.1665s eta=0:16:05
+[9300] loss=0.0925 time_per_iter=0.1663s eta=0:15:47
+[9400] loss=0.0921 time_per_iter=0.1658s eta=0:15:28
+[9500] loss=0.0923 time_per_iter=0.1653s eta=0:15:09
+[9600] loss=0.0923 time_per_iter=0.1657s eta=0:14:54
+[9700] loss=0.0912 time_per_iter=0.1654s eta=0:14:36
+[9800] loss=0.0927 time_per_iter=0.1653s eta=0:14:19
+[9900] loss=0.0918 time_per_iter=0.1647s eta=0:13:59
+[10000] loss=0.0924 time_per_iter=0.1640s eta=0:13:39
+Saving checkpoint...
+[10100] loss=0.0922 time_per_iter=0.1634s eta=0:13:20
+[10200] loss=0.0911 time_per_iter=0.1629s eta=0:13:01
+[10300] loss=0.0926 time_per_iter=0.1623s eta=0:12:42
+[10400] loss=0.0919 time_per_iter=0.1617s eta=0:12:23
+[10500] loss=0.0925 time_per_iter=0.1614s eta=0:12:06
+[10600] loss=0.0919 time_per_iter=0.1613s eta=0:11:49
+[10700] loss=0.0913 time_per_iter=0.1609s eta=0:11:32
+[10800] loss=0.0924 time_per_iter=0.1606s eta=0:11:14
+[10900] loss=0.0919 time_per_iter=0.1600s eta=0:10:56
+[11000] loss=0.0924 time_per_iter=0.1595s eta=0:10:38
+Saving checkpoint...
+[11100] loss=0.0918 time_per_iter=0.1590s eta=0:10:20
+[11200] loss=0.0915 time_per_iter=0.1586s eta=0:10:02
+[11300] loss=0.0923 time_per_iter=0.1584s eta=0:09:46
+[11400] loss=0.0917 time_per_iter=0.1581s eta=0:09:29
+[11500] loss=0.0924 time_per_iter=0.1577s eta=0:09:11
+[11600] loss=0.0916 time_per_iter=0.1577s eta=0:08:56
+[11700] loss=0.0914 time_per_iter=0.1574s eta=0:08:39
+[11800] loss=0.0924 time_per_iter=0.1570s eta=0:08:22
+[11900] loss=0.0915 time_per_iter=0.1569s eta=0:08:06
+[12000] loss=0.0925 time_per_iter=0.1565s eta=0:07:49
+Saving checkpoint...
+[12100] loss=0.0916 time_per_iter=0.1562s eta=0:07:33
+[12200] loss=0.0913 time_per_iter=0.1559s eta=0:07:16
+[12300] loss=0.0926 time_per_iter=0.1555s eta=0:06:59
+[12400] loss=0.0912 time_per_iter=0.1550s eta=0:06:42
+[12500] loss=0.0923 time_per_iter=0.1546s eta=0:06:26
+[12600] loss=0.0915 time_per_iter=0.1541s eta=0:06:09
+[12700] loss=0.0914 time_per_iter=0.1536s eta=0:05:53
+[12800] loss=0.0925 time_per_iter=0.1532s eta=0:05:37
+[12900] loss=0.0911 time_per_iter=0.1527s eta=0:05:20
+[13000] loss=0.0923 time_per_iter=0.1523s eta=0:05:04
+Saving checkpoint...
+[13100] loss=0.0915 time_per_iter=0.1519s eta=0:04:48
+[13200] loss=0.0915 time_per_iter=0.1515s eta=0:04:32
+[13300] loss=0.0924 time_per_iter=0.1511s eta=0:04:16
+[13400] loss=0.0911 time_per_iter=0.1507s eta=0:04:01
+[13500] loss=0.0920 time_per_iter=0.1502s eta=0:03:45
+[13600] loss=0.0916 time_per_iter=0.1499s eta=0:03:29
+[13700] loss=0.0916 time_per_iter=0.1495s eta=0:03:14
+[13800] loss=0.0923 time_per_iter=0.1491s eta=0:02:58
+[13900] loss=0.0911 time_per_iter=0.1487s eta=0:02:43
+[14000] loss=0.0919 time_per_iter=0.1484s eta=0:02:28
+Saving checkpoint...
+[14100] loss=0.0916 time_per_iter=0.1481s eta=0:02:13
+[14200] loss=0.0914 time_per_iter=0.1477s eta=0:01:58
+[14300] loss=0.0923 time_per_iter=0.1481s eta=0:01:43
+[14400] loss=0.0912 time_per_iter=0.1483s eta=0:01:28
+[14500] loss=0.0915 time_per_iter=0.1480s eta=0:01:14
+[14600] loss=0.0918 time_per_iter=0.1481s eta=0:00:59
+[14700] loss=0.0913 time_per_iter=0.1479s eta=0:00:44
+[14800] loss=0.0923 time_per_iter=0.1483s eta=0:00:29
+[14900] loss=0.0911 time_per_iter=0.1481s eta=0:00:14
+[15000] loss=0.0914 time_per_iter=0.1483s eta=0:00:00
+Saving checkpoint...
+
