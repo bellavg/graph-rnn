@@ -20,7 +20,7 @@ source activate  aig-rnn
 
 # Print environment info
 # Set output directory with job ID
-OUTPUT_DIR="runs/graphrnn_${SLURM_JOB_ID}"
+OUTPUT_DIR="new_runs/graphrnn_${SLURM_JOB_ID}"
 mkdir -p $OUTPUT_DIR
 
 # Config file to use (provide as parameter or default)
