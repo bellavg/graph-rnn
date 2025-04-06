@@ -20,7 +20,7 @@ source activate aig-rnn
 # --- Evaluation Specific Settings ---
 
 # Define the checkpoint to evaluate
-CHECKPOINT_PATH="runs/graphrnn_10999759/base_checkpoints/checkpoint-10000.pth."
+CHECKPOINT_PATH="runs/graphrnn_10999759/base_checkpoints/checkpoint-10000.pth"
 
 # Define the output directory for this evaluation run
 # You might want to make this more specific, e.g., include checkpoint step
