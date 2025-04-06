@@ -31,7 +31,7 @@ train:
   steps: 15000
   print_iter: 100
   checkpoint_iter: 1000
-  checkpoint_dir: 'runs/base_checkpoints'
-  log_dir: 'runs/base_logs'
+  checkpoint_dir: 'base_checkpoints'
+  log_dir: 'base_logs'
   lr_schedule_milestones: [3000, 6000, 9000]
   lr_schedule_gamma: 0.3
