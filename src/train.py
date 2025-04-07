@@ -135,6 +135,8 @@ def train_mlp_step(graph_rnn, edge_mlp, data,
 # MODIFIED train_rnn_step for ATTENTION
 # ==============================================
 
+# src/train.py (Partial - Only showing updated train_rnn_step function)
+
 def train_rnn_step(graph_rnn, edge_rnn, data,
                    criterion_edge, # Changed name
                    optim_graph_rnn,
@@ -180,9 +182,11 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
 
     # --- 1. Run GraphLevelRNN to get all node hidden states ---
     graph_rnn.reset_hidden()
-    node_hiddens = graph_rnn(x_node_rnn_input, lens_node_rnn,
-                             levels=levels_for_node_rnn,
-                             return_all_hiddens=True) # Request all hidden states
+    # Get the sequence of hidden states - should already be padded
+    # node_hiddens_padded shape: [B, MaxSeq+1, NodeHiddenSize]
+    node_hiddens_padded = graph_rnn(x_node_rnn_input, lens_node_rnn,
+                                    levels=levels_for_node_rnn,
+                                    return_all_hiddens=True) # Request all hidden states
 
     # --- 2. Prepare inputs for EdgeLevelRNN ---
     try:
@@ -206,24 +210,55 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
 
 
     # --- 3. Prepare `prev_node_hiddens` AND `attn_mask` for Attention ---
-    node_hiddens_padded, _ = pad_packed_sequence(
-        PackedSequence(data=node_hiddens, batch_sizes=x_edge_input_packed.batch_sizes,
-                       sorted_indices=x_edge_input_packed.sorted_indices,
-                       unsorted_indices=x_edge_input_packed.unsorted_indices),
-        batch_first=True, total_length=x_node_rnn_input.shape[1]
-    )
+    # *** Removed the incorrect pad_packed_sequence call for node_hiddens ***
+    # Use node_hiddens_padded directly as it's already the correct padded shape
 
     prev_node_hiddens_list = []
-    valid_history_lengths = [] # Store the actual length of history for each step
-    current_pos_in_packed = 0
-    for i_batch in range(batch_size):
-        original_batch_idx = x_edge_input_packed.unsorted_indices[i_batch] if x_edge_input_packed.unsorted_indices is not None else i_batch
-        seq_len = lens_cpu[original_batch_idx].item()
-        for step_within_seq in range(seq_len):
-            num_prev_nodes = step_within_seq + 1 # Actual history length
-            history = node_hiddens_padded[original_batch_idx, :num_prev_nodes, :]
-            prev_node_hiddens_list.append(history)
-            valid_history_lengths.append(num_prev_nodes) # Store length
+    valid_history_lengths = []
+    # Use the packing information from the *edge input* sequence to map steps
+    edge_batch_indices = []
+    if hasattr(x_edge_input_packed, 'unsorted_indices') and x_edge_input_packed.unsorted_indices is not None:
+        # Map sorted batch index back to original batch index
+        map_packed_step_to_batch_idx = {i: x_edge_input_packed.unsorted_indices[i].item() for i in range(batch_size)}
+    else: # Already sorted or batch size 1
+        map_packed_step_to_batch_idx = {i: i for i in range(batch_size)}
+
+    current_packed_idx = 0
+    for i_batch_sorted in range(len(x_edge_input_packed.batch_sizes)): # Iterate through packed batch steps
+        current_batch_size = x_edge_input_packed.batch_sizes[i_batch_sorted].item()
+        original_indices = [map_packed_step_to_batch_idx[idx] for idx in x_edge_input_packed.sorted_indices[current_packed_idx : current_packed_idx + current_batch_size]] if hasattr(x_edge_input_packed, 'sorted_indices') and x_edge_input_packed.sorted_indices is not None else list(range(current_batch_size))
+
+        # step_within_seq corresponds to the time step in the *original* sequence length
+        step_within_seq = i_batch_sorted # Time step t (0-indexed)
+
+        # For each item active at this time step in the packed sequence
+        for step_idx in range(current_batch_size):
+            original_batch_idx = original_indices[step_idx]
+            # Ensure we don't exceed the actual length for this sequence item
+            if step_within_seq < lens_cpu[original_batch_idx].item():
+                 # We need history up to and including the node corresponding to this edge step
+                 # Edge step `step_within_seq` predicts edges for node `step_within_seq + 1`
+                 # Node hidden indices: 0=SOS, 1=Node0, ..., i=Node(i-1)
+                 # We need hidden states from index 0 up to `step_within_seq + 1` (inclusive)
+                 num_prev_nodes = step_within_seq + 1 + 1 # +1 for inclusive, +1 for SOS offset
+                 history = node_hiddens_padded[original_batch_idx, :num_prev_nodes, :]
+                 prev_node_hiddens_list.append(history)
+                 valid_history_lengths.append(num_prev_nodes)
+                 edge_batch_indices.append(original_batch_idx) # Keep track of which batch item this step belongs to
+
+        current_packed_idx += current_batch_size
+
+    # Check if the number of histories matches the total steps
+    if len(prev_node_hiddens_list) != total_steps_edges:
+        print(f"Error: History list length ({len(prev_node_hiddens_list)}) mismatch with total edge steps ({total_steps_edges}). Check packing logic.")
+        # Attempt to fix by truncating/padding, or return error
+        if len(prev_node_hiddens_list) > total_steps_edges:
+             prev_node_hiddens_list = prev_node_hiddens_list[:total_steps_edges]
+             valid_history_lengths = valid_history_lengths[:total_steps_edges]
+        else:
+             # Cannot easily fix if too short
+             return {'total': 0.0, 'edge': 0.0}
+
 
     max_prev_nodes = max(valid_history_lengths) if valid_history_lengths else 0
     node_hidden_size = node_hiddens_padded.shape[-1]
@@ -233,36 +268,38 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
     for i, hist in enumerate(prev_node_hiddens_list):
         padded_prev_node_hiddens[i, :hist.shape[0], :] = hist
 
-    # === ATTENTION MASK CREATION START ===
-    # Create the attention mask based on valid_history_lengths
-    # Mask should be True where attention should be *ignored* (i.e., padding)
-    attn_mask = torch.ones(total_steps_edges, max_prev_nodes, dtype=torch.bool, device=device) # Initialize with True (mask all)
+    # Create the attention mask
+    attn_mask = torch.ones(total_steps_edges, max_prev_nodes, dtype=torch.bool, device=device) # True = ignore
     indices = torch.arange(max_prev_nodes, device=device)
-    for i, valid_len in enumerate(valid_history_lengths):
-        # Set positions up to valid_len (exclusive) to False (do not mask)
-        attn_mask[i, indices < valid_len] = False
-    # === ATTENTION MASK CREATION END ===
+    valid_history_lengths_tensor = torch.tensor(valid_history_lengths, device=device)
+    # Use broadcasting: True where indices >= valid_length
+    attn_mask = indices[None, :] >= valid_history_lengths_tensor[:, None]
 
 
     # --- 4. Run EdgeLevelRNN with Attention ---
     try:
-        hidden_for_edges_packed = pack_padded_sequence(node_hiddens_padded[:, 1:, :], lens_cpu, batch_first=True, enforce_sorted=False)
-        edge_rnn_init_hidden_packed = hidden_for_edges_packed.data
-    except RuntimeError as e:
-         print(f"Error packing initial hidden states for EdgeRNN: {e}")
+        # Select the node hidden states needed to initialize the EdgeRNN
+        # Need hiddens corresponding to node 0, node 1, ... up to node N-1
+        # These are at indices 1, 2, ... N in node_hiddens_padded
+        hidden_for_edges_padded = node_hiddens_padded[:, 1:, :] # Shape: [B, MaxSeq, NodeHiddenSize]
+        # Pack these according to original `lens_cpu`
+        hidden_for_edges_packed = pack_padded_sequence(hidden_for_edges_padded, lens_cpu, batch_first=True, enforce_sorted=False)
+        edge_rnn_init_hidden_packed = hidden_for_edges_packed.data # Shape [TotalSteps, NodeHiddenSize]
+    except Exception as e: # Catch potential index errors or other packing issues
+         print(f"Error preparing/packing initial hidden states for EdgeRNN: {e}")
          return {'total': 0.0, 'edge': 0.0}
 
     edge_rnn.set_first_layer_hidden(edge_rnn_init_hidden_packed)
 
-    # === PASS ATTENTION MASK ===
+    # Call EdgeRNN forward
+    # Input x should be the packed edge sequence data
     y_edge_pred_packed_data = edge_rnn(
-        x = x_edge_input_packed.data.unsqueeze(1),
+        x = x_edge_input_packed.data.unsqueeze(1), # Add seq_len=1 dim
         prev_node_hiddens = padded_prev_node_hiddens,
-        attn_mask = attn_mask, # Pass the created mask here
+        attn_mask = attn_mask,
         x_lens = None,
         return_logits = use_edge_features
-    ).squeeze(1)
-    # === END PASS ATTENTION MASK ===
+    ).squeeze(1) # Remove seq_len=1 dim
 
     y_edge_pred_packed = PackedSequence(data=y_edge_pred_packed_data,
                                         batch_sizes=x_edge_input_packed.batch_sizes,
@@ -270,6 +307,7 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
                                         unsorted_indices=x_edge_input_packed.unsorted_indices)
 
     # --- 5. Calculate Loss ---
+    # (Loss calculation code remains the same as previous version)
     edge_loss = torch.tensor(0.0, device=device)
     pred_padded, _ = pad_packed_sequence(y_edge_pred_packed, batch_first=True)
     target_padded, lens_orig = pad_packed_sequence(y_edge_target_packed, batch_first=True)
@@ -278,7 +316,7 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
          print(f"Warning: Shape mismatch after unpacking pred ({pred_padded.shape}) vs target ({target_padded.shape}). Skipping loss.")
     else:
         max_len_in_batch = pred_padded.shape[1]
-        loss_mask = torch.arange(max_len_in_batch, device=device)[None, :] < lens_orig.to(device)[:, None] # Renamed to loss_mask
+        loss_mask = torch.arange(max_len_in_batch, device=device)[None, :] < lens_orig.to(device)[:, None] # [B, MaxLen]
 
         if use_edge_features: # CrossEntropyLoss
              num_classes = pred_padded.shape[-1]
@@ -290,7 +328,7 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
                  labels_flat = None
 
              if labels_flat is not None:
-                 mask_flat = loss_mask.reshape(-1) # Use loss_mask here
+                 mask_flat = loss_mask.reshape(-1)
                  if pred_flat.shape[0] == labels_flat.shape[0] == mask_flat.shape[0]:
                      valid_preds = pred_flat[mask_flat]
                      valid_labels = labels_flat[mask_flat]
@@ -301,21 +339,19 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
 
         else: # BCELoss
              print("Warning: Using binary edge loss path for RNN step.")
-             mask_expanded = loss_mask.unsqueeze(-1).unsqueeze(-1).expand_as(pred_padded) # Use loss_mask
+             mask_expanded = loss_mask.unsqueeze(-1).unsqueeze(-1).expand_as(pred_padded)
              if torch.any(mask_expanded):
                  edge_loss = criterion_edge(pred_padded[mask_expanded], target_padded[mask_expanded])
 
 
     # --- Backpropagation ---
+    # (Backpropagation code remains the same as previous version)
     total_loss = edge_loss
 
     if torch.isnan(total_loss) or torch.isinf(total_loss):
          print(f"Warning: Invalid loss detected (NaN or Inf): {total_loss.item()}. Skipping backpropagation.")
     elif total_loss.requires_grad and total_loss > 0:
         total_loss.backward()
-        # Optional: Gradient clipping
-        # torch.nn.utils.clip_grad_norm_(graph_rnn.parameters(), max_norm=1.0)
-        # torch.nn.utils.clip_grad_norm_(edge_rnn.parameters(), max_norm=1.0)
         optim_graph_rnn.step()
         optim_edge_rnn.step()
 
