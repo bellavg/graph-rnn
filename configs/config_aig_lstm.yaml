@@ -12,15 +12,15 @@ model:
   edge_model: 'rnn'               # Use base EdgeLSTM (matched with 'rnn' in updated setup_models)
 
   GraphLSTM:                      # Parameters for GraphLevelLSTM
-    embedding_size: 256
-    hidden_size: 512
+    embedding_size: 128
+    hidden_size: 256
     num_layers: 4
     edge_feature_len: 3           # <-- Define explicitly here
-    output_size: 256              # For EdgeLSTM input
+    output_size: 128            # For EdgeLSTM input
 
   EdgeLSTM:                       # Parameters for EdgeLevelLSTM
-    embedding_size: 128
-    hidden_size: 256              # Matches GraphLSTM.output_size
+    embedding_size: 64
+    hidden_size: 128             # Matches GraphLSTM.output_size
     num_layers: 4
     edge_feature_len: 3           # <-- Define explicitly here
 
@@ -37,7 +37,7 @@ train:
   steps: 50000
   print_iter: 100
   checkpoint_iter: 5000
-  checkpoint_dir: 'lstm_checkpoints'
-  log_dir: 'lstm_logs'
+  checkpoint_dir: 'small_lstm_checkpoints'
+  log_dir: 'small_lstm_logs'
   lr_schedule_milestones: [10000, 20000, 30000, 40000]
   lr_schedule_gamma: 0.3
