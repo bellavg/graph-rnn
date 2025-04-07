@@ -184,121 +184,180 @@ def create_random_truth_table(n_outputs=2, n_inputs=8, device='cpu'):
 
     return flattened, table
 
+# Required for graphviz layout (using pygraphviz)
+try:
+    from networkx.drawing.nx_agraph import graphviz_layout
+    import pygraphviz # Check if pygraphviz itself is installed
+    PYGRAPHVIZ_AVAILABLE = True
+except ImportError:
+    print("Warning: pygraphviz or Graphviz not found. Hierarchical visualization (visualize_aig) will be unavailable.")
+    print("Install with: pip install pygraphviz")
+    print("(Ensure Graphviz system libraries are also installed: https://graphviz.org/download/)")
+    graphviz_layout = None # Define as None to handle gracefully later
+    PYGRAPHVIZ_AVAILABLE = False
+
+
+import matplotlib.pyplot as plt
+# These imports are crucial and assumed to be done before calling the function:
+# import pygraphviz # Necessary for graphviz_layout
+# from networkx.drawing.nx_agraph import graphviz_layout # The layout function
 
 def visualize_aig(G, output_file='generated_aig_layered.png', title=None):
     """
-    Visualize the largest weakly connected component of an AIG using a layered layout,
-    if it contains at least 10 nodes.
+    Visualize the largest weakly connected component of an AIG using a layered
+    (hierarchical) layout via Graphviz's 'dot' program, if the component
+    contains at least 10 nodes.
+
+    Requires NetworkX, Matplotlib, and PyGraphviz (and a working Graphviz install).
 
     Args:
-        G: NetworkX DiGraph object representing the AIG.
-        output_file: File to save visualization.
-        title: Optional title for the plot.
+        G (nx.DiGraph): NetworkX DiGraph object representing the AIG.
+                        Edges should ideally have a 'type' attribute:
+                        1 for regular, 2 for inverted.
+        output_file (str): File path to save the visualization.
+        title (str, optional): Optional title for the plot.
+
+    Returns:
+        nx.DiGraph or None: The subgraph that was visualized, or None if
+                            visualization was skipped.
     """
+    # --- Input Validation ---
     if G is None or G.number_of_nodes() == 0:
         print("Cannot visualize empty or None graph.")
-        return
+        return None
 
-    # --- START: Find and select the largest weakly connected component ---
+    # Ensure pygraphviz is available for the layout
+    try:
+        from networkx.drawing.nx_agraph import graphviz_layout
+        import pygraphviz # Test import
+    except ImportError:
+        print("Error: PyGraphviz (and Graphviz) must be installed to use graphviz_layout.")
+        print("Install with: pip install pygraphviz")
+        print("(Ensure Graphviz system libraries are also installed: https://graphviz.org/download/)")
+        # Fallback to a simpler layout if graphviz is not available? Or just exit?
+        # Forcing hierarchical, so let's exit if the tool is missing.
+        return None # Cannot proceed with the requested layout
+
+    # --- Find and select the largest weakly connected component ---
     connected_components = list(nx.weakly_connected_components(G))
 
     if not connected_components:
-        print("Graph has no nodes after initial check (should not happen if G is not empty). Cannot visualize.")
-        return
+        print("Graph has no nodes after initial check. Cannot visualize.")
+        return None
 
-    # Find the largest component
     largest_component_nodes = max(connected_components, key=len)
     largest_component_size = len(largest_component_nodes)
 
-    # Check if the largest component meets the minimum size requirement
     min_connected_nodes = 10
     if largest_component_size < min_connected_nodes:
         print(f"Largest connected component has {largest_component_size} nodes, which is less than the minimum required {min_connected_nodes}. Skipping visualization.")
-        return # Don't visualize if the largest component is too small
+        return None # Don't visualize if the component is too small
 
     # Create a subgraph containing only the nodes from the largest component
-    G_to_visualize = G.subgraph(largest_component_nodes).copy() # Use copy to avoid modifying original subgraph view
+    # Use copy() to avoid modifying the original graph's subgraph view
+    G_to_visualize = G.subgraph(largest_component_nodes).copy()
     print(f"Visualizing largest component with {G_to_visualize.number_of_nodes()} nodes.")
-    # --- END: Component selection ---
 
-
-    # --- Use graphviz_layout for hierarchical structure ---
+    # --- Use graphviz_layout for hierarchical structure ('dot' algorithm) ---
+    print("Calculating hierarchical layout using graphviz 'dot'...")
     try:
-        # Use graphviz for layout if available
         pos = graphviz_layout(G_to_visualize, prog="dot")
-    except ImportError:
-        print("Warning: pydot or graphviz not found. Falling back to spring_layout.")
-        pos = nx.spring_layout(G_to_visualize, seed=42)
     except Exception as e:
-        print(f"Warning: graphviz_layout failed ({e}). Falling back to spring_layout.")
-        pos = nx.spring_layout(G_to_visualize, seed=42) # Fallback layout
+         print(f"Error during graphviz_layout: {e}")
+         print("Ensure Graphviz is correctly installed and in the system PATH.")
+         # Optional: Fallback to a different layout if dot fails
+         # print("Falling back to spring layout.")
+         # pos = nx.spring_layout(G_to_visualize)
+         return None # Or handle fallback
 
-    plt.figure(figsize=(14, 12)) # Adjust figure size if needed
+    print("Layout calculated. Proceeding with drawing.")
+    plt.figure(figsize=(16, 14)) # Increased size for potentially complex graphs
 
-    # Define node color and labels based on degrees within the selected component
+    # --- Node Styling (based on degrees within the SUBGRAPH) ---
     node_colors = []
     node_labels = {}
-    for node in G_to_visualize.nodes(): # Iterate through nodes in the subgraph
-        in_deg = G_to_visualize.in_degree(node) # Calculate degree on the subgraph
-        out_deg = G_to_visualize.out_degree(node) # Calculate degree on the subgraph
+    for node in G_to_visualize.nodes():
+        in_deg = G_to_visualize.in_degree(node)
+        out_deg = G_to_visualize.out_degree(node)
 
-        # Determine node type based on degrees within the component
+        # Determine node type heuristically based on degrees within this component
         if in_deg == 0:
-            node_colors.append('lightgreen') # Potential Input within the component
-            node_labels[node] = f"PI? {node}"
+            node_colors.append('lightgreen') # Potential Input
+            node_labels[node] = f"PI? ({node})"
         elif in_deg == 2:
-             # Check if it might be an AND gate (can still have outputs)
-             node_colors.append('lightblue') # Potential AND within the component
-             node_labels[node] = f"AND? {node}"
+            node_colors.append('lightblue') # Potential AND
+            node_labels[node] = f"AND? ({node})"
         elif in_deg == 1 and out_deg == 0:
-             node_colors.append('salmon') # Potential Output within the component
-             node_labels[node] = f"PO? {node}"
+            node_colors.append('salmon') # Potential Output
+            node_labels[node] = f"PO? ({node})"
         elif in_deg == 1 and out_deg > 0:
-             node_colors.append('yellow') # Potential Buffer/Intermediate within the component
-             node_labels[node] = f"BUF? {node}"
-        else: # Handles other in_degrees or cases
-             node_colors.append('lightgray') # Intermediate/Other within the component
-             node_labels[node] = f"{node}" # Just node number
+            node_colors.append('yellow') # Potential Buffer/Intermediate
+            node_labels[node] = f"BUF? ({node})"
+        else:
+            node_colors.append('lightgray') # Other intermediate
+            node_labels[node] = f"({node})" # Just node ID
 
-    # Draw nodes of the selected component
-    nx.draw_networkx_nodes(G_to_visualize, pos, node_color=node_colors, node_size=400, alpha=0.9)
+    # --- Edge Styling ---
+    regular_edges = []
+    inverted_edges = []
+    other_edges = []
+    edge_types_found = set()
 
-    # Draw edges of the selected component with styles based on 'type' attribute
-    regular_edges = [(u, v) for u, v, d in G_to_visualize.edges(data=True) if d.get('type') == 1]
-    inverted_edges = [(u, v) for u, v, d in G_to_visualize.edges(data=True) if d.get('type') == 2]
-    other_edges = [(u, v) for u, v, d in G_to_visualize.edges(data=True) if d.get('type') not in [1, 2]]
+    for u, v, data in G_to_visualize.edges(data=True):
+        edge_type = data.get('type') # Use .get() for safety
+        edge_types_found.add(edge_type)
+        if edge_type == 1:
+            regular_edges.append((u, v))
+        elif edge_type == 2:
+            inverted_edges.append((u, v))
+        else:
+            other_edges.append((u, v))
 
-    nx.draw_networkx_edges(G_to_visualize, pos, edgelist=regular_edges, width=1.0, edge_color='black', style='solid', arrows=True, arrowsize=10, connectionstyle='arc3,rad=0.1')
-    nx.draw_networkx_edges(G_to_visualize, pos, edgelist=inverted_edges, width=1.0, edge_color='red', style='dashed', arrows=True, arrowsize=10, connectionstyle='arc3,rad=0.1')
+    print(f"Edge types found in component: {edge_types_found}")
     if other_edges:
-        print(f"Warning: Found edges with unexpected types in visualized component: {other_edges}")
-        nx.draw_networkx_edges(G_to_visualize, pos, edgelist=other_edges, width=0.5, edge_color='gray', style='dotted', arrows=True, arrowsize=10, connectionstyle='arc3,rad=0.1')
+        print(f"Warning: Found {len(other_edges)} edges with unexpected or missing types in visualized component.")
 
-    # Draw labels for the selected component
+
+    # --- Drawing ---
+    # Draw nodes
+    nx.draw_networkx_nodes(G_to_visualize, pos, node_color=node_colors, node_size=450, alpha=0.9)
+
+    # Draw edges - REMOVED connectionstyle='arc3,rad=0.1' for straighter lines
+    nx.draw_networkx_edges(G_to_visualize, pos, edgelist=regular_edges, width=1.0, edge_color='black', style='solid', arrows=True, arrowsize=10)
+    nx.draw_networkx_edges(G_to_visualize, pos, edgelist=inverted_edges, width=1.0, edge_color='red', style='dashed', arrows=True, arrowsize=10)
+    if other_edges:
+        nx.draw_networkx_edges(G_to_visualize, pos, edgelist=other_edges, width=0.5, edge_color='gray', style='dotted', arrows=True, arrowsize=10)
+
+    # Draw labels
     nx.draw_networkx_labels(G_to_visualize, pos, labels=node_labels, font_size=8)
 
-    # Add legend
+    # --- Legend ---
     legend_elements = [
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='lightgreen', markersize=8, label='In-Deg 0 (PI?)'),
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='lightblue', markersize=8, label='In-Deg 2 (AND?)'),
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='yellow', markersize=8, label='In-Deg 1, Out>0 (BUF?)'),
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='salmon', markersize=8, label='In-Deg 1, Out=0 (PO?)'),
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='lightgray', markersize=8, label='Other'),
-        plt.Line2D([0], [0], color='black', linestyle='solid', label='Regular Edge (type 1)'),
-        plt.Line2D([0], [0], color='red', linestyle='dashed', label='Inverted Edge (type 2)')
+        plt.Line2D([0], [0], marker='o', color='w', label='In-Deg 0 (PI?)', markerfacecolor='lightgreen', markersize=8),
+        plt.Line2D([0], [0], marker='o', color='w', label='In-Deg 2 (AND?)', markerfacecolor='lightblue', markersize=8),
+        plt.Line2D([0], [0], marker='o', color='w', label='In-Deg 1, Out>0 (BUF?)', markerfacecolor='yellow', markersize=8),
+        plt.Line2D([0], [0], marker='o', color='w', label='In-Deg 1, Out=0 (PO?)', markerfacecolor='salmon', markersize=8),
+        plt.Line2D([0], [0], marker='o', color='w', label='Other Degree', markerfacecolor='lightgray', markersize=8),
+        plt.Line2D([0], [0], color='black', lw=1.5, linestyle='solid', label='Regular Edge (type 1)'),
+        plt.Line2D([0], [0], color='red', lw=1.5, linestyle='dashed', label='Inverted Edge (type 2)')
     ]
-    plt.legend(handles=legend_elements, loc='upper right', fontsize='small')
+    if other_edges:
+         legend_elements.append(plt.Line2D([0], [0], color='gray', lw=1, linestyle='dotted', label='Other Edge Type'))
 
-    plt.title(title if title else f'Generated AIG (Largest Component >= {min_connected_nodes} nodes)')
-    plt.axis('off')
-    plt.tight_layout()
-    plt.savefig(output_file, dpi=300)
-    plt.close()
-    print(f"Generated graph visualization saved to {output_file}")
+    plt.legend(handles=legend_elements, loc='upper right', fontsize='small', frameon=True, facecolor='white', framealpha=0.8)
 
-    # Return the visualized subgraph
-    return G_to_visualize
+    # --- Final Touches ---
+    plt.title(title if title else f'AIG Largest Component (>{min_connected_nodes} nodes) - Hierarchical Layout')
+    plt.axis('off') # Turn off the axes
+    plt.tight_layout() # Adjust plot to prevent labels overlapping
+    try:
+        plt.savefig(output_file, dpi=300, bbox_inches='tight')
+        print(f"Generated graph visualization saved to {output_file}")
+    except Exception as e:
+        print(f"Error saving figure: {e}")
+    plt.close() # Close the plot figure to free memory
 
+    return G_to_visualize # Return the subgraph that was actually visualized
 
 # ==========================================
 # Evaluation Functions
@@ -753,21 +812,27 @@ def evaluate_model(model_path, num_graphs=50, min_nodes=10, max_nodes=100,
             valid_count += 1
             generated_nx_graphs.append(G)  # Save the actual generated graph
 
-            if valid_count <= 10:
-                # Visualize using the function in aig_generate.py if preferred
-                # Pass G directly if visualize_aig is adapted, or reconstruct adj_matrix if needed
+            # Visualize the first few valid graphs if pygraphviz is available
+            if valid_count <= 10 and PYGRAPHVIZ_AVAILABLE:  # Check flag
                 try:
-                    # Option A: Use visualize_aig_structure from aig_generate
                     output_file = os.path.join(output_dir, f"valid_aig_{valid_count}.png")
-                    visualize_aig_structure(G, output_file)  # Use the function from aig_generate
+                    # Call the corrected visualize_aig function
+                    visualize_aig(
+                        G=G,  # Pass the generated NetworkX graph
+                        output_file=output_file,
+                        title=f"Generated Valid AIG {valid_count}"
+                    )
+                    # No need to pass node_types or adj_matrix
 
-                    # Option B: Keep visualize_aig in aig_evaluate, but reconstruct matrix (less ideal)
-                    # adj_matrix_vis = nx.to_numpy_array(G, nodelist=sorted(G.nodes())) # Example reconstruction
-                    # visualize_aig(adj_matrix_vis, output_file, node_types=node_types)
                 except Exception as vis_e:
-                    print(f"Warning: Visualization failed for graph {i}: {vis_e}")
+                    # The visualize_aig function now has internal error handling,
+                    # but we can catch unexpected issues here too.
+                    print(f"Warning: Visualization failed unexpectedly for graph {i}: {vis_e}")
+            elif valid_count <= 10 and not PYGRAPHVIZ_AVAILABLE:
+                print(f"Skipping visualization for valid graph {valid_count} (pygraphviz unavailable).")
 
         all_stats.append(stats)
+
 
     # Calculate standard graph metrics on the generated graphs
     metric_results = {}

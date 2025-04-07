@@ -28,11 +28,11 @@ model:
 
 train:
   batch_size: 32
-  lr: 0.0005
-  steps: 10000
+  lr: 0.0005             # Start lower for stability
+  steps: 50000             # Train longer
   print_iter: 100
-  checkpoint_iter: 1000
-  checkpoint_dir: 'base_checkpoints'
-  log_dir: 'base_logs'
-  lr_schedule_milestones: [3000, 6000, 9000]
-  lr_schedule_gamma: 0.5
+  checkpoint_iter: 1000    # Consider increasing if 50k steps takes long
+  checkpoint_dir: 'base_checkpoints_long' # Maybe use a new dir
+  log_dir: 'base_logs_long'           # Maybe use a new dir
+  lr_schedule_milestones: [15000, 30000, 40000] # Spaced out milestones
+  lr_schedule_gamma: 0.3         # Less aggressive decay (adjust as needed)
