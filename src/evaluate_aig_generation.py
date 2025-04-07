@@ -7,6 +7,7 @@ import os
 import glob
 import torch
 import networkx as nx
+import re
 import numpy as np
 import pandas as pd
 import time
@@ -100,6 +101,14 @@ def visualize_aig_structure(G, output_file='generated_aig_structure.png'):
         print(f"Error saving visualization {output_file}: {e}")
     plt.close()
 
+def get_checkpoint_step(filename):
+    """Extracts the step number from a checkpoint filename."""
+    match = re.search(r'checkpoint-(\d+)\.pth$', filename)
+    if match:
+        return int(match.group(1))
+    return -1  # Return -1 or raise error if pattern doesn't match
+
+
 # --- Main Script Logic ---
 def main():
     parser = argparse.ArgumentParser(description="Generate and Evaluate AIGs from Trained Models")
@@ -113,6 +122,11 @@ def main():
     parser.add_argument('--patience', type=int, default=10, help='Patience for stopping if no real edges are added')
 
     # Visualization Args
+
+    ### START: Add Checkpoint Limit Argument ###
+    parser.add_argument('--num_checkpoints', type=int, default=None,
+                        help='Evaluate only the latest N checkpoints (default: evaluate all found)')
+    ### END: Add Checkpoint Limit Argument ###
     parser.add_argument('--save_plots', action='store_true', help='Save visualizations of the best valid generated graphs')
     parser.add_argument('--plot_dir', type=str, default='./aig_plots', help='Directory to save visualizations')
     parser.add_argument('--num_plots', type=int, default=5, help='Maximum number of best plots to save per model')
@@ -138,11 +152,34 @@ def main():
         print(f"Will save up to {args.num_plots} best valid plots per model (sorted by {args.plot_sort_by}) to {args.plot_dir}")
 
     # --- Find Models ---
-    checkpoint_paths = sorted(glob.glob(os.path.join(args.model_dir, '*.pth')))
-    if not checkpoint_paths:
-        print(f"Error: No .pth files found in {args.model_dir}")
+    # --- Find Models ---
+    all_checkpoint_paths = sorted(glob.glob(os.path.join(args.model_dir, 'checkpoint-*.pth')))
+
+    if not all_checkpoint_paths:
+        print(f"Error: No 'checkpoint-*.pth' files found in {args.model_dir}")
         return 1
-    print(f"Found {len(checkpoint_paths)} models to evaluate.")
+
+    ### START: Filter Checkpoints ###
+    if args.num_checkpoints is not None and args.num_checkpoints > 0:
+        # Sort by step number (descending) and take the top N
+        print(f"Found {len(all_checkpoint_paths)} total checkpoints. Selecting latest {args.num_checkpoints}.")
+        all_checkpoint_paths.sort(key=get_checkpoint_step, reverse=True)
+        checkpoint_paths_to_evaluate = all_checkpoint_paths[:args.num_checkpoints]
+        if not checkpoint_paths_to_evaluate:
+            print("Warning: Filtering resulted in zero checkpoints to evaluate.")
+    else:
+        # Evaluate all found checkpoints if arg not provided or <= 0
+        print(f"Found {len(all_checkpoint_paths)} total checkpoints. Evaluating all.")
+        checkpoint_paths_to_evaluate = all_checkpoint_paths
+    ### END: Filter Checkpoints ###
+
+    if not checkpoint_paths_to_evaluate:
+        print(f"No checkpoints selected for evaluation in {args.model_dir}")
+        return 1
+
+    print(f"Selected {len(checkpoint_paths_to_evaluate)} models/checkpoints to evaluate.")
+
+    checkpoint_paths = checkpoint_paths_to_evaluate
 
     results_list = []
 
