@@ -1,4 +1,4 @@
-# src/main.py - MODIFIED FOR FINE-TUNING
+# src/main.py - REVERTED TO ORIGINAL STATE
 
 import argparse
 import yaml
@@ -7,8 +7,8 @@ import os
 import time
 import datetime
 from torch.utils.data import DataLoader
-# Import relevant schedulers
-from torch.optim.lr_scheduler import CosineAnnealingLR, ConstantLR, StepLR
+# Import relevant schedulers (CosineAnnealingLR is typically used)
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.tensorboard import SummaryWriter
 import pickle
 import traceback # For detailed error printing
@@ -17,8 +17,9 @@ import traceback # For detailed error printing
 from train import train_rnn_step, train_mlp_step # Add train_lstm_step if created/needed
 from model import * # Import all model classes
 from aig_dataset import AIGDataset, NUM_EDGE_FEATURES # Import NUM_EDGE_FEATURES
-from utils import *
+from utils import * # Assuming utils contains load_config, setup_models, setup_criteria, get_max_node_count_from_pkl, restore_checkpoint
 
+# --- Reverted parse_args ---
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config_file', default="configs/config_aig_base.yaml",
@@ -28,37 +29,19 @@ def parse_args():
     parser.add_argument('--gpu', dest='gpu_id', default=0, type=int,
                         help='Id of the GPU to use')
     parser.add_argument('--save_dir', dest='save_dir', default="./runs", type=str)
-
-    # --- NEW ARGUMENTS FOR FINE-TUNING ---
-    parser.add_argument('--fine_tune', action='store_true',
-                        help='Activate fine-tuning mode. Requires --restore.')
-    parser.add_argument('--ft_lr', type=float, default=1e-5,
-                        help='Learning rate to use for fine-tuning.')
-    parser.add_argument('--ft_add_steps', type=int, default=10000,
-                        help='Number of *additional* steps to run during fine-tuning.')
-    parser.add_argument('--ft_scheduler', type=str, default='cosine', choices=['cosine', 'constant', 'step'],
-                        help='Scheduler type for fine-tuning (cosine, constant, step).')
-    parser.add_argument('--ft_eta_min', type=float, default=0,
-                        help='Minimum LR for cosine scheduler during fine-tuning.')
-    parser.add_argument('--ft_step_size', type=int, default=5000,
-                        help='Step size for StepLR scheduler during fine-tuning.')
-    parser.add_argument('--ft_gamma', type=float, default=0.5,
-                        help='Gamma factor for StepLR scheduler during fine-tuning.')
-    # --- END NEW ARGUMENTS ---
-
+    # --- Fine-tuning arguments removed ---
     return parser.parse_args()
 
 
-
-# --- MODIFIED train_loop ---
-# Added use_edge_features and target_total_steps parameters
+# --- Reverted train_loop ---
+# Removed use_edge_features and target_total_steps parameters
+# Assumes use_edge_features is handled within setup_criteria and passed correctly from main
 def train_loop(config, node_model, edge_model, step_fn,
-               criterion_edge, use_edge_features, # Added use_edge_features param
+               criterion_edge, use_edge_features, # Added use_edge_features param back
                optim_node_model, optim_edge_model, scheduler_node_model, scheduler_edge_model,
                device,
                dataset,
-               global_step, writer, base_path,
-               target_total_steps): # <-- ADD parameter for total steps for this run
+               global_step, writer, base_path): # Removed target_total_steps
 
     data_loader = DataLoader(dataset, batch_size=config['train']['batch_size'], shuffle=True, num_workers=4, pin_memory=True) # Added workers/pin_memory
 
@@ -69,7 +52,8 @@ def train_loop(config, node_model, edge_model, step_fn,
     epoch = 0
     start_step = global_step # Start from restored step
     start_time = time.time()
-    max_steps = target_total_steps # Use the target for this specific run
+    # Use the max steps defined in the config
+    max_steps = config['train']['steps']
 
     # Calculate approximate starting epoch for logging continuity
     approx_steps_per_epoch = (len(dataset) + config['train']['batch_size'] - 1) // config['train']['batch_size']
@@ -101,16 +85,16 @@ def train_loop(config, node_model, edge_model, step_fn,
                 loss_dict = step_fn(node_model, edge_model, data,
                                     criterion_edge,
                                     optim_node_model, optim_edge_model,
-                                    # Pass None for schedulers if not using scheduler.step() per iteration
-                                    None, None, # Schedulers usually step per epoch or per specified logic
-                                    device, use_edge_features)
+                                    # Pass None for schedulers if not using scheduler.step() per iteration (but Cosine usually does)
+                                    None, None,
+                                    device, use_edge_features) # Pass use_edge_features
 
                 total_loss_tensor = loss_dict.get('total')
 
                 # Check for valid loss tensor before backward()
                 if total_loss_tensor is None or not isinstance(total_loss_tensor, torch.Tensor) or torch.isnan(total_loss_tensor) or torch.isinf(total_loss_tensor):
-                     print(f"WARNING: Invalid or missing 'total' loss tensor ({total_loss_tensor}) at step {global_step}. Skipping backward/step.")
-                     continue
+                    print(f"WARNING: Invalid or missing 'total' loss tensor ({total_loss_tensor}) at step {global_step}. Skipping backward/step.")
+                    continue
 
                 total_loss = total_loss_tensor.item() # Get float value for logging
                 edge_loss = loss_dict.get('edge', 0.0) # Allow edge loss to be missing or float
@@ -123,16 +107,15 @@ def train_loop(config, node_model, edge_model, step_fn,
                 optim_node_model.step()
                 optim_edge_model.step()
 
-                # Scheduler step (depends on scheduler type - typically per epoch, but CosineAnnealingLR often per step)
+                # Scheduler step (CosineAnnealingLR typically steps per iteration)
                 if scheduler_node_model: scheduler_node_model.step()
                 if scheduler_edge_model: scheduler_edge_model.step()
 
-
             except Exception as step_e:
-                 print(f"\nERROR during training step {global_step}: {step_e}")
-                 traceback.print_exc()
-                 print("Attempting to continue training...")
-                 continue # Skip rest of loop for this batch
+                print(f"\nERROR during training step {global_step}: {step_e}")
+                traceback.print_exc()
+                print("Attempting to continue training...")
+                continue # Skip rest of loop for this batch
 
             epoch_loss_sum += total_loss
             epoch_steps += 1
@@ -181,8 +164,8 @@ def train_loop(config, node_model, edge_model, step_fn,
 
         # End of epoch
         if epoch_steps > 0 and writer is not None:
-             avg_epoch_loss = epoch_loss_sum / epoch_steps
-             writer.add_scalar('loss/epoch_avg_total', avg_epoch_loss, epoch)
+            avg_epoch_loss = epoch_loss_sum / epoch_steps
+            writer.add_scalar('loss/epoch_avg_total', avg_epoch_loss, epoch)
         print(f"Epoch {epoch} finished. Avg Loss: {avg_epoch_loss:.4f}")
 
 
@@ -191,7 +174,7 @@ def train_loop(config, node_model, edge_model, step_fn,
         writer.close()
 
 
-# --- MODIFIED main function ---
+# --- Reverted main function ---
 def main():
     args = parse_args()
     try:
@@ -200,28 +183,15 @@ def main():
         print(f"Error loading config '{args.config_file}': {e}")
         return 1
 
-    # --- Fine-tuning checks ---
-    is_fine_tuning = args.fine_tune
-    if is_fine_tuning and not args.restore_path:
-        print("Error: --fine_tune requires --restore <checkpoint_path> to be specified.")
-        return 1
-    if is_fine_tuning:
-        print("--- Fine-tuning Mode Activated ---")
-        print(f"  Restoring from: {args.restore_path}")
-        print(f"  New LR: {args.ft_lr}")
-        print(f"  Additional Steps: {args.ft_add_steps}")
-        print(f"  New Scheduler: {args.ft_scheduler}")
-        print("---------------------------------")
+    # --- Fine-tuning checks removed ---
 
     # --- Setup ---
     base_path = args.save_dir
     # Create a unique run directory using config name and timestamp
     config_name = os.path.splitext(os.path.basename(args.config_file))[0]
     timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    run_name_parts = [config_name]
-    if is_fine_tuning: run_name_parts.append("ft")
-    run_name_parts.append(timestamp)
-    run_path = os.path.join(base_path, "_".join(run_name_parts))
+    # Run name simplified
+    run_path = os.path.join(base_path, f"{config_name}_{timestamp}")
     os.makedirs(run_path, exist_ok=True) # Use unique run path as base
     print(f"Run directory: {run_path}")
 
@@ -267,6 +237,7 @@ def main():
         node_model, edge_model, step_fn = setup_models(config, device, max_node_count, max_level)
 
         print("Setting up criteria...")
+        # Pass dataset to setup_criteria
         criterion_edge, use_edge_features_flag = setup_criteria(config, device, dataset)
 
     except (ValueError, KeyError, RuntimeError) as e:
@@ -276,7 +247,8 @@ def main():
 
     # --- Setup Optimizers ---
     try:
-        initial_lr = args.ft_lr if is_fine_tuning else config['train']['lr']
+        # Use LR directly from config
+        initial_lr = config['train']['lr']
         print(f"Setting up optimizers with initial LR: {initial_lr:.1E}")
         # Add weight decay option from config if present
         weight_decay = config['train'].get('weight_decay', 0.0)
@@ -290,99 +262,41 @@ def main():
     scheduler_node_model = None
     scheduler_edge_model = None
     global_step = 0
-    target_total_steps = config['train']['steps'] # Default target
+    # Total steps always come from the config now
+    total_steps = config['train']['steps']
+
+    # Initialize schedulers based on config FIRST (needed before restore)
+    try:
+        # Assuming CosineAnnealingLR as the default/common scheduler here
+        # Adjust T_max to the *total* steps defined in the config
+        eta_min_value = config['train'].get('lr_schedule_eta_min', 0)
+        scheduler_node_model = CosineAnnealingLR(optim_node_model, T_max=total_steps, eta_min=eta_min_value)
+        scheduler_edge_model = CosineAnnealingLR(optim_edge_model, T_max=total_steps, eta_min=eta_min_value)
+        print(f"Initialized CosineAnnealingLR schedulers with T_max={total_steps}, eta_min={eta_min_value}")
+    except KeyError as e:
+        print(f"Error setting up schedulers: Missing key {e} in config['train']")
+        return 1
 
     if args.restore_path:
         try:
-            # Pass optimizers, model will be loaded inplace
-            # Pass None for schedulers initially
+            # Pass the initialized schedulers to restore_checkpoint
+            # restore_checkpoint should now always try to load scheduler state
             global_step = restore_checkpoint(
                 args.restore_path, device, node_model, edge_model,
                 optim_node_model, optim_edge_model,
-                None, None, # Pass None, they will be created below or loaded if not fine-tuning
-                load_schedulers=(not is_fine_tuning) # Skip loading scheduler state if fine-tuning
+                scheduler_node_model, scheduler_edge_model # Pass initialized schedulers
             )
             print(f"Restored checkpoint. Resuming from global step: {global_step}")
 
-            if is_fine_tuning:
-                # Fine-tuning: Set LR in loaded optimizer and create NEW schedulers
-                print(f"Fine-tuning: Resetting optimizer LR to {args.ft_lr:.1E}")
-                for param_group in optim_node_model.param_groups:
-                    param_group['lr'] = args.ft_lr
-                for param_group in optim_edge_model.param_groups:
-                    param_group['lr'] = args.ft_lr
-
-                target_total_steps = global_step + args.ft_add_steps # Set new target
-                T_max_fine_tune = args.ft_add_steps
-
-                print(f"Creating new schedulers for fine-tuning ({T_max_fine_tune} steps)...")
-                if args.ft_scheduler == 'cosine':
-                     eta_min_ft = args.ft_eta_min
-                     scheduler_node_model = CosineAnnealingLR(optim_node_model, T_max=T_max_fine_tune, eta_min=eta_min_ft)
-                     scheduler_edge_model = CosineAnnealingLR(optim_edge_model, T_max=T_max_fine_tune, eta_min=eta_min_ft)
-                     print(f"Using CosineAnnealingLR (T_max={T_max_fine_tune}, eta_min={eta_min_ft})")
-                elif args.ft_scheduler == 'constant':
-                     scheduler_node_model = ConstantLR(optim_node_model, factor=1.0, total_iters=0)
-                     scheduler_edge_model = ConstantLR(optim_edge_model, factor=1.0, total_iters=0)
-                     print(f"Using ConstantLR (LR={args.ft_lr:.1E})")
-                elif args.ft_scheduler == 'step':
-                     scheduler_node_model = StepLR(optim_node_model, step_size=args.ft_step_size, gamma=args.ft_gamma)
-                     scheduler_edge_model = StepLR(optim_edge_model, step_size=args.ft_step_size, gamma=args.ft_gamma)
-                     print(f"Using StepLR (step={args.ft_step_size}, gamma={args.ft_gamma})")
-                else: # Default to constant
-                     print(f"Warning: Unknown ft_scheduler '{args.ft_scheduler}'. Using ConstantLR.")
-                     scheduler_node_model = ConstantLR(optim_node_model, factor=1.0, total_iters=0)
-                     scheduler_edge_model = ConstantLR(optim_edge_model, factor=1.0, total_iters=0)
-
-            else:
-                # Normal restore: Create schedulers based on original config and THEN load state
-                print("Normal restore: Initializing schedulers before loading state...")
-                eta_min_value = config['train'].get('lr_schedule_eta_min', 0)
-                original_total_steps = config['train']['steps']
-                scheduler_node_model = CosineAnnealingLR(optim_node_model, T_max=original_total_steps, eta_min=eta_min_value)
-                scheduler_edge_model = CosineAnnealingLR(optim_edge_model, T_max=original_total_steps, eta_min=eta_min_value)
-                target_total_steps = original_total_steps
-
-                # Now load the state into the newly created schedulers
-                print("Loading scheduler states from checkpoint...")
-                state = torch.load(args.restore_path, map_location=device)
-                if "scheduler_node_model" in state and state["scheduler_node_model"] is not None:
-                    try: scheduler_node_model.load_state_dict(state["scheduler_node_model"]); print("Restored node model scheduler state.")
-                    except Exception as e: print(f"Warning: Failed to load node scheduler state: {e}. Scheduler will start from scratch.")
-                else: print("Warning: Node scheduler state not found in checkpoint. Scheduler will start from scratch.")
-                if "scheduler_edge_model" in state and state["scheduler_edge_model"] is not None:
-                    try: scheduler_edge_model.load_state_dict(state["scheduler_edge_model"]); print("Restored edge model scheduler state.")
-                    except Exception as e: print(f"Warning: Failed to load edge scheduler state: {e}. Scheduler will start from scratch.")
-                else: print("Warning: Edge scheduler state not found in checkpoint. Scheduler will start from scratch.")
-
         except (FileNotFoundError, KeyError, RuntimeError) as e:
-             print(f"Warning: Error restoring checkpoint '{args.restore_path}': {e}. Training from scratch.")
-             traceback.print_exc()
-             global_step = 0
-             is_fine_tuning = False
-             # Initialize schedulers for training from scratch
-             eta_min_value = config['train'].get('lr_schedule_eta_min', 0)
-             total_steps = config['train']['steps']
-             scheduler_node_model = CosineAnnealingLR(optim_node_model, T_max=total_steps, eta_min=eta_min_value)
-             scheduler_edge_model = CosineAnnealingLR(optim_edge_model, T_max=total_steps, eta_min=eta_min_value)
-             target_total_steps = total_steps
+            print(f"Warning: Error restoring checkpoint '{args.restore_path}': {e}. Training from scratch.")
+            traceback.print_exc()
+            global_step = 0
+            # Schedulers are already initialized for training from scratch above
 
     else:
-        # No restore path provided, normal training from scratch
-        if is_fine_tuning:
-             print("Warning: --fine_tune specified without --restore. Starting normal training from scratch.")
-             is_fine_tuning = False
-        print("Initializing schedulers for training from scratch...")
-        try:
-            eta_min_value = config['train'].get('lr_schedule_eta_min', 0)
-            total_steps = config['train']['steps']
-            scheduler_node_model = CosineAnnealingLR(optim_node_model, T_max=total_steps, eta_min=eta_min_value)
-            scheduler_edge_model = CosineAnnealingLR(optim_edge_model, T_max=total_steps, eta_min=eta_min_value)
-            target_total_steps = total_steps
-        except KeyError as e:
-             print(f"Error setting up schedulers: Missing key {e} in config['train']")
-             return 1
-
+        # No restore path, training from scratch. Schedulers are already initialized.
+        print("No checkpoint specified. Starting training from scratch.")
 
     # --- TensorBoard Writer ---
     log_dir_name = config['train'].get('log_dir', 'logs')
@@ -393,35 +307,35 @@ def main():
     print(f"TensorBoard logs will be saved to: {log_dir}")
     try:
         with open(os.path.join(run_path, 'config.yaml'), 'w') as f_cfg: # Save config in run path
-             yaml.dump(config, f_cfg, sort_keys=False)
+            yaml.dump(config, f_cfg, sort_keys=False)
         with open(os.path.join(run_path, 'args.txt'), 'w') as f_args: # Save args in run path
-             print(vars(args), file=f_args)
+            print(vars(args), file=f_args)
     except Exception as e:
-         print(f"Warning: Could not save config/args to run dir: {e}")
-
+        print(f"Warning: Could not save config/args to run dir: {e}")
 
     # --- Start Training Loop ---
-    print(f"Target total steps for this run: {target_total_steps}")
+    print(f"Target total steps for this run: {total_steps}")
     try:
         # Pass the unique run_path as base_path for saving checkpoints inside it
         train_loop(config, node_model, edge_model, step_fn,
-                   criterion_edge, use_edge_features_flag,
+                   criterion_edge, use_edge_features_flag, # Pass flag
                    optim_node_model, optim_edge_model,
                    scheduler_node_model, scheduler_edge_model,
                    device,
                    dataset,
-                   global_step, writer, run_path, # Pass run_path here
-                   target_total_steps)
+                   global_step, writer, run_path) # Pass run_path here
     except Exception as e:
-         print(f"FATAL: Error occurred during training loop: {e}")
-         traceback.print_exc()
-         if writer: writer.close()
-         return 1
+        print(f"FATAL: Error occurred during training loop: {e}")
+        traceback.print_exc()
+        if writer: writer.close()
+        return 1
 
     print("Main function finished successfully.")
     return 0
 
 
 if __name__ == "__main__":
+    # Assuming the utility functions are defined in utils.py or imported above
+    # You'll need load_config, setup_models, setup_criteria, get_max_node_count_from_pkl, restore_checkpoint
     exit_code = main()
     exit(exit_code)
