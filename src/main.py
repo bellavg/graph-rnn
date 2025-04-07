@@ -48,10 +48,8 @@ def load_config(config_file):
 # MODIFIED setup_models function
 def setup_models(config, device, max_node_count, max_level): # ADDED max_level
     """
-    Initializes the GraphRNN and Edge models based on the config,
-    using the correct dimensions derived from max_node_count and use_bfs,
-    and passing max_level for positional encoding.
-    REMOVED node type prediction and TT conditioning logic.
+    Initializes the GraphRNN and Edge models based on the config.
+    MODIFIED for Attention EdgeLevelRNN initialization.
     """
     # Determine use_bfs from config (default to False if not specified)
     use_bfs = config['data'].get('use_bfs', False) # Read from config
@@ -75,26 +73,38 @@ def setup_models(config, device, max_node_count, max_level): # ADDED max_level
     edge_model = None
     step_fn = None
 
+    # --- Get GraphRNN hidden size (needed for both edge models) ---
+    if 'GraphRNN' not in config['model'] or 'hidden_size' not in config['model']['GraphRNN']:
+        raise ValueError("Config 'model.GraphRNN.hidden_size' needed.")
+    graph_rnn_hidden_size = config['model']['GraphRNN']['hidden_size']
+
     if edge_model_type == 'rnn':
         if 'EdgeRNN' not in config['model']: raise ValueError("Config missing 'model.EdgeRNN'.")
         edge_model_args = config['model']['EdgeRNN'].copy()
         edge_model_args['edge_feature_len'] = edge_feature_len
         edge_model_args['tt_size'] = None # REMOVED TT conditioning
+
+        # === ATTENTION MODIFICATION START ===
+        # Pass GraphRNN hidden size for attention keys/values
+        edge_model_args['node_hidden_size'] = graph_rnn_hidden_size
+        # Get attention heads from config (provide a default if not specified)
+        edge_model_args['attention_heads'] = config['model']['EdgeRNN'].get('attention_heads', 4)
+        # === ATTENTION MODIFICATION END ===
+
         edge_model = EdgeLevelRNN(**edge_model_args).to(device)
         step_fn = train_rnn_step
-        node_model_output_size = edge_model_args.get('hidden_size')
-        if node_model_output_size is None: raise ValueError("Config 'model.EdgeRNN.hidden_size' needed.")
-        print("Selected EdgeLevelRNN model.")
+        # Node model output depends on whether EdgeRNN needs a specific input size
+        # For attention model, GraphLevelRNN should output its hidden states directly
+        node_model_output_size = None # Let GraphLevelRNN output its hidden states
+        print(f"Selected EdgeLevelRNN model with Attention ({edge_model_args['attention_heads']} heads).")
 
     elif edge_model_type == 'mlp':
         if 'EdgeMLP' not in config['model']: raise ValueError("Config missing 'model.EdgeMLP'.")
-        if 'GraphRNN' not in config['model'] or 'hidden_size' not in config['model']['GraphRNN']:
-             raise ValueError("Config 'model.GraphRNN.hidden_size' needed.")
         edge_model_args = config['model']['EdgeMLP'].copy()
         edge_model_args['edge_feature_len'] = edge_feature_len
         edge_model_args['tt_size'] = None # REMOVED TT conditioning
         edge_model_args['output_size'] = effective_input_size # Set based on mode
-        edge_model_args['input_size'] = config['model']['GraphRNN']['hidden_size']
+        edge_model_args['input_size'] = graph_rnn_hidden_size # MLP input is node hidden state
         edge_model = EdgeLevelMLP(**edge_model_args).to(device)
         step_fn = train_mlp_step
         node_model_output_size = None # Correct for MLP
@@ -103,24 +113,22 @@ def setup_models(config, device, max_node_count, max_level): # ADDED max_level
         raise ValueError(f"Unsupported edge_model type: {edge_model_type}")
 
     # --- Initialize Node Model ---
-    if 'GraphRNN' not in config['model']: raise ValueError("Config missing 'model.GraphRNN'.")
     node_model_args = config['model']['GraphRNN'].copy()
     node_model_args['input_size'] = effective_input_size # Set based on mode
     node_model_args['edge_feature_len'] = edge_feature_len
+    node_model_args['hidden_size'] = graph_rnn_hidden_size # Ensure this is passed correctly
     node_model_args['output_size'] = node_model_output_size # Set based on edge model
-    # REMOVED node type args
     node_model_args['predict_node_types'] = False
     node_model_args['num_node_types'] = None
-    # REMOVED TT conditioning args
     node_model_args['use_conditioning'] = False
     node_model_args['tt_size'] = None
-    # Keep level embedding
     node_model_args['max_level'] = max_level
 
     node_model = GraphLevelRNN(**node_model_args).to(device)
     print("Initialized GraphLevelRNN model.")
 
     return node_model, edge_model, step_fn
+
 
 
 def get_max_node_count_from_pkl(graph_file: str) -> int:
@@ -373,12 +381,19 @@ def main():
     try:
         optim_node_model = torch.optim.AdamW(node_model.parameters(), lr=config['train']['lr'])
         optim_edge_model = torch.optim.AdamW(edge_model.parameters(), lr=config['train']['lr'])
-        scheduler_node_model = MultiStepLR(optim_node_model,
-                                           milestones=config['train']['lr_schedule_milestones'],
-                                           gamma=config['train']['lr_schedule_gamma'])
-        scheduler_edge_model = MultiStepLR(optim_edge_model,
-                                           milestones=config['train']['lr_schedule_milestones'],
-                                           gamma=config['train']['lr_schedule_gamma'])
+        eta_min_value = 0  # Or config['train'].get('eta_min', 0)
+        total_steps = config['train']['steps']
+
+        scheduler_node_model = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optim_node_model,
+            T_max=total_steps,
+            eta_min=eta_min_value
+        )
+        scheduler_edge_model = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optim_edge_model,
+            T_max=total_steps,
+            eta_min=eta_min_value
+        )
     except KeyError as e:
         print(f"Error setting up optimizers/schedulers: Missing key {e} in config['train']")
         return 1

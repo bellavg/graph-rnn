@@ -1,10 +1,12 @@
 
 
+
 import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
+import torch.nn.functional as F # Needed for softmax
+import math # Needed for sqrt in attention
 from typing import Optional, Tuple, List, Union
-
 
 
 class GraphLevelRNN(nn.Module):
@@ -156,62 +158,45 @@ class EdgeLevelRNN(nn.Module):
     """
     def __init__(
             self,
-            # Args for basic RNN functionality
             embedding_size: int,
             hidden_size: int,
             num_layers: int,
             edge_feature_len: int = 1,
-            # Args for attention mechanism
-            node_hidden_size: int = None, # Hidden size of the GraphLevelRNN outputting states
+            node_hidden_size: int = None,
             attention_heads: int = 4,
-            # Optional args (kept for compatibility, but attention usually replaces need for TT conditioning here)
             tt_size: Optional[int] = None,
             tt_embedding_size: int = 64
     ):
         super().__init__()
         self.num_layers = num_layers
-        self.hidden_size = hidden_size # Hidden size of this EdgeLevelRNN's GRU
+        self.hidden_size = hidden_size
         self.edge_feature_len = edge_feature_len
         self.use_conditioning = tt_size is not None
 
-        # --- Attention Setup ---
         if node_hidden_size is None:
              raise ValueError("node_hidden_size (GraphLevelRNN's hidden_size) must be provided for attention.")
         self.node_hidden_size = node_hidden_size
         self.attention_heads = attention_heads
 
-        # Use PyTorch's MultiheadAttention layer
-        # The GRU hidden state will be the query.
-        # The previous GraphLevelRNN hidden states will be the key and value.
-        # Ensure embed_dim is compatible. Here, query=edge_hidden, key/value=node_hidden
-        # We'll project node_hidden to edge_hidden dim if they differ, or use edge_hidden for all
-        attention_embed_dim = self.hidden_size # Using edge RNN hidden size for attention internal dim
+        attention_embed_dim = self.hidden_size
         self.attention = nn.MultiheadAttention(embed_dim=attention_embed_dim,
                                                num_heads=attention_heads,
-                                               kdim=self.node_hidden_size, # Key dim = node hidden
-                                               vdim=self.node_hidden_size, # Value dim = node hidden
-                                               batch_first=True) # Crucial: input format is [batch, seq, feature]
+                                               kdim=self.node_hidden_size,
+                                               vdim=self.node_hidden_size,
+                                               batch_first=True) # batch_first=True
 
-        # Linear layer to combine GRU output and attention context
-        # Input size = GRU hidden + Attention output (which is attention_embed_dim)
         combined_feature_size = self.hidden_size + attention_embed_dim
-        self.linear_combine = nn.Linear(combined_feature_size, embedding_size) # Project down to embedding size
+        self.linear_combine = nn.Linear(combined_feature_size, embedding_size)
 
-
-        # --- Original Layers ---
-        gru_input_size = embedding_size # Input to GRU is just embedded edge features now
-        # Incorporate TT conditioning if needed (though maybe redundant with attention)
+        gru_input_size = embedding_size
         if self.use_conditioning:
             self.tt_embedding = nn.Sequential(
                 nn.Linear(tt_size, tt_embedding_size), nn.ReLU(),
                 nn.Linear(tt_embedding_size, tt_embedding_size), nn.ReLU()
             )
-            # If conditioning, GRU input needs to accommodate it too
-            # This part becomes complex: maybe condition the *initial* hidden state instead?
-            # For now, let's assume attention replaces TT conditioning need here.
             print("Warning: TT Conditioning and Node Attention used together in EdgeLevelRNN - interaction might be complex.")
 
-        self.linear_in = nn.Linear(edge_feature_len, embedding_size) # Embed input edge type
+        self.linear_in = nn.Linear(edge_feature_len, embedding_size)
         self.relu = nn.ReLU()
 
         self.gru = nn.GRU(
@@ -221,50 +206,38 @@ class EdgeLevelRNN(nn.Module):
             batch_first=True
         )
 
-        # Output layers now take the combined features projection
-        self.linear_out1 = nn.Linear(embedding_size, embedding_size) # Adjusted input size
+        self.linear_out1 = nn.Linear(embedding_size, embedding_size)
         self.linear_out2 = nn.Linear(embedding_size, edge_feature_len)
-        self.sigmoid = nn.Sigmoid() # Keep sigmoid for potential BCELoss
+        self.sigmoid = nn.Sigmoid()
 
-        self.hidden = None # Placeholder for GRU hidden state
+        self.hidden = None
 
     def set_first_layer_hidden(self, h: torch.Tensor):
-        """
-        Sets the hidden state of the first GRU layer using GraphLevelRNN's output.
-        """
-        # Ensure h matches the EdgeLevelRNN's hidden size if different from node_hidden_size
-        # This might require a projection layer in GraphLevelRNN or here if sizes mismatch
         if h.shape[-1] != self.hidden_size:
-             # Example: Add a projection if GraphLevelRNN output size != EdgeLevelRNN hidden size
-             # This linear layer should be defined in __init__
-             # h = self.initial_hidden_projection(h)
              print(f"Warning: GraphLevelRNN output size ({h.shape[-1]}) doesn't match EdgeLevelRNN hidden size ({self.hidden_size}). Hidden state init might be incorrect.")
-             # Simple fix: Use only the first 'hidden_size' features if node_hidden > edge_hidden
              if h.shape[-1] > self.hidden_size:
                  h = h[..., :self.hidden_size]
-             # Padding if node_hidden < edge_hidden? More complex. Assume sizes match for now.
 
-
-        zeros = torch.zeros([self.num_layers - 1, h.shape[-2], self.hidden_size], device=h.device) # Use self.hidden_size
+        zeros = torch.zeros([self.num_layers - 1, h.shape[-2], self.hidden_size], device=h.device)
         if len(h.shape) == 2:
-            h = h.unsqueeze(0) # Add layer dimension if needed
-        # Ensure h is correctly shaped [1, batch, hidden_size] for the first layer
+            h = h.unsqueeze(0)
         if h.shape[0] != 1:
-             h = h.permute(1,0,2)[:1,:,:] # Take only the last layer's hidden if multi-layer GRU in GraphLevelRNN
+             h = h.permute(1,0,2)[:1,:,:]
 
-        self.hidden = torch.cat([h, zeros], dim=0) # [num_layers, batch, hidden_size]
+        self.hidden = torch.cat([h, zeros], dim=0)
 
 
-    def forward(self, x, prev_node_hiddens, x_lens=None, return_logits=False, truth_table=None):
+    # --- MODIFIED forward signature and attention call ---
+    def forward(self, x, prev_node_hiddens, attn_mask: Optional[torch.Tensor] = None, x_lens=None, return_logits=False, truth_table=None):
         """
         Forward pass for the EdgeLevelRNN with attention.
 
         Args:
-            x (Tensor): Input sequence of edge features (e.g., SOS token followed by previous edge types).
-                        Shape: [batch_or_total_nodes, edge_seq_len, edge_feature_len]
-            prev_node_hiddens (Tensor): Sequence of hidden states from GraphLevelRNN for *previous* nodes.
+            x (Tensor): Input sequence of edge features. Shape: [batch_or_total_nodes, edge_seq_len, edge_feature_len]
+            prev_node_hiddens (Tensor): Sequence of hidden states from GraphLevelRNN for previous nodes.
                                         Shape: [batch_or_total_nodes, num_prev_nodes, node_hidden_size]
-                                        Note: num_prev_nodes might vary or need padding/masking.
+            attn_mask (Tensor, optional): Mask for attention mechanism. True values are masked out.
+                                          Shape: [batch_or_total_nodes, num_prev_nodes] OR broadcastable.
             x_lens (Tensor, optional): Lengths of the edge sequences in x. Shape: [batch_or_total_nodes]
             return_logits (bool): If True, return raw scores before final activation.
             truth_table (Tensor, optional): Truth table for conditioning (if enabled).
@@ -281,76 +254,58 @@ class EdgeLevelRNN(nn.Module):
         batch_size, edge_seq_len, _ = x.shape
         num_prev_nodes = prev_node_hiddens.shape[1]
 
-        # Embed the input edge features (SOS, prev_edge, ...)
         embedded_x = self.relu(self.linear_in(x)) # Shape: [batch, edge_seq_len, embedding_size]
-
-        # --- GRU Processing with Attention at each step ---
-        # We need to run the GRU step-by-step to apply attention correctly.
-        # The MultiheadAttention layer expects sequences, so we adapt.
 
         outputs = []
         current_hidden = self.hidden # Shape: [num_layers, batch, hidden_size]
 
         for t in range(edge_seq_len):
-            # GRU input for this step: embedded edge feature
-            gru_input = embedded_x[:, t:t+1, :] # Shape: [batch, 1, embedding_size]
-
-            # Run GRU for one step
-            # gru_output_t shape: [batch, 1, hidden_size]
-            # current_hidden shape: [num_layers, batch, hidden_size]
+            gru_input = embedded_x[:, t:t+1, :]
             gru_output_t, current_hidden = self.gru(gru_input, current_hidden)
 
-            # --- Attention Calculation ---
-            # Query: Current GRU hidden state (last layer)
-            # Use hidden state from the *last* layer of the GRU as the query
             query = current_hidden[-1:, :, :].permute(1, 0, 2) # Shape: [batch, 1, hidden_size]
-
-            # Key/Value: Previous node hidden states from GraphLevelRNN
             key_value = prev_node_hiddens # Shape: [batch, num_prev_nodes, node_hidden_size]
 
-            # Create attention mask if needed (e.g., for padding in prev_node_hiddens)
-            # Assuming prev_node_hiddens is already appropriately masked or padded if necessary.
-            # The length `num_prev_nodes` should correspond to the number of valid predecessors for edge t.
-            attn_mask = None # Placeholder - depends on how prev_node_hiddens is structured
+            # --- Prepare attention mask for MultiheadAttention ---
+            # MultiheadAttention expects mask shape (N, L, S) or (L, S) or (S,)
+            # N=batch_size, L=target_seq_len=1, S=source_seq_len=num_prev_nodes
+            # Our mask is [batch, num_prev_nodes]. Needs unsqueezing.
+            prepared_attn_mask = None
+            if attn_mask is not None:
+                if attn_mask.shape[0] != batch_size or attn_mask.shape[1] != num_prev_nodes:
+                     print(f"Warning: attn_mask shape ({attn_mask.shape}) mismatch with expected ([{batch_size}, {num_prev_nodes}]). Skipping mask.")
+                else:
+                     # Expand mask for multi-head: MultiheadAttention requires mask shape (N*num_heads, L, S)
+                     # Or a boolean mask of shape (N, L, S) where true means ignore.
+                     # Let's use the (N, L, S) format -> [batch, 1, num_prev_nodes]
+                     prepared_attn_mask = attn_mask.unsqueeze(1) # Add target sequence length dimension (L=1)
 
-            # Apply multi-head attention
-            # attn_output shape: [batch, 1, attention_embed_dim] (embed_dim = self.hidden_size here)
-            # attn_weights shape: [batch, 1, num_prev_nodes]
+
             try:
                  attn_output, attn_weights = self.attention(query=query,
                                                             key=key_value,
                                                             value=key_value,
-                                                            attn_mask=attn_mask,
-                                                            need_weights=False) # Set True to debug weights
+                                                            attn_mask=prepared_attn_mask, # Pass the prepared mask
+                                                            need_weights=False)
             except Exception as e:
                  print(f"Error during attention calculation: {e}")
-                 # Handle error, maybe use zero context?
                  attn_output = torch.zeros_like(query)
 
 
-            # --- Combine GRU output and Attention context ---
-            # Concatenate along the feature dimension
-            combined = torch.cat((gru_output_t, attn_output), dim=2) # Shape: [batch, 1, hidden_size + attention_embed_dim]
+            combined = torch.cat((gru_output_t, attn_output), dim=2)
+            projected_output = self.relu(self.linear_combine(combined))
 
-            # Project combined features
-            projected_output = self.relu(self.linear_combine(combined)) # Shape: [batch, 1, embedding_size]
-
-
-            # --- Final Output Layers for this step ---
-            out1 = self.relu(self.linear_out1(projected_output)) # Shape: [batch, 1, embedding_size]
-            out2 = self.linear_out2(out1)                      # Shape: [batch, 1, edge_feature_len]
+            out1 = self.relu(self.linear_out1(projected_output))
+            out2 = self.linear_out2(out1)
 
             outputs.append(out2)
 
-        # Concatenate results from all steps
-        final_output = torch.cat(outputs, dim=1) # Shape: [batch, edge_seq_len, edge_feature_len]
+        final_output = torch.cat(outputs, dim=1)
 
-        # Apply final activation if needed
         if not return_logits:
-            final_output = self.sigmoid(final_output) # Use sigmoid for potential BCELoss
+            final_output = self.sigmoid(final_output)
 
         return final_output
-
 
 
 

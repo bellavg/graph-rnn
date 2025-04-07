@@ -1,0 +1,42 @@
+# Config file for the attention-based RNN model
+data:
+  dataset_type: 'aig-directed-multiclass'
+  # m: (Removed - not needed for topological sort / attention approach)
+  graph_file: 'dataset/inputs8_outputs8max_nodes128max.pkl' # Verify this path
+  use_bfs: false
+  max_graphs: null
+
+model:
+  mode: 'directed-multiclass'
+  edge_model: 'rnn' # Ensure this is 'rnn' to use the attention model
+
+  GraphRNN:
+    embedding_size: 256
+    hidden_size: 512     # This is the node_hidden_size for EdgeRNN attention
+    num_layers: 3
+    edge_feature_len: 3
+    # output_size: null # Should be null/absent for attention EdgeRNN
+
+  EdgeMLP: # Settings ignored if edge_model is 'rnn'
+    hidden_size: 512
+    edge_feature_len: 3
+
+  EdgeRNN: # Settings for the attention-based EdgeRNN
+    embedding_size: 128    # Input embedding size for edge features
+    hidden_size: 256     # Hidden size of the EdgeRNN's *own* GRU (Query Dim)
+    num_layers: 3
+    edge_feature_len: 3
+    # --- New Attention Parameters ---
+    node_hidden_size: 512  # MUST match GraphRNN.hidden_size (Key/Value Dim)
+    attention_heads: 8     # Number of attention heads (e.g., 4 or 8)
+
+train:
+  batch_size: 32
+  lr: 0.0005
+  steps: 50000
+  print_iter: 100
+  checkpoint_iter: 5000
+  checkpoint_dir: 'attn_checkpoints' # Suggest new directory
+  log_dir: 'attn_logs'           # Suggest new directory
+  lr_schedule_milestones: [5000, 10000, 15000, 20000, 30000, 40000]
+  lr_schedule_gamma: 0.3

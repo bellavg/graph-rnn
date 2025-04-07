@@ -140,7 +140,7 @@ def load_aig_generator_model(model_path):
 #     one_hot = np.zeros(num_classes)
 #     one_hot[chosen_class] = 1
 #     return one_hot
-def sample_softmax(x, temperature=1.0): # Set back to 1.0 for standard softmax
+def sample_softmax(x, temperature=1.2): # Set back to 1.0 for standard softmax
     if not isinstance(x, torch.Tensor):
         x = torch.tensor(x)
     # When temp=1.0, this is just standard softmax
