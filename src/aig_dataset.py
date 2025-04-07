@@ -96,8 +96,6 @@ from typing import List, Dict, Tuple, Optional, Any, Union # Ensure these are im
 # ... (other imports, constants like NODE_TYPES, EDGE_TYPES, NUM_EDGE_FEATURES, _calculate_levels) ...
 class AIGDataset(torch.utils.data.Dataset):
 
-
-
     def __init__(self,
                  graph_file: str,
                  training: bool = True,
@@ -228,30 +226,50 @@ class AIGDataset(torch.utils.data.Dataset):
                     edge_type_counts[EDGE_TYPES["NONE"]] += padding_len
                     total_potential_edges += padding_len
 
-        # Calculate weights
-        total_edges_counted = sum(edge_type_counts.values())
+        # --- START Replace Weights Calculation ---
+        total_edges_counted = sum(edge_type_counts.values())  # Use actual counted edges
         self.edge_weights = torch.zeros(NUM_EDGE_FEATURES)
-        # Example using Effective Num Samples:
-        if total_edges_counted > 0:
+
+        if total_edges_counted > 0 and all(count > 0 for count in edge_type_counts.values()):  # Check all counts > 0
             print(f"Total edge slots considered for weights: {total_potential_edges}")
             print(f"Raw edge counts: {dict(edge_type_counts)}")
-            beta = 0.9999  # Hyperparameter for Effective Num Samples
+
+            # --- Simple Inverse Frequency Weighting ---
             for i in range(NUM_EDGE_FEATURES):
-                if edge_type_counts[i] == 0:
-                    print(f"Warning: Edge type {i} has zero count in training split.")
-                    self.edge_weights[i] = 1.0  # Assign default weight
-                else:
-                    effective_num = 1.0 - np.power(beta, edge_type_counts[i])
-                    weights = (1.0 - beta) / effective_num
-                    self.edge_weights[i] = weights
-            # Normalize weights (helps stabilize training)
+                # weight = total_edges_counted / edge_type_counts[i] # Basic inverse frequency
+                # Alternative: Use 1 / count, often works well
+                weight = 1.0 / edge_type_counts[i]
+                self.edge_weights[i] = weight
+            # --- End Simple Inverse Frequency ---
+
+            # Normalize weights so they sum to NUM_EDGE_FEATURES (optional, but can help stabilize)
+            # Or simply normalize to sum to 1: self.edge_weights / torch.sum(self.edge_weights)
             self.edge_weights = self.edge_weights / torch.sum(self.edge_weights) * NUM_EDGE_FEATURES
-            print(f"Calculated edge weights: {self.edge_weights.tolist()}")
+
+            print(f"Calculated edge weights (Inverse Frequency): {self.edge_weights.tolist()}")
+
+        elif total_edges_counted > 0:  # Handle if some classes have zero counts
+            print(
+                f"Warning: Zero counts detected for some edge types: {dict(edge_type_counts)}. Using fallback weights.")
+            # Fallback: Give non-zero classes inverse weight, zero classes maybe weight 1? Or max weight?
+            max_count = 1
+            for i in range(NUM_EDGE_FEATURES):
+                if edge_type_counts[i] > 0:
+                    max_count = max(max_count, edge_type_counts[i])
+
+            for i in range(NUM_EDGE_FEATURES):
+                if edge_type_counts[i] > 0:
+                    self.edge_weights[i] = float(max_count) / edge_type_counts[i]  # Relative inverse freq
+                else:
+                    self.edge_weights[i] = float(max_count)  # Assign max weight to zero-count class
+            # Normalize
+            self.edge_weights = self.edge_weights / torch.sum(self.edge_weights) * NUM_EDGE_FEATURES
+            print(f"Calculated edge weights (Fallback for Zero Counts): {self.edge_weights.tolist()}")
+
         else:
             print(
                 "Warning: No edges/padding found in training split to calculate weights. Using default weights [1, 1, 1].")
             self.edge_weights = torch.ones(NUM_EDGE_FEATURES)
-        # --- END Weight Calculation ---
 
         # Set up train/test split indices (needed for __len__ and __getitem__)
         np.random.seed(42)  # Ensure consistent shuffle for split definition
