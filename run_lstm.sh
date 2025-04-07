@@ -3,7 +3,7 @@
 #SBATCH --partition=gpu_a100     # Specify the appropriate partition here
 #SBATCH --gpus=1
 #SBATCH --time=14:00:00
-#SBATCH --output=slurm_logs/lstm_%j.out
+#SBATCH --output=slurm_logs/small_lstm_%j.out
 
 
 # Create log directories if they don't exist
@@ -20,7 +20,7 @@ source activate  aig-rnn
 
 # Print environment info
 # Set output directory with job ID
-OUTPUT_DIR="current_runs/lstm_${SLURM_JOB_ID}"
+OUTPUT_DIR="current_runs/small_lstm_${SLURM_JOB_ID}"
 mkdir -p $OUTPUT_DIR
 
 # Config file to use (provide as parameter or default)
