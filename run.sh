@@ -24,7 +24,7 @@ OUTPUT_DIR="new_runs/lstm_${SLURM_JOB_ID}"
 mkdir -p $OUTPUT_DIR
 
 # Config file to use (provide as parameter or default)
-CONFIG_FILE=${1:-"configs/config_aig_lstm.yaml"}
+CONFIG_FILE=${1:-"configs/config_aig_lstm_big.yaml"}
 
 # Run the main script
 echo "Using config file: $CONFIG_FILE"
