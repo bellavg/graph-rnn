@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 
 # --- Imports from project structure ---
 try:
-    from model import * # Import all model classes for setup_models
+    from model import *  # Import all model classes for setup_models
     from utils import setup_models
     # Import constants and helpers needed here and potentially by generate.py
     from aig_dataset import _calculate_levels, NUM_EDGE_FEATURES, EDGE_TYPES
@@ -31,6 +31,7 @@ except ImportError as e:
     print("'model', 'utils', 'aig_dataset', 'generate', 'aig_evaluate' are importable.")
     exit(1)
 
+
 def visualize_aig_structure(G, output_file='generated_aig_structure.png'):
     """Visualize the generated AIG structure, handling edge types."""
     if G is None or G.number_of_nodes() == 0:
@@ -43,11 +44,12 @@ def visualize_aig_structure(G, output_file='generated_aig_structure.png'):
         # Try a layout that works well for DAGs if pygraphviz is available
         pos = nx.nx_agraph.graphviz_layout(G, prog='dot')
     except ImportError:
-        print("Warning: pygraphviz not found. Using spring_layout (may be less clear). Install pygraphviz for better DAG layout.")
+        print(
+            "Warning: pygraphviz not found. Using spring_layout (may be less clear). Install pygraphviz for better DAG layout.")
         pos = nx.spring_layout(G, seed=42)
     except Exception as e:
         print(f"Warning: graphviz layout failed ({e}). Using spring_layout.")
-        pos = nx.spring_layout(G, seed=42) # Fallback
+        pos = nx.spring_layout(G, seed=42)  # Fallback
 
     # Infer node types for coloring (using the imported function)
     node_colors = []
@@ -57,9 +59,10 @@ def visualize_aig_structure(G, output_file='generated_aig_structure.png'):
 
     for node in G.nodes():
         node_type = inferred_types.get(node, "UNKNOWN")
-        color_map = {"PI": 'lightgreen', "AND": 'lightblue', "PO": 'salmon', "UNKNOWN": 'lightgrey', "INVALID_FANIN": 'orange'}
+        color_map = {"PI": 'lightgreen', "AND": 'lightblue', "PO": 'salmon', "UNKNOWN": 'lightgrey',
+                     "INVALID_FANIN": 'orange'}
         node_colors.append(color_map.get(node_type, 'lightgrey'))
-        node_labels[node] = f"{node}\n({node_type})" # Label with node ID and type
+        node_labels[node] = f"{node}\n({node_type})"  # Label with node ID and type
 
     # Draw nodes
     nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=700, alpha=0.9)
@@ -67,28 +70,34 @@ def visualize_aig_structure(G, output_file='generated_aig_structure.png'):
     # Draw edges with styles based on 'type' attribute
     regular_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('type') == EDGE_TYPES["REGULAR"]]
     inverted_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('type') == EDGE_TYPES["INVERTED"]]
-    other_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('type') not in [EDGE_TYPES["REGULAR"], EDGE_TYPES["INVERTED"]]]
+    other_edges = [(u, v) for u, v, d in G.edges(data=True) if
+                   d.get('type') not in [EDGE_TYPES["REGULAR"], EDGE_TYPES["INVERTED"]]]
 
-    nx.draw_networkx_edges(G, pos, edgelist=regular_edges, width=1.5, edge_color='black', style='solid', arrowsize=20, node_size=700)
-    nx.draw_networkx_edges(G, pos, edgelist=inverted_edges, width=1.5, edge_color='red', style='dashed', arrowsize=20, node_size=700)
+    nx.draw_networkx_edges(G, pos, edgelist=regular_edges, width=1.5, edge_color='black', style='solid', arrowsize=20,
+                           node_size=700)
+    nx.draw_networkx_edges(G, pos, edgelist=inverted_edges, width=1.5, edge_color='red', style='dashed', arrowsize=20,
+                           node_size=700)
     if other_edges:
         print(f"Warning: Found edges with unexpected types (not REGULAR/INVERTED) in {output_file}")
-        nx.draw_networkx_edges(G, pos, edgelist=other_edges, width=1.0, edge_color='gray', style='dotted', arrowsize=20, node_size=700)
+        nx.draw_networkx_edges(G, pos, edgelist=other_edges, width=1.0, edge_color='gray', style='dotted', arrowsize=20,
+                               node_size=700)
 
     # Draw labels
     nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=9)
 
     # Add legend for edge types and node colors
     legend_elements = [
-        plt.Line2D([0], [0], color='black', lw=1.5, linestyle='solid', label=f'Regular Edge (type {EDGE_TYPES["REGULAR"]})'),
-        plt.Line2D([0], [0], color='red', lw=1.5, linestyle='dashed', label=f'Inverted Edge (type {EDGE_TYPES["INVERTED"]})'),
+        plt.Line2D([0], [0], color='black', lw=1.5, linestyle='solid',
+                   label=f'Regular Edge (type {EDGE_TYPES["REGULAR"]})'),
+        plt.Line2D([0], [0], color='red', lw=1.5, linestyle='dashed',
+                   label=f'Inverted Edge (type {EDGE_TYPES["INVERTED"]})'),
         plt.scatter([], [], s=100, color='lightgreen', label='Inferred PI'),
         plt.scatter([], [], s=100, color='lightblue', label='Inferred AND'),
         plt.scatter([], [], s=100, color='salmon', label='Inferred PO'),
         plt.scatter([], [], s=100, color='orange', label='Invalid Fan-in'),
         plt.scatter([], [], s=100, color='lightgrey', label='Unknown/Other')
     ]
-    plt.legend(handles=legend_elements, loc='best', fontsize='small') # Changed loc
+    plt.legend(handles=legend_elements, loc='best', fontsize='small')  # Changed loc
 
     plt.title(f'Generated AIG Structure ({os.path.basename(output_file)})')
     plt.axis('off')
@@ -98,6 +107,7 @@ def visualize_aig_structure(G, output_file='generated_aig_structure.png'):
     except Exception as e:
         print(f"Error saving visualization {output_file}: {e}")
     plt.close()
+
 
 def get_checkpoint_step(filename):
     """Extracts the step number from a checkpoint filename."""
@@ -115,20 +125,29 @@ def main():
     parser.add_argument('--temp', type=float, default=1.0, help='Sampling temperature for generation (1.0=no change)')
     parser.add_argument('--gpu', type=int, default=0, help='GPU ID to use (-1 for CPU)')
     parser.add_argument('--output_csv', type=str, default='aig_evaluation_results.csv', help='Output CSV file name')
-    parser.add_argument('--max_gen_steps', type=int, default=None, help='Optional max generation steps per graph (overrides default)')
+    parser.add_argument('--max_gen_steps', type=int, default=None,
+                        help='Optional max generation steps per graph (overrides default)')
     parser.add_argument('--patience', type=int, default=10, help='Patience for stopping if no real edges are added')
 
     # Visualization Args
     parser.add_argument('--num_checkpoints', type=int, default=None,
                         help='Evaluate only the latest N checkpoints (default: evaluate all found)')
-    parser.add_argument('--save_plots', action='store_true', help='Save visualizations of the best valid generated graphs')
+    parser.add_argument('--save_plots', action='store_true',
+                        help='Save visualizations of the best valid generated graphs')
     parser.add_argument('--plot_dir', type=str, default='./aig_plots', help='Directory to save visualizations')
     parser.add_argument('--num_plots', type=int, default=5, help='Maximum number of best plots to save per model')
-    parser.add_argument('--plot_sort_by', type=str, default='nodes', choices=['nodes', 'level'], help='Sort criteria for best plots ("nodes" or "level")')
+    parser.add_argument('--plot_sort_by', type=str, default='nodes', choices=['nodes', 'level'],
+                        help='Sort criteria for best plots ("nodes" or "level")')
 
     # Args potentially needed if info not in config (better to save in config)
-    parser.add_argument('--force_max_nodes_train', type=int, default=None, help='Manually override max_node_count_train if not in config')
-    parser.add_argument('--force_max_level_train', type=int, default=None, help='Manually override max_level_train if not in config')
+    parser.add_argument('--force_max_nodes_train', type=int, default=None,
+                        help='Manually override max_node_count_train if not in config')
+    parser.add_argument('--force_max_level_train', type=int, default=None,
+                        help='Manually override max_level_train if not in config')
+
+    # Debug flags
+    parser.add_argument('--debug', action='store_true', help='Enable debug output for diagnostics')
+    parser.add_argument('--try_temps', action='store_true', help='Try different temperature values if generation fails')
 
     args = parser.parse_args()
 
@@ -143,7 +162,8 @@ def main():
     # --- Plot Directory ---
     if args.save_plots:
         os.makedirs(args.plot_dir, exist_ok=True)
-        print(f"Will save up to {args.num_plots} best valid plots per model (sorted by {args.plot_sort_by}) to {args.plot_dir}")
+        print(
+            f"Will save up to {args.num_plots} best valid plots per model (sorted by {args.plot_sort_by}) to {args.plot_dir}")
 
     # --- Find Models ---
     all_checkpoint_paths = sorted(glob.glob(os.path.join(args.model_dir, 'checkpoint-*.pth')))
@@ -178,7 +198,7 @@ def main():
     # --- Model Loop ---
     for model_idx, model_path in enumerate(checkpoint_paths):
         model_basename = os.path.basename(model_path).replace(".pth", "")
-        print(f"\n--- Evaluating Model [{model_idx+1}/{len(checkpoint_paths)}]: {model_basename} ---")
+        print(f"\n--- Evaluating Model [{model_idx + 1}/{len(checkpoint_paths)}]: {model_basename} ---")
         start_time_model = time.time()
 
         # --- Load Model and Config ---
@@ -212,7 +232,8 @@ def main():
             print("  Skipping this model.")
             continue  # Skip this model if values are still missing
 
-        print(f"  Using training params for model setup: max_nodes={max_n_train}, max_level={max_l_train} ({config_source_msg})")
+        print(
+            f"  Using training params for model setup: max_nodes={max_n_train}, max_level={max_l_train} ({config_source_msg})")
 
         # --- Setup Models ---
         try:
@@ -245,7 +266,8 @@ def main():
         elif isinstance(edge_model_gen, (EdgeLevelRNN, EdgeLevelAttentionRNN, EdgeLevelLSTM, EdgeLevelAttentionLSTM)):
             edge_func = rnn_edge_gen_aig
         else:
-            print(f"  Error: Could not determine edge function for model type '{type(edge_model_gen).__name__}' (config edge_model: '{edge_model_type_config}'). Skipping.")
+            print(
+                f"  Error: Could not determine edge function for model type '{type(edge_model_gen).__name__}' (config edge_model: '{edge_model_type_config}'). Skipping.")
             continue
         print(f"  Using edge generation function: {edge_func.__name__}")
 
@@ -254,31 +276,62 @@ def main():
         effective_m_gen = max(1, max_n_train - 1)
         print(f"  Effective M for generation (max_n_train - 1): {effective_m_gen}")
 
+        # --- Set up temperature list for testing if enabled ---
+        temps_to_try = [args.temp]
+        if args.try_temps:
+            # If try_temps is enabled and base temp is 1.0, try a range
+            if abs(args.temp - 1.0) < 0.01:  # If very close to 1.0
+                temps_to_try = [0.5, 0.8, 1.0, 1.2, 1.5]
+            else:
+                # If a specific temp was given, try that plus a higher and lower
+                temps_to_try = [args.temp * 0.5, args.temp, args.temp * 1.5]
+
+            print(f"  Will try these temperatures: {temps_to_try}")
+
         # --- Generation and Evaluation Loop for this Model ---
-        all_graphs_data = [] # Stores dicts with graph data and results
-        print(f"  Generating {args.num_graphs} graphs (target N={args.nodes_target}, temp={args.temp}, patience={args.patience})...")
+        all_graphs_data = []  # Stores dicts with graph data and results
+        print(
+            f"  Generating {args.num_graphs} graphs (target N={args.nodes_target}, temps={temps_to_try}, patience={args.patience})...")
         graphs_generated_count = 0
+
         with tqdm(total=args.num_graphs, desc=f"  Generating {model_basename}", leave=False) as pbar:
             for i in range(args.num_graphs):
-                try:
-                    gen_graph, gen_max_level = generate_aig(
-                        num_nodes_target=args.nodes_target,
-                        node_model=node_model_gen,
-                        edge_model=edge_model_gen,
-                        effective_m=effective_m_gen,
-                        max_level_model=max_l_train, # Pass max level model trained with
-                        edge_gen_fn=edge_func,
-                        device=device,
-                        temperature=args.temp,
-                        max_steps=args.max_gen_steps,
-                        eos_patience=args.patience
-                    )
-                    graphs_generated_count += 1
-                except Exception as e:
-                    print(f"\n  Error during generation for graph {i}: {e}")
-                    # Optionally store error or skip
+                gen_graph = None
+                gen_max_level = -1
+
+                # Try different temperatures if enabled
+                for temp_idx, temperature in enumerate(temps_to_try):
+                    try:
+                        gen_graph, gen_max_level = generate_aig(
+                            num_nodes_target=args.nodes_target,
+                            node_model=node_model_gen,
+                            edge_model=edge_model_gen,
+                            effective_m=effective_m_gen,
+                            max_level_model=max_l_train,  # Pass max level model trained with
+                            edge_gen_fn=edge_func,
+                            device=device,
+                            temperature=temperature,
+                            max_steps=args.max_gen_steps,
+                            eos_patience=args.patience,
+                            debug=args.debug
+                        )
+                        graphs_generated_count += 1
+
+                        # If the graph has nodes and we're trying temps, we can stop
+                        if args.try_temps and gen_graph.number_of_nodes() > 0:
+                            if temp_idx > 0:  # If not the first temperature
+                                print(f"\n  Temperature {temperature} succeeded for graph {i}!")
+                            break
+
+                    except Exception as e:
+                        print(f"\n  Error during generation for graph {i} (temp={temperature}): {e}")
+                        # Continue to next temperature or skip if last one
+                        continue
+
+                # If we couldn't generate a graph with any temperature, skip this iteration
+                if gen_graph is None:
                     pbar.update(1)
-                    continue # Skip analysis for this failed generation
+                    continue
 
                 # --- Clean: Remove Isolated Nodes ---
                 g_cleaned = gen_graph
@@ -302,10 +355,11 @@ def main():
                     try:
                         if nx.is_directed_acyclic_graph(g_cleaned):
                             _, final_max_level_cleaned = _calculate_levels(g_cleaned)
-                        else: final_max_level_cleaned = -2 # Non-DAG
+                        else:
+                            final_max_level_cleaned = -2  # Non-DAG
 
                         inferred_types_cleaned = infer_node_types(g_cleaned)
-                        g_cleaned.graph['_inferred_types_cleaned'] = inferred_types_cleaned # Store for viz
+                        g_cleaned.graph['_inferred_types_cleaned'] = inferred_types_cleaned  # Store for viz
 
                         # Calculate validity metrics using functions from aig_evaluate
                         paper_val = calculate_paper_validity(g_cleaned)
@@ -313,21 +367,21 @@ def main():
                         is_extensively_valid = extensive_val_details.get("overall_valid", False)
 
                     except Exception as e:
-                         print(f"\n  Error during analysis for graph {i}: {e}")
-                         final_max_level_cleaned = -3 # Analysis error
-                         paper_val = np.nan # Mark metrics as NaN on error
-                         is_extensively_valid = False
+                        print(f"\n  Error during analysis for graph {i}: {e}")
+                        final_max_level_cleaned = -3  # Analysis error
+                        paper_val = np.nan  # Mark metrics as NaN on error
+                        is_extensively_valid = False
 
                 all_graphs_data.append({
-                    "graph": g_cleaned, # Store the cleaned graph object
+                    "graph": g_cleaned,  # Store the cleaned graph object
                     "analysis_index": i,
                     "is_extensively_valid": is_extensively_valid,
                     "paper_validity": paper_val,
                     "node_count": cleaned_node_count,
                     "edge_count": cleaned_edge_count,
-                    "max_level": final_max_level_cleaned, # Level of cleaned graph
+                    "max_level": final_max_level_cleaned,  # Level of cleaned graph
                 })
-                pbar.update(1) # End of generation loop for one graph
+                pbar.update(1)  # End of generation loop for one graph
 
         # --- Aggregate and Report Results for the Current Model ---
         num_analyzed = len(all_graphs_data)
@@ -337,7 +391,7 @@ def main():
             # Calculate overall averages (handle potential NaNs in paper validity)
             all_node_counts = [d["node_count"] for d in all_graphs_data]
             all_edge_counts = [d["edge_count"] for d in all_graphs_data]
-            all_valid_levels = [d["max_level"] for d in all_graphs_data if d["max_level"] >= 0] # Levels for valid DAGs
+            all_valid_levels = [d["max_level"] for d in all_graphs_data if d["max_level"] >= 0]  # Levels for valid DAGs
             all_paper_validities = [d["paper_validity"] for d in all_graphs_data]
             all_extensive_valid = [d["is_extensively_valid"] for d in all_graphs_data]
 
@@ -345,7 +399,7 @@ def main():
             avg_edges = np.mean(all_edge_counts)
             avg_max_level = np.mean(all_valid_levels) if all_valid_levels else 0.0
             max_max_level = np.max(all_valid_levels) if all_valid_levels else 0.0
-            avg_paper_validity = np.nanmean(all_paper_validities) # Use nanmean
+            avg_paper_validity = np.nanmean(all_paper_validities)  # Use nanmean
             percent_extensive_valid = np.mean(all_extensive_valid) * 100.0
 
             # Store aggregated results
@@ -382,7 +436,7 @@ def main():
                     valid_graphs_data_sorted = sorted(
                         valid_graphs_data,
                         key=lambda x: x.get(sort_key, 0),
-                        reverse=True # Sort descending
+                        reverse=True  # Sort descending
                     )
 
                     num_plots_to_save = min(len(valid_graphs_data_sorted), args.num_plots)
@@ -391,7 +445,7 @@ def main():
                     for rank, graph_data in enumerate(valid_graphs_data_sorted[:num_plots_to_save]):
                         plot_filename = os.path.join(
                             args.plot_dir,
-                            f"{model_basename}_valid_{args.plot_sort_by}_rank{rank+1}_idx{graph_data['analysis_index']}.png"
+                            f"{model_basename}_valid_{args.plot_sort_by}_rank{rank + 1}_idx{graph_data['analysis_index']}.png"
                         )
                         # Call the visualization function defined in this script
                         visualize_aig_structure(graph_data["graph"], plot_filename)
@@ -399,7 +453,7 @@ def main():
                 else:
                     print("  No extensively valid graphs found to plot.")
 
-        else: # No graphs analyzed
+        else:  # No graphs analyzed
             print("    No graphs were successfully generated or analyzed for this model.")
             # Add empty/error result row
             results_list.append({
@@ -419,9 +473,9 @@ def main():
         results_df = pd.DataFrame(results_list)
         # Define column order
         cols_order = [
-             "model", "num_generated", "num_analyzed", "target_nodes", "temperature", "patience",
-             "avg_nodes", "avg_edges", "avg_paper_validity", "percent_extensive_valid",
-             "avg_max_level", "max_max_level"
+            "model", "num_generated", "num_analyzed", "target_nodes", "temperature", "patience",
+            "avg_nodes", "avg_edges", "avg_paper_validity", "percent_extensive_valid",
+            "avg_max_level", "max_max_level"
         ]
         # Reorder/select columns, handling potential missing ones if errors occurred
         final_cols = [col for col in cols_order if col in results_df.columns]
@@ -439,8 +493,10 @@ def main():
 
     return 0
 
+
 if __name__ == "__main__":
     import sys
+
     # Set a higher recursion depth if deep graphs cause issues with NetworkX/layout (use with caution)
     # sys.setrecursionlimit(5000)
     sys.exit(main())
