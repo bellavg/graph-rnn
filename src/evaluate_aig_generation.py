@@ -132,9 +132,9 @@ def main():
     parser.add_argument('--num_plots', type=int, default=5, help='Maximum number of best plots to save per model')
     parser.add_argument('--plot_sort_by', type=str, default='nodes', choices=['nodes', 'level'], help='Sort criteria for best plots ("nodes" or "level")')
 
-    # Args potentially needed if info not in config (better to save in config)
-    # parser.add_argument('--force_max_nodes_train', type=int, default=None, help='Manually override max_node_count_train if not in config')
-    # parser.add_argument('--force_max_level_train', type=int, default=None, help='Manually override max_level_train if not in config')
+    #Args potentially needed if info not in config (better to save in config)
+    parser.add_argument('--force_max_nodes_train', type=int, default=None, help='Manually override max_node_count_train if not in config')
+    parser.add_argument('--force_max_level_train', type=int, default=None, help='Manually override max_level_train if not in config')
 
     args = parser.parse_args()
 
