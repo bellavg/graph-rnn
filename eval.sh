@@ -20,10 +20,8 @@ FORCE_MAX_NODES=64
 FORCE_MAX_LEVEL=13
 NUM_CHECKPOINTS_TO_EVAL=5
 
-# --- New Debug Parameters ---
+# --- New Parameters ---
 TEMPERATURE=0.8                # Lower temperature for more deterministic sampling
-ENABLE_DEBUG=true              # Set to true to enable debug output
-TRY_DIFFERENT_TEMPS=true       # Try different temperatures per graph if needed
 
 # --- Environment Setup ---
 mkdir -p slurm_logs
@@ -36,24 +34,11 @@ echo "Forcing Max Nodes Train: $FORCE_MAX_NODES"
 echo "Forcing Max Level Train: $FORCE_MAX_LEVEL"
 echo "Evaluating last $NUM_CHECKPOINTS_TO_EVAL checkpoints per directory."
 echo "Using temperature: $TEMPERATURE"
-echo "Debug mode: $ENABLE_DEBUG"
-echo "Try multiple temperatures: $TRY_DIFFERENT_TEMPS"
 
 module purge
 module load 2024
 module load Anaconda3/2024.06-1
 source activate aig-rnn
-
-# --- Debug Summary of Python Modules ---
-echo "Checking Python modules:"
-python -c "
-try:
-    import model, utils, aig_dataset, aig_generate, aig_evaluate
-    print('All required modules found!')
-    print(f'Edge types: {aig_dataset.EDGE_TYPES}')
-except ImportError as e:
-    print(f'Error: {e}')
-"
 
 # --- Find and Evaluate Model Run Directories ---
 find "$RUNS_DIR" -type d -name 'checkpoints_*' | while read -r CKPT_DIR; do
@@ -76,18 +61,7 @@ find "$RUNS_DIR" -type d -name 'checkpoints_*' | while read -r CKPT_DIR; do
 
     echo "  Launching evaluation job for directory: $CKPT_DIR"
 
-    # Conditional args based on env vars
-    DEBUG_ARGS=""
-    if [ "$ENABLE_DEBUG" = true ]; then
-        DEBUG_ARGS="--debug"
-    fi
-
-    TEMP_ARGS=""
-    if [ "$TRY_DIFFERENT_TEMPS" = true ]; then
-        TEMP_ARGS="--try_temps"
-    fi
-
-    # Launch the evaluation job
+    # Launch the evaluation job - REMOVED debug flags
     srun --job-name="${MODEL_RUN_NAME}_eval" --output="slurm_logs/${MODEL_RUN_NAME}_eval_%j.out" \
     python -u $PYTHON_SCRIPT \
         "$CKPT_DIR" \
@@ -101,8 +75,7 @@ find "$RUNS_DIR" -type d -name 'checkpoints_*' | while read -r CKPT_DIR; do
         --force_max_nodes_train $FORCE_MAX_NODES \
         --force_max_level_train $FORCE_MAX_LEVEL \
         --num_checkpoints $NUM_CHECKPOINTS_TO_EVAL \
-        --temp $TEMPERATURE \
-        $DEBUG_ARGS $TEMP_ARGS
+        --temp $TEMPERATURE
 
     echo "  Evaluation job launched for run $MODEL_RUN_NAME. Results -> $EVAL_OUTPUT_DIR, Plots -> $PLOT_DIR"
     echo "-----------------------------------------------------"
