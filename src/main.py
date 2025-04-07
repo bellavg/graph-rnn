@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import MultiStepLR
 from torch.utils.tensorboard import SummaryWriter
 import pickle
+from utils import setup_models
 
 # Assuming these imports are correct relative to your project structure
 # Make sure train_rnn_step/train_mlp_step signatures are updated
@@ -45,105 +46,7 @@ def load_config(config_file):
     return config
 
 
-def setup_models(config, device, max_node_count, max_level):
-    use_bfs = config['data'].get('use_bfs', False)
-    edge_feature_len = config['model'].get('GraphRNN', {}).get('edge_feature_len', NUM_EDGE_FEATURES)
 
-    # Determine Effective Input/Output Size
-    # (Keep the logic for effective_input_size as before)
-    if use_bfs:
-        effective_input_size = config['data'].get('m')
-        if effective_input_size is None: raise ValueError("Config 'data.m' required for BFS.")
-        print(f"INFO: Using BFS mode. Effective input/output size (m): {effective_input_size}")
-    else: # TopSort mode
-        if max_node_count <= 1: raise ValueError("max_node_count must be > 1 for training.")
-        effective_input_size = max_node_count - 1
-        print(f"INFO: Using Topological Sort mode. Effective input/output size (max_nodes-1): {effective_input_size}")
-
-
-    edge_model_type = config['model'].get('edge_model', 'mlp').lower()
-    node_model_output_size = None # Default
-    edge_model = None
-    step_fn = None
-
-    # --- Initialize Edge Model ---
-    if edge_model_type == 'rnn':
-        if 'EdgeRNN' not in config['model']: raise ValueError("Config missing 'model.EdgeRNN'.")
-        edge_model_args = config['model']['EdgeRNN'].copy()
-        edge_model_args['edge_feature_len'] = edge_feature_len
-        edge_model = EdgeLevelRNN(**edge_model_args).to(device)
-        step_fn = train_rnn_step # Assuming train_rnn_step works for both RNN types
-        node_model_output_size = edge_model_args.get('hidden_size')
-        if node_model_output_size is None: raise ValueError("Config 'model.EdgeRNN.hidden_size' needed.")
-        print(f"Selected standard EdgeLevelRNN model. Expecting GraphRNN output size: {node_model_output_size}")
-
-    # --- >>> NEW: Handle EdgeLevelAttentionRNN <<< ---
-    elif edge_model_type == 'attention_rnn': # Or choose a different key, e.g., 'attn_rnn'
-        if 'EdgeAttentionRNN' not in config['model']: raise ValueError("Config missing 'model.EdgeAttentionRNN'.")
-        edge_model_args = config['model']['EdgeAttentionRNN'].copy()
-        edge_model_args['edge_feature_len'] = edge_feature_len
-        # Read attention params specifically for this model
-        edge_model_args['attention_heads'] = edge_model_args.get('attention_heads', 4)
-        edge_model_args['attention_dropout'] = edge_model_args.get('attention_dropout', 0.1)
-        # Add other necessary args like tt_size if supported/needed
-        # edge_model_args['tt_size'] = config['model'].get('tt_size', None) # Example if adding conditioning
-
-        edge_model = EdgeLevelAttentionRNN(**edge_model_args).to(device)
-        step_fn = train_rnn_step # Assuming train_rnn_step works
-        node_model_output_size = edge_model_args.get('hidden_size')
-        if node_model_output_size is None: raise ValueError("Config 'model.EdgeAttentionRNN.hidden_size' needed.")
-        print(f"Selected EdgeLevelAttentionRNN model. Expecting GraphRNN output size: {node_model_output_size}")
-    # --- >>> END NEW <<< ---
-
-    elif edge_model_type == 'mlp':
-        if 'EdgeMLP' not in config['model']: raise ValueError("Config missing 'model.EdgeMLP'.")
-        if 'GraphRNN' not in config['model'] or 'hidden_size' not in config['model']['GraphRNN']:
-             raise ValueError("Config 'model.GraphRNN.hidden_size' needed.")
-        edge_model_args = config['model']['EdgeMLP'].copy()
-        edge_model_args['edge_feature_len'] = edge_feature_len
-        edge_model_args['output_size'] = effective_input_size
-        edge_model_args['input_size'] = config['model']['GraphRNN']['hidden_size']
-        edge_model = EdgeLevelMLP(**edge_model_args).to(device)
-        step_fn = train_mlp_step
-        node_model_output_size = None
-        print("Selected EdgeLevelMLP model.")
-    else:
-        raise ValueError(f"Unsupported edge_model type: {edge_model_type}")
-
-    # --- Initialize Node Model (GraphLevelRNN or GraphLevelAttentionRNN) ---
-    # (This part remains the same as in the previous response, checking the
-    # 'use_attention' flag within the GraphRNN config section to decide
-    # whether to instantiate GraphLevelRNN or GraphLevelAttentionRNN)
-    if 'GraphRNN' not in config['model']: raise ValueError("Config missing 'model.GraphRNN'.")
-    node_model_config = config['model']['GraphRNN'].copy()
-    node_model_args = {}
-
-    node_model_args['input_size'] = effective_input_size
-    node_model_args['embedding_size'] = node_model_config.get('embedding_size')
-    node_model_args['hidden_size'] = node_model_config.get('hidden_size')
-    node_model_args['num_layers'] = node_model_config.get('num_layers')
-    node_model_args['edge_feature_len'] = edge_feature_len
-    node_model_args['output_size'] = node_model_output_size # Crucial link
-    node_model_args['max_level'] = max_level
-    node_model_args['predict_node_types'] = False
-    node_model_args['num_node_types'] = None
-    node_model_args['use_conditioning'] = False
-    node_model_args['tt_size'] = None
-
-    use_node_attention = node_model_config.get('use_attention', False)
-
-    if use_node_attention:
-        print("INFO: Using GraphLevelAttentionRNN for node level.")
-        node_model_args['attention_heads'] = node_model_config.get('attention_heads', 4)
-        node_model_args['attention_dropout'] = node_model_config.get('attention_dropout', 0.1)
-        node_model = GraphLevelAttentionRNN(**node_model_args).to(device)
-    else:
-        print("INFO: Using standard GraphLevelRNN for node level.")
-        node_model_args.pop('attention_heads', None)
-        node_model_args.pop('attention_dropout', None)
-        node_model = GraphLevelRNN(**node_model_args).to(device)
-
-    return node_model, edge_model, step_fn
 
 def get_max_node_count_from_pkl(graph_file: str) -> int:
     """
