@@ -78,20 +78,30 @@ def setup_models(config, device, max_node_count, max_level):
     # --- Instantiate Node Model ---
     if use_lstm:
         if use_node_attention:
+            # GraphLevelAttentionLSTM expects attention_heads, attention_dropout
+            # It does NOT expect use_attention
+            node_params.pop('use_attention', None)  # Remove if present
             node_model = GraphLevelAttentionLSTM(**node_params).to(device)
             print(f"INFO: Using GraphLevelAttentionLSTM for node level.")
         else:
+            # GraphLevelLSTM does NOT expect any attention args
+            node_params.pop('use_attention', None)  # Remove if present
             node_params.pop('attention_heads', None)
             node_params.pop('attention_dropout', None)
             node_model = GraphLevelLSTM(**node_params).to(device)
             print(f"INFO: Using GraphLevelLSTM for node level.")
-    else: # GRU
+    else:  # GRU
         if use_node_attention:
-            node_params['attention_heads'] = node_params.get('attention_heads', 4)
-            node_params['attention_dropout'] = node_params.get('attention_dropout', 0.1)
+            # GraphLevelAttentionRNN expects attention_heads, attention_dropout
+            node_params['attention_heads'] = node_params.get('attention_heads', 4)  # Keep/default these
+            node_params['attention_dropout'] = node_params.get('attention_dropout', 0.1)  # Keep/default these
+            # It does NOT expect use_attention
+            node_params.pop('use_attention', None)  # Remove if present
             node_model = GraphLevelAttentionRNN(**node_params).to(device)
             print(f"INFO: Using GraphLevelAttentionRNN for node level.")
         else:
+            # GraphLevelRNN does NOT expect any attention args
+            node_params.pop('use_attention', None)  # Remove if present
             node_params.pop('attention_heads', None)
             node_params.pop('attention_dropout', None)
             node_model = GraphLevelRNN(**node_params).to(device)
