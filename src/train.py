@@ -128,8 +128,14 @@ def train_mlp_step(graph_rnn, edge_mlp, data,
     scheduler_graph_rnn.step()
     scheduler_mlp.step()
 
-    # Return loss value (matching original snippet style)
-    return total_loss.item() if isinstance(total_loss, torch.Tensor) else total_loss
+    edge_loss_val = edge_loss.item() if isinstance(edge_loss, torch.Tensor) else edge_loss
+    total_loss_val = total_loss.item() if isinstance(total_loss, torch.Tensor) else total_loss
+
+    return {
+        'total': total_loss_val,
+        'edge': edge_loss_val,
+        'node': 0.0  # MLP step doesn't calculate node loss separately here
+    }
 
 
 def train_rnn_step(graph_rnn, edge_rnn, data,
