@@ -1,470 +1,391 @@
-'''Code to use trained GraphRNN to generate a new AIG graph.'''
+# src/generate.py (Modified)
 
 import argparse
 import numpy as np
 import torch
 import networkx as nx
-import matplotlib.pyplot as plt
 import os
-import yaml  # For loading config
-from model import *
+import yaml # Added for config loading
+from torch.distributions import Categorical # For sampling
 
-# Assuming model definitions are in 'model.py'
-# Make sure NODE_TYPES and EDGE_TYPES are accessible if needed later,
-# but generation itself only uses edge types implicitly via edge_feature_len=3
-# from aig_dataset import EDGE_TYPES # Only needed if you use names later
+# Import necessary model classes and setup function
+from model import * # Import all model classes
+from utils import setup_models # Import the setup function from main's utils
+from aig_dataset import _calculate_levels, EDGE_TYPES, NUM_EDGE_FEATURES # Import helpers/constants
 
-# --- Model Loading ---
-# Adapted from load_aig_model_from_config / load_model_from_config
-def load_aig_generator_model(model_path):
+# --- Helper Function to convert AIG sequence to NetworkX ---
+def aig_seq_to_nx(adj_seq_list: list, edge_feature_len: int) -> nx.DiGraph:
     """
-    Load Node and Edge models from a checkpoint.
-    MODIFIED: Also returns the max_level used by the node model's embedding.
-    """
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    print(f"Loading model state from: {model_path}")
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model file not found at {model_path}")
-    try:
-        state = torch.load(model_path, map_location=device)
-        config = state['config']
-    except Exception as e:
-        raise RuntimeError(f"Error loading model state: {e}")
-
-    # Determine input_size based on config (BFS or TopSort)
-    use_bfs = config['data'].get('use_bfs', False) # Use False default for TopSort AIGs
-    if use_bfs:
-        input_size = config['data'].get('m')
-        if input_size is None:
-            raise ValueError("Config 'data.m' is required when use_bfs is true.")
-        print(f"INFO: Loading model for BFS mode. Input size (m): {input_size}")
-    else:
-        # Need max_node_count for TopSort. Determine from dataset.
-        dataset_path = config['data'].get('graph_file')
-        if not dataset_path or not os.path.exists(dataset_path):
-             raise FileNotFoundError(f"Dataset file '{dataset_path}' specified in config not found.")
-        try:
-            from aig_dataset import AIGDataset # Import locally
-            temp_dataset = AIGDataset(graph_file=dataset_path, training=False)
-            max_node_count = temp_dataset.max_node_count
-            if max_node_count <= 1: raise ValueError("Max node count from dataset <= 1")
-            input_size = max_node_count - 1
-            print(f"INFO: Loading model for TopSort mode. Input size (max_nodes-1): {input_size}")
-            # --- Store dataset's max level ---
-            max_level_from_dataset = temp_dataset.max_level
-            print(f"INFO: Max level from dataset: {max_level_from_dataset}")
-        except Exception as e:
-             raise RuntimeError(f"Could not determine max_node_count/max_level for TopSort mode from {dataset_path}: {e}")
-
-    # Model Setup
-    edge_feature_len = config['model']['GraphRNN'].get('edge_feature_len', 3)
-    if edge_feature_len != 3:
-         print(f"Warning: Expected edge_feature_len=3 for AIGs, found {edge_feature_len} in config.")
-
-    # --- Get max_level used during training from config ---
-    # It was added to the GraphRNN args in main.py's setup_models
-    max_level_config = config['model']['GraphRNN'].get('max_level')
-    # Use the one from config if available, otherwise fallback to dataset's
-    max_level_for_model = max_level_config if max_level_config is not None else max_level_from_dataset
-    if max_level_for_model is None:
-         print("Warning: max_level not found in config or dataset. Level embedding might not work.")
-         max_level_for_model = 15 # Default or raise error? Defaulting to 0 for now.
-
-    print(f"INFO: Using max_level={max_level_for_model} for model initialization/clamping.")
-
-    node_model_args = config['model']['GraphRNN'].copy()
-    node_model_args['input_size'] = input_size # Use determined size
-    node_model_args['edge_feature_len'] = edge_feature_len
-    node_model_args['max_level'] = max_level_for_model # Pass it during init
-    # Ensure node type prediction and conditioning are OFF for generation
-    node_model_args['predict_node_types'] = False
-    node_model_args['use_conditioning'] = False
-    node_model_args['tt_size'] = None
-
-    if config['model']['edge_model'] == 'rnn':
-        edge_model_args = config['model']['EdgeRNN'].copy()
-        edge_model_args['edge_feature_len'] = edge_feature_len
-        edge_model_args['tt_size'] = None # Conditioning off
-
-        node_model = GraphLevelRNN(
-            output_size=edge_model_args['hidden_size'], # RNN edge model needs output size
-            **node_model_args
-        ).to(device)
-        edge_model = EdgeLevelRNN(**edge_model_args).to(device)
-        edge_gen_function = rnn_edge_gen
-        print("Using RNN edge model.")
-    else: # Assume MLP
-        edge_model_args = config['model']['EdgeMLP'].copy()
-        edge_model_args['edge_feature_len'] = edge_feature_len
-        edge_model_args['tt_size'] = None # Conditioning off
-        edge_model_args['output_size'] = input_size # MLP output matches input size
-        edge_model_args['input_size'] = node_model_args['hidden_size'] # MLP input is node hidden state
-
-        node_model = GraphLevelRNN(
-            output_size=None, # MLP edge model uses hidden state directly
-            **node_model_args
-        ).to(device)
-        edge_model = EdgeLevelMLP(**edge_model_args).to(device)
-        edge_gen_function = mlp_edge_gen
-        print("Using MLP edge model.")
-
-    # Load state dicts
-    try:
-        node_model.load_state_dict(state['node_model'])
-        edge_model.load_state_dict(state['edge_model'])
-        print("Model weights loaded successfully.")
-    except Exception as e:
-        raise RuntimeError(f"Error loading model state dict: {e}")
-
-    mode = config['model'].get('mode', 'directed-multiclass')
-    if mode != 'directed-multiclass':
-        print(f"Warning: Expected mode 'directed-multiclass', found '{mode}' in config.")
-
-    # --- Return max_level_for_model ---
-    return node_model, edge_model, input_size, edge_gen_function, mode, edge_feature_len, max_level_for_model
-
-
-
-# --- Sampling Function ---
-# def sample_softmax(x):
-#     """Samples a one-hot vector from softmax probabilities of input logits x."""
-#     # Ensure input is a torch tensor for softmax
-#     if not isinstance(x, torch.Tensor):
-#         x = torch.tensor(x)
-#     # Detach from computation graph before converting to numpy
-#     probabilities = torch.softmax(x.detach(), dim=0).cpu().numpy()
-#     num_classes = probabilities.shape[0]
-#     # Ensure probabilities sum to 1 (handle potential floating point issues)
-#     probabilities = probabilities / np.sum(probabilities)
-#     chosen_class = np.random.choice(range(num_classes), p=probabilities)
-#     one_hot = np.zeros(num_classes)
-#     one_hot[chosen_class] = 1
-#     return one_hot
-def sample_softmax(x, temperature=1.2): # Set back to 1.0 for standard softmax
-    if not isinstance(x, torch.Tensor):
-        x = torch.tensor(x)
-    # When temp=1.0, this is just standard softmax
-    probabilities = torch.softmax(x.detach() / temperature, dim=0).cpu().numpy()
-    num_classes = probabilities.shape[0]
-    # Renormalization might still be needed due to floating point
-    probabilities = probabilities / np.sum(probabilities)
-    chosen_class = np.random.choice(range(num_classes), p=probabilities)
-    one_hot = np.zeros(num_classes)
-    one_hot[chosen_class] = 1
-    return one_hot
-
-# --- Edge Generation Functions (Simplified: No Conditioning) ---
-def rnn_edge_gen(edge_rnn, h, num_edges, adj_vec_size, sample_fun, edge_feature_len, attempts=1):
-    """Generates edges using RNN method (No conditioning)."""
-    device = h.device  # Get device from hidden state tensor
-
-    best_adj_vec = None
-    best_edge_count = 0
-
-    # Try multiple attempts to generate edges
-    for attempt in range(attempts):
-        adj_vec = torch.zeros([1, 1, adj_vec_size, edge_feature_len], device=device)
-        edge_rnn.set_first_layer_hidden(h)  # Reset hidden state for each attempt
-
-        # SOS token
-        x = torch.ones([1, 1, edge_feature_len], device=device)
-
-        for i in range(num_edges):
-            # Calculate logits (RNN output before activation)
-            try:
-                logits = edge_rnn(x, return_logits=True)
-            except TypeError:
-                # Fallback if model doesn't support return_logits
-                print("Warning: EdgeRNN doesn't support return_logits=True, using direct output.")
-                logits = edge_rnn(x)
-
-            # Sample from logits and assign one-hot vector to x and adj_vec
-            sampled_one_hot = torch.tensor(sample_fun(logits[0, 0, :]), dtype=torch.float, device=device)
-            x[0, 0, :] = sampled_one_hot
-            adj_vec[0, 0, i, :] = sampled_one_hot
-
-        # Count how many non-zero (edge class 1 or 2) edges were generated
-        edge_count = torch.sum(torch.argmax(adj_vec[0, 0, :num_edges, :], dim=-1) > 0).item()
-
-        # If this attempt has more edges than the best so far, keep it
-        if best_adj_vec is None or edge_count > best_edge_count:
-            best_adj_vec = adj_vec.clone()
-            best_edge_count = edge_count
-
-        # If we've found at least one edge, we can stop trying
-        if edge_count > 0:
-            break
-
-    return best_adj_vec  # Return the best attempt
-
-def mlp_edge_gen(edge_mlp, h, num_edges, adj_vec_size, sample_fun, edge_feature_len, attempts=1):
-    """Generates edges using MLP method (No conditioning)."""
-    device = h.device # Get device from hidden state tensor
-    adj_vec = torch.zeros([1, 1, adj_vec_size, edge_feature_len], device=device)
-
-    # Calculate logits (MLP output before activation)
-    # Assuming edge_mlp.forward can take return_logits=True
-    try:
-        edge_logits = edge_mlp(h, return_logits=True) # Shape: [1, 1, adj_vec_size, edge_feature_len]
-    except TypeError:
-        print("Warning: EdgeMLP doesn't support return_logits=True, using direct output.")
-        edge_logits = edge_mlp(h)
-
-
-    # Update adj_vec with the sampled value from each edge logit distribution
-    for _ in range(attempts):
-        for i in range(num_edges):
-             # Sample using logits for the i-th potential predecessor
-             # sample_fun returns numpy array, convert back to tensor
-             sampled_one_hot = torch.tensor(sample_fun(edge_logits[0, 0, i, :]), dtype=torch.float, device=device)
-             adj_vec[0, 0, i, :] = sampled_one_hot
-        # If we generated all zeros (only 'No Edge' sampled), try again if attempts left.
-        # Check if any class other than 0 (assuming EDGE_TYPES['NONE'] == 0) was sampled.
-        if (torch.argmax(adj_vec[0, 0, :num_edges, :], dim=-1) > 0).any():
-            break
-
-    return adj_vec
-
-# --- Core AIG Generation Function ---
-def generate_aig_structure(num_nodes, node_model, edge_model, input_size, edge_gen_function, mode, edge_feature_len, node_model_max_level):
-    """
-    Generates an And-Inverter Graph structure (nodes and edges with types).
-    MODIFIED: Calculates and uses node levels during generation.
+    Converts the sequence of adjacency vectors (output from generation)
+    into a NetworkX DiGraph for an AIG.
 
     Args:
-        num_nodes: Target number of nodes.
-        node_model: Graph-level RNN model.
-        edge_model: Edge-level model (MLP or RNN).
-        input_size: 'm' value (max lookback).
-        edge_gen_function: Function to generate edges (rnn_edge_gen or mlp_edge_gen).
-        mode: Generation mode ('directed-multiclass').
-        edge_feature_len: Number of edge types (should be 3 for AIGs).
-        node_model_max_level: Max level value used in node_model's embedding.
+        adj_seq_list: List of numpy arrays, where each array represents the
+                      incoming edge types for a node (shape: [m, edge_feature_len]).
+                      Assumes topological order (node 1 connects to node 0, node 2 to 0,1 etc.)
+        edge_feature_len: Number of edge features (should be 3 for AIG).
 
     Returns:
-        nx.DiGraph: The generated AIG with edge 'type' attributes (1=Regular, 2=Inverted).
-                    Returns None if generation fails or results in an empty graph.
+        A NetworkX DiGraph representing the AIG.
     """
-    if mode != 'directed-multiclass':
-        print(f"Warning: This generator is designed for 'directed-multiclass' mode, but found '{mode}'. Results may be incorrect.")
+    if not adj_seq_list:
+        return nx.DiGraph()
 
-    device = next(node_model.parameters()).device # Get device from model
+    num_nodes = len(adj_seq_list) + 1 # +1 for the implicit node 0 (SOS/PI placeholder)
+    g = nx.DiGraph()
+    g.add_nodes_from(range(num_nodes)) # Nodes 0 to num_nodes-1
 
+    effective_m = adj_seq_list[0].shape[0] # Get m from the shape
+
+    for target_node_idx, adj_vec in enumerate(adj_seq_list, start=1):
+        # adj_vec shape: [m, edge_feature_len]
+        # Represents connections *to* target_node_idx
+        num_possible_preds = min(target_node_idx, effective_m)
+
+        # The adj_vec is reversed relative to node indices 0..i-1
+        # adj_vec[0] corresponds to connection from node target_node_idx - 1
+        # adj_vec[k] corresponds to connection from node target_node_idx - 1 - k
+        for k in range(num_possible_preds):
+            source_node_idx = target_node_idx - 1 - k
+            if source_node_idx < 0: continue # Should not happen with correct slicing
+
+            edge_type_probs = adj_vec[k, :] # Probabilities/logits for this edge
+            # Assuming the adj_vec contains the *sampled* one-hot representation
+            edge_type = np.argmax(edge_type_probs).item() # Get the sampled class index
+
+            if edge_type != EDGE_TYPES["NONE"]:
+                g.add_edge(source_node_idx, target_node_idx, type=edge_type)
+
+    # Basic node type inference based on topology (can be refined in validation)
+    for n in g.nodes():
+         in_deg = g.in_degree(n)
+         out_deg = g.out_degree(n)
+         if in_deg == 0:
+             g.nodes[n]['inferred_type'] = 'PI' # Or ZERO
+         elif in_deg == 2:
+             g.nodes[n]['inferred_type'] = 'AND'
+         elif out_deg == 0 and in_deg > 0 : # Sink nodes (might be POs)
+             g.nodes[n]['inferred_type'] = 'PO'
+         else: # Could be intermediate, buffer, or invalid fan-in
+              g.nodes[n]['inferred_type'] = 'UNKNOWN' # Or based on in_deg == 1?
+
+    return g
+
+
+# --- Modified Edge Generation Functions (Using Categorical Sampling) ---
+
+def rnn_edge_gen_aig(edge_rnn, h, num_edges_to_sample, effective_m, temperature=1.0, device='cpu'):
+    """
+    Generates AIG edges for one node using RNN method with categorical sampling.
+
+    Args:
+        edge_rnn: Trained EdgeLevel RNN/LSTM model.
+        h: Hidden state from the NodeLevel model for the current node step.
+           Shape typically [1, 1, node_hidden_size] for MLP input,
+           or needs to be set via set_first_layer_hidden for EdgeRNN/LSTM.
+        num_edges_to_sample: The number of potential incoming edges to sample (min(current_node_idx, effective_m)).
+        effective_m: The maximum number of predecessors considered (max_nodes - 1).
+        temperature: Sampling temperature (higher -> more random).
+        device: Torch device.
+
+    Returns:
+        torch.Tensor: Sampled adjacency vector [1, 1, effective_m, NUM_EDGE_FEATURES] (one-hot encoded).
+    """
+    adj_vec_sampled = torch.zeros([1, 1, effective_m, NUM_EDGE_FEATURES], device=device)
+    # One-hot encode the "NONE" type for padding
+    adj_vec_sampled[:, :, :, EDGE_TYPES["NONE"]] = 1.0
+
+    # --- Handle setting initial hidden state based on model type ---
+    # This depends on how the NodeModel output `h` is structured and if EdgeRNN/LSTM is used.
+    # Assuming EdgeLevelRNN/LSTM classes have `set_first_layer_hidden`
+    if hasattr(edge_rnn, 'set_first_layer_hidden') and callable(getattr(edge_rnn, 'set_first_layer_hidden')):
+         try:
+            # We need the hidden state corresponding *to this node* from the node model's sequence output
+            # Assuming h passed here is the *correct* hidden state slice for this step.
+             edge_rnn.set_first_layer_hidden(h.squeeze(0)) # Remove batch dim if necessary
+         except Exception as e:
+             print(f"Warning: Could not set hidden state for EdgeRNN/LSTM: {e}")
+             # Decide how to proceed: maybe zero hidden state or raise error
+             return adj_vec_sampled # Return default if hidden state fails
+    # --- End Hidden State Handling ---
+
+
+    # SOS token (one-hot encoded for NONE type, assuming SOS implies no actual edge)
+    # Shape: [batch=1, seq=1, features=3]
+    x = torch.zeros([1, 1, NUM_EDGE_FEATURES], device=device)
+    x[:, :, EDGE_TYPES["NONE"]] = 1.0 # Start with SOS = NONE
+
+    sampled_edges = []
+    for i in range(num_edges_to_sample):
+        # Get logits for the next edge type
+        # EdgeRNN expects packed sequences usually, but here we run step-by-step
+        # Shape of logits: [batch=1, seq=1, features=3]
+        logits = edge_rnn(x, return_logits=True) # Pass x, internal hidden state advances
+
+        # Apply temperature and sample
+        scaled_logits = logits.squeeze(1) / temperature # Shape: [1, 3]
+        dist = Categorical(logits=scaled_logits)
+        sampled_type_idx = dist.sample() # Tensor containing index [0, 1, or 2]
+
+        # Create next input (one-hot encoding of sampled type)
+        x.zero_()
+        x[0, 0, sampled_type_idx.item()] = 1.0
+        sampled_edges.append(x.clone().squeeze().cpu().numpy()) # Store sampled one-hot vector
+
+    # Place sampled edges into the correct (reversed) positions in adj_vec_sampled
+    if sampled_edges:
+        sampled_stack = torch.tensor(np.stack(sampled_edges[::-1]), device=device) # Reverse list before stacking
+        num_sampled = sampled_stack.shape[0]
+        adj_vec_sampled[0, 0, :num_sampled, :] = sampled_stack # Fill from the start (represents nearest predecessors)
+
+
+    return adj_vec_sampled
+
+
+def mlp_edge_gen_aig(edge_mlp, h, num_edges_to_sample, effective_m, temperature=1.0, device='cpu'):
+    """
+    Generates AIG edges for one node using MLP method with categorical sampling.
+
+    Args:
+        edge_mlp: Trained EdgeLevel MLP model.
+        h: Output from the NodeLevel model for the current node step.
+           Shape typically [1, 1, node_hidden_size].
+        num_edges_to_sample: The number of potential incoming edges to sample (min(current_node_idx, effective_m)).
+        effective_m: The maximum number of predecessors considered (max_nodes - 1).
+        temperature: Sampling temperature.
+        device: Torch device.
+
+    Returns:
+        torch.Tensor: Sampled adjacency vector [1, 1, effective_m, NUM_EDGE_FEATURES] (one-hot encoded).
+    """
+    adj_vec_sampled = torch.zeros([1, 1, effective_m, NUM_EDGE_FEATURES], device=device)
+    # One-hot encode the "NONE" type for padding
+    adj_vec_sampled[:, :, :, EDGE_TYPES["NONE"]] = 1.0
+
+    # Get logits for all potential edges at once
+    # edge_mlp output shape: [batch=1, seq=1, output_m, features=3]
+    # Assuming h is shaped [1, 1, node_hidden_size]
+    all_logits = edge_mlp(h, return_logits=True)
+    # Squeeze batch and sequence dims: [output_m, features=3]
+    logits_for_sampling = all_logits.squeeze(0).squeeze(0)
+
+    # Sample edges for the relevant predecessors
+    if num_edges_to_sample > 0:
+        # Select logits for the edges we need to sample
+        # Logits are ordered corresponding to potential predecessors 0 to m-1
+        # We need the *last* `num_edges_to_sample` logits (reversed order)
+        relevant_logits = logits_for_sampling[:num_edges_to_sample, :] # Corresponds to preds i-1 down to i-num_edges
+
+        # Apply temperature and sample
+        scaled_logits = relevant_logits / temperature
+        dist = Categorical(logits=scaled_logits)
+        sampled_type_indices = dist.sample() # Shape: [num_edges_to_sample]
+
+        # Create one-hot encodings
+        one_hot_sampled = torch.nn.functional.one_hot(sampled_type_indices, num_classes=NUM_EDGE_FEATURES).float()
+
+        # Place into the adjacency vector (correct positions)
+        # Needs to be reversed to match RNN generation order if needed, but MLP generates all at once.
+        # The adj_vec represents inputs from node i-1, i-2,... down to i-m
+        # The logits[:num_edges] correspond to these same nodes.
+        adj_vec_sampled[0, 0, :num_edges_to_sample, :] = one_hot_sampled
+
+    return adj_vec_sampled
+
+
+# --- Main Generation Function ---
+# src/generate.py (Modified generate_aig function)
+
+# ... (keep imports and other functions like aig_seq_to_nx, edge gen functions) ...
+
+# --- Main Generation Function ---
+def generate_aig(num_nodes_target, node_model, edge_model, effective_m, max_level_model,
+                 edge_gen_fn, device,
+                 temperature=1.0, max_steps=None, eos_patience=10): # <-- Added eos_patience
+    """
+    Generates a single And-Inverter Graph (AIG).
+
+    Args:
+        num_nodes_target: Desired number of nodes (generation might stop earlier/later).
+        node_model: Trained NodeLevel model.
+        edge_model: Trained EdgeLevel model.
+        effective_m: Max predecessors considered (max_nodes_train - 1).
+        max_level_model: Max level the node_model was trained with (for level embedding).
+        edge_gen_fn: The edge generation function to use (rnn_edge_gen_aig or mlp_edge_gen_aig).
+        device: Torch device.
+        temperature: Sampling temperature.
+        max_steps: Optional maximum generation steps (nodes to add).
+        eos_patience: Stop if no actual edges (type 1 or 2) are added for this many consecutive steps.
+
+    Returns:
+        nx.DiGraph: The generated AIG as a NetworkX graph.
+        int: The maximum level reached in the generated graph.
+    """
     node_model.eval()
     edge_model.eval()
 
-    sample_fun = sample_softmax # Use softmax sampling for multiclass edges
-
-    # Initialize with SOS token
-    adj_vec_input = torch.ones([1, 1, input_size, edge_feature_len], device=device)
-    list_edge_type_indices = []
+    # --- Initialization ---
+    adj_vec_current = torch.zeros([1, 1, effective_m, NUM_EDGE_FEATURES], device=device)
+    adj_vec_current[:, :, :, EDGE_TYPES["NONE"]] = 1.0
+    list_adj_vecs_sampled = []
     node_model.reset_hidden()
+    current_levels = {0: 0}
+    max_level_gen = 0
+    uses_level_embedding = hasattr(node_model, 'level_embedding') and node_model.level_embedding is not None
+    no_real_edge_steps_in_a_row = 0 # <-- Initialize patience counter
 
-    # --- NEW: Track generated graph and node levels ---
-    G_generated_so_far = nx.DiGraph()
-    node_levels_so_far = { -1: -1 } # Use -1 for pre-SOS state, node 0 will have level 0
-    # -------------------------------------------------
+    # Determine max generation steps
+    if max_steps is None:
+        # Make max_steps slightly larger to allow patience to trigger before hard limit
+        max_steps = int(num_nodes_target * 2.5) + eos_patience
+    if num_nodes_target <= 1:
+        return nx.DiGraph(), 0
 
-    actual_num_nodes = 0
-    consecutive_no_edge_nodes = 0
+    # --- Generation Loop ---
+    for i in range(1, max_steps):
+        current_node_idx = i
+        # --- Node Level Hidden State Calculation ---
+        level_for_input = None
+        if uses_level_embedding:
+            max_pred_level = -1
+            # Avoid repeatedly building the graph if performance is critical
+            # Only need predecessors of current_node_idx
+            # However, building it is simpler for now
+            temp_g_so_far = aig_seq_to_nx(list_adj_vecs_sampled, NUM_EDGE_FEATURES)
+            # Need to add the node we are about to generate to check predecessors
+            # This assumes node indices are contiguous from 0
+            if not temp_g_so_far.has_node(current_node_idx):
+                 temp_g_so_far.add_node(current_node_idx) # Add node to check preds even if no edges yet
 
-    with torch.no_grad():
-        for i in range(num_nodes): # Generate node i (0-indexed)
-            # --- Determine level for the *input* step (node i) ---
-            # The input adj_vec_input represents connections *to* node i-1.
-            # The RNN state update processes this input to represent node i-1's state.
-            # So, the level embedding should correspond to node i-1.
-            level_for_input_node = node_levels_so_far.get(i - 1, -1) # Get level of node i-1, default -1
-            # For the very first step (i=0), input is SOS, level is 0.
-            current_input_level = 0 if i == 0 else level_for_input_node + 1 # Level of node i
+            # Check predecessors using the structure *before* adding edges for this step
+            preds_of_current = []
+            if current_node_idx in temp_g_so_far: # Check if node exists before getting preds
+                 # Logic based on list_adj_vecs_sampled index implies connectivity
+                 num_preds_possible = min(current_node_idx, effective_m)
+                 for k in range(num_preds_possible):
+                      source_node_idx = current_node_idx - 1 - k
+                      # Check the *previous* step's output if available
+                      if list_adj_vecs_sampled:
+                           # We need to look at the connectivity *to* current_node_idx
+                           # which was determined by the vector added at step i-1
+                           # Let's stick to the simpler graph build for level calc for now
+                           pass # Simplified level calc below uses graph structure
 
-            # Clamp level to be within the embedding range [0, max_level]
-            clamped_level = max(0, min(current_input_level, node_model_max_level))
-            current_level_tensor = torch.tensor([[clamped_level]], dtype=torch.long, device=device)
-            # --- End Level Calculation for Input ---
+            # Simplified level calculation: max level of nodes < current_node_idx connected to it
+            # Re-calculate levels on the temp graph at each step (less efficient but simpler)
+            if temp_g_so_far.number_of_nodes() > 1 and nx.is_directed_acyclic_graph(temp_g_so_far):
+                 temp_levels, _ = _calculate_levels(temp_g_so_far)
+                 current_levels = temp_levels # Update levels based on current graph
+                 max_pred_level = -1
+                 # Find max level among nodes that *could* connect to current_node_idx
+                 num_preds_possible = min(current_node_idx, effective_m)
+                 for k in range(num_preds_possible):
+                     source_node_idx = current_node_idx - 1 - k
+                     if source_node_idx in current_levels:
+                          max_pred_level = max(max_pred_level, current_levels.get(source_node_idx, -1))
+            else:
+                 # Fallback if not DAG or too small
+                 max_pred_level = current_levels.get(current_node_idx-1, -1) # Approx level based on previous node
 
-            # --- Generate graph state vector (RNN hidden state for node i) ---
-            # Pass the level tensor corresponding to the node being processed
-            h = node_model(adj_vec_input, levels=current_level_tensor)
-            # h now represents the state *after* processing node i's connections (or SOS)
-            # It will be used to generate edges for node i+1
-            # --- End State Generation ---
+            current_node_level = max_pred_level + 1
+            # Only add to current_levels if positive, avoid overwriting node 0?
+            if current_node_idx > 0:
+                current_levels[current_node_idx] = current_node_level
+            max_level_gen = max(max_level_gen, current_node_level)
 
-            # Add node i to the tracked graph
-            G_generated_so_far.add_node(i)
-            node_levels_so_far[i] = current_input_level # Store the calculated level for node i
-            actual_num_nodes += 1
-
-
-            # --- Generate edges *for* node i+1 (based on hidden state h from node i) ---
-            # Note: The loop generates node i, then generates edges for i+1.
-            # We need num_nodes iterations to generate nodes 0 to num_nodes-1.
-            # The edge generation happens *after* node i is processed.
-
-            if i < num_nodes - 1: # Only generate edges if not the last target node
-                num_edges_to_generate = min(i + 1, input_size) # Edges for node i+1 connect to nodes 0..i
-
-                adj_vec_generated = edge_gen_function(
-                    edge_model,
-                    h, # Hidden state after processing node i
-                    num_edges=num_edges_to_generate,
-                    adj_vec_size=input_size, # M value
-                    sample_fun=sample_fun,
-                    edge_feature_len=edge_feature_len,
-                    attempts=5,
-                )
-
-                # --- Store edge indices and update G_generated_so_far ---
-                adj_slice = adj_vec_generated[0, 0, :num_edges_to_generate, :]
-                edge_indices_vec = torch.argmax(adj_slice, dim=-1).cpu().numpy()
-                list_edge_type_indices.append(edge_indices_vec) # Store edges for node i+1
-
-                # Add edges to the tracked graph G_generated_so_far
-                target_node_for_edges = i + 1
-                max_pred_level_for_next_node = -1
-                for k in range(num_edges_to_generate):
-                    edge_type = int(edge_indices_vec[k])
-                    if edge_type > 0: # If it's a Regular (1) or Inverted (2) edge
-                         # Source node index calculation (remains the same logic)
-                         source_node_idx = (target_node_for_edges - num_edges_to_generate) + k
-                         if 0 <= source_node_idx < target_node_for_edges:
-                             G_generated_so_far.add_edge(source_node_idx, target_node_for_edges, type=edge_type)
-                             # Track max predecessor level for the *next* node's level calculation
-                             max_pred_level_for_next_node = max(max_pred_level_for_next_node, node_levels_so_far.get(source_node_idx, -1))
-
-                # Calculate and store level for the *next* node (i+1)
-                level_of_next_node = max_pred_level_for_next_node + 1
-                node_levels_so_far[i+1] = level_of_next_node
-                # --- End Edge Storage and Level Calc for Next Node ---
+            level_clamped = min(current_node_level, max_level_model)
+            level_for_input = torch.tensor([[level_clamped]], dtype=torch.long, device=device)
 
 
-                # Check for early stopping (based on edges generated *for node i+1*)
-                if np.all(edge_indices_vec == 0):
-                    consecutive_no_edge_nodes += 1
-                    if consecutive_no_edge_nodes >= 3 and (i+1) > num_nodes // 3: # Check against i+1
-                        print(
-                            f"INFO: Early stopping at step {i+1} (node {i+1}) after {consecutive_no_edge_nodes} consecutive 'No Edge' steps."
-                        )
-                        # No need to decrement actual_num_nodes here, just break
-                        break
-                else:
-                    consecutive_no_edge_nodes = 0
+        # --- Node model forward pass ---
+        node_output = node_model(adj_vec_current, levels=level_for_input)
+        h_node = node_output[0] if isinstance(node_output, tuple) else node_output
 
-                # Prepare input for the next iteration (processing node i+1)
-                adj_vec_input = adj_vec_generated
+        # --- Edge Sampling ---
+        num_edges_to_sample = min(current_node_idx, effective_m)
+        adj_vec_next_sampled = edge_gen_fn(edge_model, h_node, num_edges_to_sample, effective_m, temperature, device)
 
-            else: # Last iteration (i == num_nodes - 1), node generated, no more edges needed
-                 pass
+        # --- Store and Prepare for Next Step ---
+        adj_vec_np = adj_vec_next_sampled.squeeze(0).squeeze(0).cpu().numpy()
+        list_adj_vecs_sampled.append(adj_vec_np)
+        adj_vec_current = adj_vec_next_sampled
 
+        # --- Termination Checks ---
+        # 1. Check for actual edges added in this step
+        has_real_edge = False
+        if num_edges_to_sample > 0: # Only check if we actually sampled something
+            sampled_part = adj_vec_np[:num_edges_to_sample, :]
+            has_real_edge = np.any(sampled_part[:, EDGE_TYPES["REGULAR"]] == 1.0) or \
+                            np.any(sampled_part[:, EDGE_TYPES["INVERTED"]] == 1.0)
 
-    # --- Construct Final NetworkX Graph ---
-    # G_generated_so_far already holds the graph structure and edge types
-    if G_generated_so_far.number_of_nodes() <= 1:
-        print("Warning: Generated graph has <= 1 node after generation/stopping. Returning None.")
-        return None
-
-    # Add level attribute to nodes (optional, but useful)
-    for node_id, level in node_levels_so_far.items():
-        if node_id >= 0 and node_id in G_generated_so_far: # Check if node exists
-            G_generated_so_far.nodes[node_id]['level'] = level
-
-
-    # Optional: Remove isolated nodes
-    isolated_nodes = list(nx.isolates(G_generated_so_far))
-    if isolated_nodes:
-        print(f"Removing {len(isolated_nodes)} isolated nodes: {isolated_nodes}")
-        G_generated_so_far.remove_nodes_from(isolated_nodes)
-
-    if G_generated_so_far.number_of_nodes() == 0:
-        print("Warning: Graph became empty after removing isolated nodes.")
-        return None
-
-    return G_generated_so_far
-
-def visualize_aig_structure(G, output_file='generated_aig_structure.png'):
-    """Visualize the generated AIG structure."""
-    if G is None:
-        print("Cannot visualize None graph.")
-        return
-
-    plt.figure(figsize=(12, 10))
-    pos = nx.spring_layout(G, seed=42) # Use a layout algorithm
-
-    # Draw nodes
-    nx.draw_networkx_nodes(G, pos, node_color='lightblue', node_size=500)
-
-    # Draw edges with styles based on 'type' attribute
-    regular_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('type') == 1]
-    inverted_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('type') == 2]
-    other_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('type') not in [1, 2]]
-
-    nx.draw_networkx_edges(G, pos, edgelist=regular_edges, width=1.5, edge_color='black', style='solid', arrowsize=15)
-    nx.draw_networkx_edges(G, pos, edgelist=inverted_edges, width=1.5, edge_color='red', style='dashed', arrowsize=15)
-    if other_edges:
-        print(f"Warning: Found edges with unexpected types: {other_edges}")
-        nx.draw_networkx_edges(G, pos, edgelist=other_edges, width=1.0, edge_color='gray', style='dotted', arrowsize=15)
-
-    # Draw labels
-    nx.draw_networkx_labels(G, pos, font_size=10)
-
-    # Add legend
-    legend_elements = [
-        plt.Line2D([0], [0], color='black', linestyle='solid', label='Regular Edge (type 1)'),
-        plt.Line2D([0], [0], color='red', linestyle='dashed', label='Inverted Edge (type 2)')
-    ]
-    plt.legend(handles=legend_elements, loc='upper right')
-
-    plt.title('Generated AIG Structure')
-    plt.axis('off') # Turn off axis
-    plt.tight_layout()
-    plt.savefig(output_file, dpi=300)
-    plt.close()
-    print(f"Generated graph visualization saved to {output_file}")
-
-
-# --- Main Execution Block ---
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Generate AIG structure from a trained GraphRNN model")
-    parser.add_argument('model_path', help='Path to the trained model checkpoint (.pth file)')
-    parser.add_argument('-n', '--nodes', type=int, default=50, help='Target number of nodes for the generated graph')
-    parser.add_argument('-o', '--output', type=str, default='generated_aig.png', help='Output file name for the visualization')
-    parser.add_argument('--seed', type=int, default=None, help='Optional random seed for generation')
-
-    args = parser.parse_args()
-
-    if args.seed is not None:
-        print(f"Setting random seed to: {args.seed}")
-        np.random.seed(args.seed)
-        torch.manual_seed(args.seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(args.seed)
-
-    try:
-        # Load models and config
-        node_model, edge_model, input_size, edge_gen_func, mode, edge_feature_len = load_aig_generator_model(args.model_path)
-
-        # Generate the graph structure
-        print(f"Generating AIG structure with target nodes: {args.nodes}...")
-        generated_graph = generate_aig_structure(
-            num_nodes=args.nodes,
-            node_model=node_model,
-            edge_model=edge_model,
-            input_size=input_size,
-            edge_gen_function=edge_gen_func,
-            mode=mode,
-            edge_feature_len=edge_feature_len
-        )
-
-        if generated_graph:
-            print(f"Successfully generated graph with {generated_graph.number_of_nodes()} nodes and {generated_graph.number_of_edges()} edges.")
-            # Visualize the generated graph
-            visualize_aig_structure(generated_graph, args.output)
+        if has_real_edge:
+            no_real_edge_steps_in_a_row = 0 # Reset patience counter
         else:
-            print("Graph generation failed or resulted in an empty graph.")
+            no_real_edge_steps_in_a_row += 1 # Increment patience counter
 
-    except FileNotFoundError as e:
-        print(f"Error: {e}")
-    except RuntimeError as e:
-        print(f"Error: {e}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        # 2. Check explicit EOS signal (all NONE in sampled region)
+        is_eos = False
+        if num_edges_to_sample > 0:
+            is_eos = np.all(adj_vec_np[:num_edges_to_sample, EDGE_TYPES["NONE"]] == 1.0)
+        elif num_edges_to_sample == 0: # First step (i=1), num_edges_to_sample=0
+             is_eos = False # Cannot be EOS on first step
+
+        if is_eos:
+            print(f"INFO: EOS signal detected at step {i}. Stopping generation.")
+            list_adj_vecs_sampled.pop() # Remove the EOS vector
+            break
+
+        # 3. Check Patience
+        if no_real_edge_steps_in_a_row >= eos_patience:
+            print(f"INFO: Patience ({eos_patience}) exceeded. No real edges added for {no_real_edge_steps_in_a_row} steps. Stopping at step {i}.")
+            # Do NOT pop the last vector here, it wasn't a clean EOS
+            break
+
+        # 4. Check target node count
+        # Stop *after* adding the target node index
+        if current_node_idx >= num_nodes_target - 1:
+            # Let loop continue if target is reached exactly, break on next iteration if needed
+            # Or break here? Let's break here for clarity.
+            # print(f"INFO: Reached target node count ({num_nodes_target}) at step {i}.")
+            pass # Allow loop to potentially finish via EOS/Patience/MaxSteps
+
+        # 5. Max steps reached (handled by loop limit)
+        if i == max_steps - 1:
+             print(f"INFO: Reached max_steps ({max_steps}). Stopping generation.")
+
+
+    # --- Final Graph Construction ---
+    # (Keep the rest of the function the same)
+    final_graph = aig_seq_to_nx(list_adj_vecs_sampled, NUM_EDGE_FEATURES)
+    final_levels, final_max_level = {}, -1
+    if final_graph.number_of_nodes() > 0:
+         try:
+             if nx.is_directed_acyclic_graph(final_graph):
+                  final_levels, final_max_level = _calculate_levels(final_graph)
+                  final_graph.graph['levels'] = final_levels
+             else:
+                  print("Warning: Generated graph is not a DAG. Max level calculation might be inaccurate.")
+                  final_levels = {n: 0 for n in final_graph.nodes()}
+                  final_max_level = -2 # Use negative code for non-DAG
+         except Exception as e:
+              print(f"Warning: Error calculating final levels: {e}")
+              final_max_level = -3 # Use negative code for error
+
+    # Print final node count relative to target
+    final_node_count = final_graph.number_of_nodes()
+    print(f"Generated graph with {final_node_count} nodes (target: {num_nodes_target}) and max level {final_max_level}.")
+
+    return final_graph, final_max_level
+
+
+# --- Updated Model Loading ---
+def load_model_and_config(model_path, device):
+    """Loads model state dict and config from checkpoint."""
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Checkpoint file not found: {model_path}")
+    state = torch.load(model_path, map_location=device)
+    if 'config' not in state:
+        raise ValueError(f"Checkpoint {model_path} does not contain 'config'.")
+    config = state['config']
+    return state, config
+
