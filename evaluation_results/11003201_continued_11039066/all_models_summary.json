@@ -1,0 +1,33 @@
+[
+  {
+    "model_path": "new_runs/graphrnn_11003201_continued/base_checkpoints_long/checkpoint-48000.pth",
+    "checkpoint_step": 48000,
+    "generated_graphs": 314,
+    "valid_graphs": 159,
+    "validity_rate": 0.5063694267515924,
+    "avg_nodes": 27.0,
+    "avg_edges": 31.522292993630572,
+    "in_degree_distribution": {
+      "0": 3401,
+      "1": 256,
+      "2": 4821,
+      "other": 0
+    },
+    "out_degree_distribution": {
+      "0": 5024,
+      "other": 3454
+    },
+    "graph_metrics": {
+      "avg_nodes": 27.0,
+      "avg_edges": 31.0,
+      "min_nodes": 27,
+      "max_nodes": 27,
+      "min_edges": 31,
+      "max_edges": 31,
+      "avg_degree": 2.2962962962962963,
+      "avg_degree_centrality": 0.08831908831908869,
+      "avg_betweenness_centrality": 0.0,
+      "avg_clustering": 0.0
+    }
+  }
+]

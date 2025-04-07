@@ -1,0 +1,6596 @@
+[
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 1
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 33,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 1,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 3
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 6
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 9
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 10
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 14,
+    "num_potential_pos": 2,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 3,
+      "2": 14,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 13
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 18
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 21
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 24
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 28
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 29
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 30
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 33
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 37
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 38
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 39
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 41
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 42
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 43
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 46
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 48
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 53
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 56
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 59
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 60
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 61
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 63
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 33,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 1,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 64
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 66
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 71
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 33,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 1,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 72
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 83
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 17 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 85
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 87
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 90
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 93
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 99
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 104
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 106
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 107
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 114
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 116
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 124
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 125
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 126
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 129
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 131
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 137
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 141
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 33,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 1,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 143
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 145
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 147
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 148
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 150
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 151
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 152
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 153
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 156
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 161
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 162
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 163
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 167
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 168
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 172
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 174
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 177
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 178
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 184
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 186
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 190
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 2 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 191
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 195
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 198
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 203
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 206
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 14,
+    "num_potential_pos": 2,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 3,
+      "2": 14,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 210
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 212
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 213
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 219
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 220
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 221
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 222
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 223
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 224
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 230
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 231
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 238
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 239
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 243
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 246
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 250
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 251
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 252
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 254
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 255
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 269
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 273
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 281
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 283
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 286
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 33,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 1,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 291
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 292
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 294
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 297
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 14,
+    "num_potential_pos": 2,
+    "valid": false,
+    "reason": "Node 17 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 3,
+      "2": 14,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 305
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 2 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 309
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 312
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 325
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 326
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 327
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 332
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 335
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 342
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 345
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 351
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 353
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 356
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 358
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 363
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 365
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 368
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 370
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 371
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 373
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 381
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 384
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 386
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 390
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 391
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 14,
+    "num_potential_pos": 2,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 3,
+      "2": 14,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 394
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 397
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 33,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 1,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 398
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 405
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 407
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 412
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 416
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 423
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 424
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 425
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 33,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 1,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 430
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 438
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 440
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 450
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 451
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 455
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 459
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 461
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 463
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 469
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 477
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 33,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 1,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 480
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 482
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 483
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 484
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 493
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 502
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 503
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 504
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 509
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 519
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 520
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 524
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 33,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 2 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 1,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 525
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 532
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 534
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 539
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 542
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 543
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 544
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 546
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 550
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 554
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 556
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 557
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 33,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 1,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 559
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 560
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 564
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 565
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 566
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 572
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 575
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 577
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 587
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 588
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 594
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 595
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 596
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 598
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 2 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 603
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 604
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 608
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 613
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 618
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 622
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 623
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 625
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 14,
+    "num_potential_pos": 2,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 3,
+      "2": 14,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 628
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 629
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 634
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 644
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 645
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 646
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 651
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 654
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 656
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 659
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 660
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 662
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 33,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 1,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 667
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 681
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 684
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 686
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 687
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 692
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 696
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 697
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 699
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 700
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 33,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 1,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 702
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 703
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 33,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 1,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 705
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 706
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 713
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 714
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 715
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 722
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 725
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 726
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 728
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 731
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 732
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 739
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 749
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 750
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 2 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 751
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 753
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 756
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 763
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 772
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 776
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 780
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 781
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 783
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 796
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 800
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 801
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 806
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 809
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 818
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 820
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 821
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 822
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 823
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 825
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 828
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 830
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 831
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 832
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 833
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 836
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 839
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 840
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 841
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 842
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 845
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 848
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 855
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 14,
+    "num_potential_pos": 2,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 3,
+      "2": 14,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 857
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 858
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 861
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 863
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 865
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 867
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 869
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 871
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 880
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 884
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 886
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 889
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 892
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 897
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 899
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 33,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 1,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 901
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 902
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 33,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 2 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 1,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 907
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 911
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 914
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 918
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 919
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 920
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 921
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 927
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 928
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 932
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 933
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 934
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 935
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 937
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 939
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 957
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 10,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": false,
+    "reason": "Node 16 has in-degree 1 but out-degree 1 (expected 0 for PO)",
+    "in_degree_counts": {
+      "0": 10,
+      "1": 2,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 958
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 959
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 963
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 966
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 967
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 972
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 974
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 975
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 980
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 981
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 985
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 32,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 16,
+    "num_potential_pos": 0,
+    "valid": false,
+    "reason": "Graph lacks potential PIs, ANDs, or POs",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 0,
+      "2": 16,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 991
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 993
+  },
+  {
+    "num_nodes": 27,
+    "num_edges": 31,
+    "is_dag": true,
+    "num_potential_pis": 11,
+    "num_potential_ands": 15,
+    "num_potential_pos": 1,
+    "valid": true,
+    "reason": "OK",
+    "in_degree_counts": {
+      "0": 11,
+      "1": 1,
+      "2": 15,
+      "other": 0
+    },
+    "out_degree_counts": {
+      "0": 16,
+      "other": 11
+    },
+    "graph_id": 995
+  }
+]
