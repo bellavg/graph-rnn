@@ -371,8 +371,8 @@ def main():
 
     # --- Setup Optimizers and Schedulers ---
     try:
-        optim_node_model = torch.optim.Adam(node_model.parameters(), lr=config['train']['lr'])
-        optim_edge_model = torch.optim.Adam(edge_model.parameters(), lr=config['train']['lr'])
+        optim_node_model = torch.optim.AdamW(node_model.parameters(), lr=config['train']['lr'])
+        optim_edge_model = torch.optim.AdamW(edge_model.parameters(), lr=config['train']['lr'])
         scheduler_node_model = MultiStepLR(optim_node_model,
                                            milestones=config['train']['lr_schedule_milestones'],
                                            gamma=config['train']['lr_schedule_gamma'])
