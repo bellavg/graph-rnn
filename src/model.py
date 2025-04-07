@@ -228,69 +228,77 @@ class EdgeLevelRNN(nn.Module):
 
 
     # --- MODIFIED forward signature and attention call ---
-    def forward(self, x, prev_node_hiddens, attn_mask: Optional[torch.Tensor] = None, x_lens=None, return_logits=False, truth_table=None):
+    def forward(self, x, prev_node_hiddens, attn_mask: Optional[torch.Tensor] = None, x_lens=None, return_logits=False,
+                truth_table=None):
         """
         Forward pass for the EdgeLevelRNN with attention.
 
         Args:
-            x (Tensor): Input sequence of edge features. Shape: [batch_or_total_nodes, edge_seq_len, edge_feature_len]
+            x (Tensor): Input sequence of edge features.
+                        Shape: [total_steps, edge_feature_len] for PackedSequence data
             prev_node_hiddens (Tensor): Sequence of hidden states from GraphLevelRNN for previous nodes.
-                                        Shape: [batch_or_total_nodes, num_prev_nodes, node_hidden_size]
+                                       Shape: [total_steps, num_prev_nodes, node_hidden_size]
             attn_mask (Tensor, optional): Mask for attention mechanism. True values are masked out.
-                                          Shape: [batch_or_total_nodes, num_prev_nodes] OR broadcastable.
-            x_lens (Tensor, optional): Lengths of the edge sequences in x. Shape: [batch_or_total_nodes]
+                                        Shape: [total_steps, num_prev_nodes]
+            x_lens (Tensor, optional): Lengths of the edge sequences in x. Shape: [batch_size]
             return_logits (bool): If True, return raw scores before final activation.
             truth_table (Tensor, optional): Truth table for conditioning (if enabled).
 
         Returns:
             Tensor: Predicted edge features (probabilities or logits).
-                    Shape: [batch_or_total_nodes, edge_seq_len, edge_feature_len]
+                    Shape: [total_steps, edge_feature_len]
         """
         if self.hidden is None:
-             raise AssertionError("Hidden state not set! Call set_first_layer_hidden first.")
+            raise AssertionError("Hidden state not set! Call set_first_layer_hidden first.")
         if prev_node_hiddens is None:
-             raise ValueError("prev_node_hiddens must be provided for attention.")
+            raise ValueError("prev_node_hiddens must be provided for attention.")
 
-        batch_size, edge_seq_len, _ = x.shape
-        num_prev_nodes = prev_node_hiddens.shape[1]
+        # Handle packed sequence data - x shape will be [total_steps, edge_feature_len]
+        # Reshape to add a sequence dimension of 1
+        if len(x.shape) == 2:
+            # For packed sequence data: [total_steps, edge_feature_len]
+            total_steps, feat_len = x.shape
+            x = x.view(total_steps, 1, feat_len)  # Add sequence length dim of 1
+        elif len(x.shape) == 3:
+            # Already in the expected shape
+            total_steps, edge_seq_len, feat_len = x.shape
+        else:
+            # Handle 4D input (batch, seq_len, m, feat) - reshape to 3D
+            batch_size, edge_seq_len, m, feat_len = x.shape
+            x = x.view(-1, edge_seq_len, m * feat_len)  # Flatten m and feat dimensions
+            total_steps = x.shape[0]
 
-        embedded_x = self.relu(self.linear_in(x)) # Shape: [batch, edge_seq_len, embedding_size]
+        embedded_x = self.relu(self.linear_in(x))  # Shape: [total_steps, edge_seq_len, embedding_size]
 
         outputs = []
-        current_hidden = self.hidden # Shape: [num_layers, batch, hidden_size]
+        current_hidden = self.hidden  # Shape: [num_layers, batch, hidden_size]
 
-        for t in range(edge_seq_len):
-            gru_input = embedded_x[:, t:t+1, :]
+        for t in range(embedded_x.shape[1]):  # Iterate over the sequence length dimension
+            gru_input = embedded_x[:, t:t + 1, :]
             gru_output_t, current_hidden = self.gru(gru_input, current_hidden)
 
-            query = current_hidden[-1:, :, :].permute(1, 0, 2) # Shape: [batch, 1, hidden_size]
-            key_value = prev_node_hiddens # Shape: [batch, num_prev_nodes, node_hidden_size]
+            query = current_hidden[-1:, :, :].permute(1, 0, 2)  # Shape: [total_steps, 1, hidden_size]
+            key_value = prev_node_hiddens  # Shape: [total_steps, num_prev_nodes, node_hidden_size]
 
-            # --- Prepare attention mask for MultiheadAttention ---
-            # MultiheadAttention expects mask shape (N, L, S) or (L, S) or (S,)
-            # N=batch_size, L=target_seq_len=1, S=source_seq_len=num_prev_nodes
-            # Our mask is [batch, num_prev_nodes]. Needs unsqueezing.
+            # Prepare attention mask
             prepared_attn_mask = None
             if attn_mask is not None:
-                if attn_mask.shape[0] != batch_size or attn_mask.shape[1] != num_prev_nodes:
-                     print(f"Warning: attn_mask shape ({attn_mask.shape}) mismatch with expected ([{batch_size}, {num_prev_nodes}]). Skipping mask.")
-                else:
-                     # Expand mask for multi-head: MultiheadAttention requires mask shape (N*num_heads, L, S)
-                     # Or a boolean mask of shape (N, L, S) where true means ignore.
-                     # Let's use the (N, L, S) format -> [batch, 1, num_prev_nodes]
-                     prepared_attn_mask = attn_mask.unsqueeze(1) # Add target sequence length dimension (L=1)
-
+                prepared_attn_mask = attn_mask.unsqueeze(1)  # [total_steps, 1, num_prev_nodes]
 
             try:
-                 attn_output, attn_weights = self.attention(query=query,
-                                                            key=key_value,
-                                                            value=key_value,
-                                                            attn_mask=prepared_attn_mask, # Pass the prepared mask
-                                                            need_weights=False)
+                attn_output, _ = self.attention(
+                    query=query,
+                    key=key_value,
+                    value=key_value,
+                    attn_mask=prepared_attn_mask,
+                    need_weights=False
+                )
             except Exception as e:
-                 print(f"Error during attention calculation: {e}")
-                 attn_output = torch.zeros_like(query)
-
+                print(f"Error during attention calculation: {e}")
+                print(f"Query shape: {query.shape}, Key/Value shape: {key_value.shape}")
+                if prepared_attn_mask is not None:
+                    print(f"Mask shape: {prepared_attn_mask.shape}")
+                attn_output = torch.zeros_like(query)
 
             combined = torch.cat((gru_output_t, attn_output), dim=2)
             projected_output = self.relu(self.linear_combine(combined))
@@ -302,11 +310,21 @@ class EdgeLevelRNN(nn.Module):
 
         final_output = torch.cat(outputs, dim=1)
 
+        # For packed sequence data, we need to reshape back
+        if final_output.shape[1] == 1:  # If we processed sequence length 1
+            final_output = final_output.squeeze(1)  # Remove the sequence length dimension
+
+        # Reshape to match expected output if needed
+        if len(x.shape) == 4 and len(final_output.shape) == 3:
+            # Need to reshape back to [batch, seq, m, feat]
+            batch_size, seq_len, flattened_dim = final_output.shape
+            m = flattened_dim // self.edge_feature_len
+            final_output = final_output.view(batch_size, seq_len, m, self.edge_feature_len)
+
         if not return_logits:
             final_output = self.sigmoid(final_output)
 
         return final_output
-
 
 
 class EdgeLevelMLP(nn.Module):
