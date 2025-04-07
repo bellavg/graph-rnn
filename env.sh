@@ -16,6 +16,6 @@ module load Anaconda3/2024.06-1
 
 conda create -n aig-rnn python=3.12
 source activate aig-rnn
-pip install -r requirements.txt
+conda install pygraphviz
 
 echo "Environment created and activated"
