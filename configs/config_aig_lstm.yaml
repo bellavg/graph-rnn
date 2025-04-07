@@ -12,8 +12,8 @@ model:
 
   GraphRNN:
     embedding_size: 256
-    hidden_size: 512
-    num_layers: 4
+    hidden_size: 384
+    num_layers: 2
     edge_feature_len: 3  # <-- CORRECT (None, Regular, Inverted)
 
   EdgeMLP: # Settings used if edge_model is 'mlp'
@@ -23,16 +23,16 @@ model:
   EdgeRNN: # Settings used if edge_model is 'rnn'
     embedding_size: 128
     hidden_size: 256
-    num_layers: 4
+    num_layers: 2
     edge_feature_len: 3 # <-- CORRECT
 
 train:
   batch_size: 32
-  lr: 0.001
-  steps: 10000
+  lr: 0.001            # Start lower for stability
+  steps: 50000             # Train longer
   print_iter: 100
-  checkpoint_iter: 1000
-  checkpoint_dir: 'base_checkpoints'
-  log_dir: 'base_logs'
-  lr_schedule_milestones: [3000, 6000, 9000]
-  lr_schedule_gamma: 0.3
+  checkpoint_iter: 5000    # Consider increasing if 50k steps takes long
+  checkpoint_dir: 'lstm_checkpoints' # Maybe use a new dir
+  log_dir: 'lstm_logs'           # Maybe use a new dir
+  lr_schedule_milestones: [3000, 6000, 9000, 15000, 30000, 40000] # Spaced out milestones
+  lr_schedule_gamma: 0.3         # Less aggressive decay (adjust as needed)
