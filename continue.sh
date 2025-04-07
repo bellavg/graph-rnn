@@ -27,7 +27,7 @@ RESTORE_PATH="current_runs/rnn_11048520/checkpoints_GraphLevelRNN/checkpoint-500
 # IMPORTANT: This config defines the model architecture to load.
 # Assumes the config for run 'rnn_11048520' was e.g. 'configs/config_aig_rnn_base.yaml'
 # If passed as $1, use that, otherwise use a default (you might need to change this default)
-ORIGINAL_CONFIG_FILE=${1:-"configs/config_aig_rnn_base.yaml"} #<-- CHANGE DEFAULT IF NEEDED
+ORIGINAL_CONFIG_FILE=${1:-"configs/config_aig_rnn.yaml"} #<-- CHANGE DEFAULT IF NEEDED
 
 # Fine-tuning parameters (adjust as needed)
 FT_LR="1e-5"            # New learning rate for fine-tuning
