@@ -15,16 +15,16 @@ model:
 
   GraphRNN: # Settings for the NODE-level RNN
     use_attention: true     # *** Use attention at the NODE level ***
-    embedding_size: 256   # Embedding dim within GraphLevelAttentionRNN
-    hidden_size: 512      # Hidden state size of GraphLevelAttentionRNN's GRU
-    num_layers: 3         # Number of GRU layers in GraphLevelAttentionRNN
+    embedding_size: 384   # Embedding dim within GraphLevelAttentionRNN
+    hidden_size: 768      # Hidden state size of GraphLevelAttentionRNN's GRU
+    num_layers: 4         # Number of GRU layers in GraphLevelAttentionRNN
     edge_feature_len: 3   # Should be 3 for AIGs (None, Regular, Inverted)
     # --- Node Attention Parameters ---
-    attention_heads: 8    # Number of heads for NODE attention
+    attention_heads: 12    # Number of heads for NODE attention
     attention_dropout: 0.1 # Dropout for NODE attention
     # --- Output Size (Link to EdgeAttentionRNN) ---
     # MUST match the hidden_size of the chosen edge RNN (EdgeAttentionRNN in this case)
-    output_size: 256
+    output_size: 512
 
   EdgeMLP: # These settings are IGNORED because edge_model is not 'mlp'
     hidden_size: 512
@@ -37,10 +37,10 @@ model:
     edge_feature_len: 3
 
   EdgeAttentionRNN: # *** Settings for the EDGE-level attention RNN ***
-    embedding_size: 128     # Input embedding size for edge features
-    hidden_size: 256      # GRU hidden size (MUST match GraphRNN.output_size)
-    num_layers: 3         # Number of GRU layers in EdgeAttentionRNN
-    edge_feature_len: 3   # Should be 3 for AIGs
+    embedding_size: 256    # Input embedding size for edge features
+    hidden_size: 512      # GRU hidden size (MUST match GraphRNN.output_size)
+    num_layers: 4         # Number of GRU layers in EdgeAttentionRNN
+    edge_feature_len: 8   # Should be 3 for AIGs
     # --- Edge Attention Parameters ---
     attention_heads: 4      # Number of heads for EDGE attention
     attention_dropout: 0.1 # Dropout for EDGE attention
@@ -51,7 +51,7 @@ model:
 
 train:
   batch_size: 32          # Adjust based on GPU memory
-  lr: 0.0003              # Learning rate (might need tuning for attention models)
+  lr: 0.0001              # Learning rate (might need tuning for attention models)
   steps: 50000            # Total training steps
   print_iter: 100         # How often to print loss
   checkpoint_iter: 5000   # How often to save checkpoints
