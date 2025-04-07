@@ -12,36 +12,48 @@ PLOTS_BASE_DIR="current_evaluation_plots"
 PYTHON_SCRIPT="src/evaluate_aig_generation.py"
 
 # --- Parameters for the Python Script ---
-NUM_GRAPHS_PER_CHECKPOINT=500
+NUM_GRAPHS_PER_CHECKPOINT=50     # Reduced for debugging
 NUM_PLOTS_TO_SAVE=5
 TARGET_NODES=64
 SORT_PLOTS_BY="nodes"
 FORCE_MAX_NODES=64
 FORCE_MAX_LEVEL=13
-### START: Define number of checkpoints ###
 NUM_CHECKPOINTS_TO_EVAL=5
-### END: Define number of checkpoints ###
 
+# --- New Debug Parameters ---
+TEMPERATURE=0.8                # Lower temperature for more deterministic sampling
+ENABLE_DEBUG=true              # Set to true to enable debug output
+TRY_DIFFERENT_TEMPS=true       # Try different temperatures per graph if needed
 
 # --- Environment Setup ---
-# ... (keep mkdir, echo, module load, source activate) ...
 mkdir -p slurm_logs
 mkdir -p $OUTPUT_BASE_DIR
 mkdir -p $PLOTS_BASE_DIR
 
 echo "Starting AIG evaluation script at $(date)"
-# ... other echos ...
 echo "Python script: $PYTHON_SCRIPT"
 echo "Forcing Max Nodes Train: $FORCE_MAX_NODES"
 echo "Forcing Max Level Train: $FORCE_MAX_LEVEL"
-echo "Evaluating last $NUM_CHECKPOINTS_TO_EVAL checkpoints per directory." # Added info
-
+echo "Evaluating last $NUM_CHECKPOINTS_TO_EVAL checkpoints per directory."
+echo "Using temperature: $TEMPERATURE"
+echo "Debug mode: $ENABLE_DEBUG"
+echo "Try multiple temperatures: $TRY_DIFFERENT_TEMPS"
 
 module purge
 module load 2024
 module load Anaconda3/2024.06-1
 source activate aig-rnn
 
+# --- Debug Summary of Python Modules ---
+echo "Checking Python modules:"
+python -c "
+try:
+    import model, utils, aig_dataset, aig_generate, aig_evaluate
+    print('All required modules found!')
+    print(f'Edge types: {aig_dataset.EDGE_TYPES}')
+except ImportError as e:
+    print(f'Error: {e}')
+"
 
 # --- Find and Evaluate Model Run Directories ---
 find "$RUNS_DIR" -type d -name 'checkpoints_*' | while read -r CKPT_DIR; do
@@ -55,7 +67,7 @@ find "$RUNS_DIR" -type d -name 'checkpoints_*' | while read -r CKPT_DIR; do
     mkdir -p $EVAL_OUTPUT_DIR
     mkdir -p $PLOT_DIR
 
-    OUTPUT_CSV="${EVAL_OUTPUT_DIR}/results_summary_last_${NUM_CHECKPOINTS_TO_EVAL}.csv" # Modified CSV name
+    OUTPUT_CSV="${EVAL_OUTPUT_DIR}/results_summary_last_${NUM_CHECKPOINTS_TO_EVAL}.csv"
 
     if ! ls "${CKPT_DIR}/checkpoint-"*.pth 1> /dev/null 2>&1; then
         echo "  No checkpoint files (.pth) found in $CKPT_DIR. Skipping launch."
@@ -63,7 +75,19 @@ find "$RUNS_DIR" -type d -name 'checkpoints_*' | while read -r CKPT_DIR; do
     fi
 
     echo "  Launching evaluation job for directory: $CKPT_DIR"
-    # --- Modify srun command ---
+
+    # Conditional args based on env vars
+    DEBUG_ARGS=""
+    if [ "$ENABLE_DEBUG" = true ]; then
+        DEBUG_ARGS="--debug"
+    fi
+
+    TEMP_ARGS=""
+    if [ "$TRY_DIFFERENT_TEMPS" = true ]; then
+        TEMP_ARGS="--try_temps"
+    fi
+
+    # Launch the evaluation job
     srun --job-name="${MODEL_RUN_NAME}_eval" --output="slurm_logs/${MODEL_RUN_NAME}_eval_%j.out" \
     python -u $PYTHON_SCRIPT \
         "$CKPT_DIR" \
@@ -76,7 +100,9 @@ find "$RUNS_DIR" -type d -name 'checkpoints_*' | while read -r CKPT_DIR; do
         --plot_sort_by $SORT_PLOTS_BY \
         --force_max_nodes_train $FORCE_MAX_NODES \
         --force_max_level_train $FORCE_MAX_LEVEL \
-        --num_checkpoints $NUM_CHECKPOINTS_TO_EVAL # <-- Added this line
+        --num_checkpoints $NUM_CHECKPOINTS_TO_EVAL \
+        --temp $TEMPERATURE \
+        $DEBUG_ARGS $TEMP_ARGS
 
     echo "  Evaluation job launched for run $MODEL_RUN_NAME. Results -> $EVAL_OUTPUT_DIR, Plots -> $PLOT_DIR"
     echo "-----------------------------------------------------"
