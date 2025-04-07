@@ -595,7 +595,6 @@ def load_aig_model_from_config(model_path):
 
     # --- START FIX for input_size ---
     use_bfs = config['data'].get('use_bfs', True) # Default to True if missing
-    max_level_for_model = 0  # Default
 
     if use_bfs:
         # Use 'm' only if BFS mode is specified
@@ -610,33 +609,21 @@ def load_aig_model_from_config(model_path):
         if not dataset_path or not os.path.exists(dataset_path):
              raise FileNotFoundError(f"Dataset file '{dataset_path}' specified in config not found.")
         try:
-            print("INFO: Config indicates TopSort mode. Determining max_node_count & max_level from dataset...")
-            # Load dataset temporarily
-            temp_dataset = AIGDataset(graph_file=dataset_path, training=False)  # Assume training=False is okay
-            max_node_count = temp_dataset.max_node_count
-            if max_node_count <= 1: raise ValueError("Max node count from dataset <= 1")
-            input_size = max_node_count - 1
-
-            # Get max_level from dataset and config
-            max_level_from_dataset = temp_dataset.max_level
-            max_level_config = config['model']['GraphRNN'].get('max_level')
-            # Prioritize config value if it exists, else use dataset value
-            max_level_for_model = max_level_config if max_level_config is not None else max_level_from_dataset
-            print(f"INFO: Max level from dataset: {max_level_from_dataset}")
-            print(f"INFO: Using max_level={max_level_for_model} for model initialization/clamping.")
-            print(f"INFO: Loading model for TopSort mode. Input size (max_nodes-1): {input_size}")
-
+             # Load dataset temporarily just to get max_node_count
+             # Note: This assumes AIGDataset can be initialized with m=None when training=False
+             temp_dataset = AIGDataset(graph_file=dataset_path, training=False)
+             max_node_count = temp_dataset.max_node_count
+             if max_node_count <= 1: raise ValueError("Max node count from dataset <= 1")
+             input_size = max_node_count - 1
+             print(f"INFO: Loading model for TopSort mode. Input size (max_nodes-1): {input_size}")
         except Exception as e:
-            raise RuntimeError(
-                f"Could not determine max_node_count/max_level for TopSort mode from {dataset_path}: {e}")
+             raise RuntimeError(f"Could not determine max_node_count for TopSort mode from {dataset_path}: {e}")
     # --- END FIX for input_size ---
 
     # Assume edge_feature_len is correctly set in the config used for training
     edge_feature_len = config['model']['GraphRNN'].get('edge_feature_len', 3)
     if edge_feature_len != 3:
          print(f"Warning: Expected edge_feature_len=3 for AIGs, found {edge_feature_len} in config.")
-
-
 
     # Setup model args, forcing generation-specific settings
     node_model_args = config['model']['GraphRNN'].copy() # Use copy
@@ -645,7 +632,7 @@ def load_aig_model_from_config(model_path):
     node_model_args['predict_node_types'] = False # Override for generation
     node_model_args['use_conditioning'] = False # Override for generation
     node_model_args['tt_size'] = None # Override for generation
-    node_model_args['max_level'] = max_level_for_model
+    node_model_args['max_level'] = 13
 
     if config['model']['edge_model'] == 'rnn':
         edge_model_args = config['model']['EdgeRNN'].copy() # Use copy
@@ -698,9 +685,8 @@ def load_aig_model_from_config(model_path):
     # Return necessary items for evaluation
     # Note: tt_size is returned as None because conditioning is forced off during generation
     #return node_model, edge_model, input_size, edge_gen_function, mode, None, config # Return config too
-    return (node_model, edge_model, input_size, edge_gen_function, mode,
-            None, config, edge_feature_len, max_level_for_model)  # Added max_level_for_model
-    # ----------------------
+    return node_model, edge_model, input_size, edge_gen_function, mode, None, config, edge_feature_len
+
 
 def evaluate_model(model_path, num_graphs=50, min_nodes=10, max_nodes=100,
                    output_dir='evaluation_results', use_conditioning=False,
@@ -736,9 +722,8 @@ def evaluate_model(model_path, num_graphs=50, min_nodes=10, max_nodes=100,
     if not model_result:
         return {"error": f"Failed to load model from {model_path}"}
 
-    (node_model, edge_model, input_size, edge_gen_function, mode, tt_size, config,
-     edge_feature_len, node_model_max_level) = model_result  # Added node_model_max_level
-    # --------------------------
+    node_model, edge_model, input_size, edge_gen_function, mode, tt_size, config, edge_feature_len = model_result
+
     # Override config setting with explicit parameter if provided
     if predict_node_types is not None:
         config['model']['predict_node_types'] = predict_node_types
@@ -795,11 +780,11 @@ def evaluate_model(model_path, num_graphs=50, min_nodes=10, max_nodes=100,
             num_nodes=target_nodes,
             node_model=node_model,
             edge_model=edge_model,
-            input_size=input_size,
+            input_size=input_size,  # Use the correctly loaded input_size
             edge_gen_function=edge_gen_function,
             mode=mode,
-            edge_feature_len=edge_feature_len,
-            node_model_max_level=node_model_max_level  # *** ADD THIS ARGUMENT ***
+            edge_feature_len=edge_feature_len  # Add this missing argument
+            # REMOVE incorrect config and truth_table arguments
         )
 
         # Skip if generation failed
