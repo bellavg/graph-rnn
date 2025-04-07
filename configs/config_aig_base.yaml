@@ -1,38 +1,42 @@
-# Config file for the base model without conditioning
 data:
   dataset_type: 'aig-directed-multiclass'
-  #m: 16  # Adjust based on your graph analysis  <-- CAN BE REMOVED/IGNORED
-  graph_file: 'dataset/inputs8_outputs8max_nodes128max.pkl'  # Update with your actual file path <-- CHECK PATH
-  use_bfs: false  # <--- CORRECT for Topological Sort
+  graph_file: 'dataset/inputs8_outputs8max_nodes128max.pkl'
+  use_bfs: false
   max_graphs: null
 
 model:
-  mode: 'directed-multiclass' # Correct for AIGs
-  edge_model: 'rnn'  # Use 'mlp' or 'rnn' <-- CURRENT CHOICE (See discussion below)
+  mode: 'directed-multiclass'
+  edge_model: 'rnn' # Use 'mlp'
 
   GraphRNN:
+    use_attention: false    # <<< Flag set to false
     embedding_size: 256
-    hidden_size: 512
+    hidden_size: 512      # Needed for EdgeMLP input_size
     num_layers: 3
-    edge_feature_len: 3  # <-- CORRECT (None, Regular, Inverted)
+    edge_feature_len: 3
+    # attention_heads: 8      # Ignored if use_attention: false
+    # attention_dropout: 0.1 # Ignored if use_attention: false
+    output_size: null       # Not needed when edge_model is 'mlp'
 
-  EdgeMLP: # Settings used if edge_model is 'mlp'
-    hidden_size: 512
-    edge_feature_len: 3 # <-- CORRECT
+  EdgeMLP: # Used settings
+    hidden_size: 512      # Internal hidden size for MLP
+    edge_feature_len: 3
+    # input_size is automatically set from GraphRNN.hidden_size in setup_models
+    # output_size is automatically set from effective_input_size in setup_models
 
-  EdgeRNN: # Settings used if edge_model is 'rnn'
+  EdgeRNN: # Ignored settings
     embedding_size: 128
     hidden_size: 256
     num_layers: 3
-    edge_feature_len: 3 # <-- CORRECT
+    edge_feature_len: 3
 
 train:
   batch_size: 32
-  lr: 0.0005             # Start lower for stability
-  steps: 50000             # Train longer
+  lr: 0.0005
+  steps: 50000
   print_iter: 100
-  checkpoint_iter: 1000    # Consider increasing if 50k steps takes long
-  checkpoint_dir: 'base_checkpoints_long' # Maybe use a new dir
-  log_dir: 'base_logs_long'           # Maybe use a new dir
-  lr_schedule_milestones: [15000, 30000, 40000] # Spaced out milestones
-  lr_schedule_gamma: 0.3         # Less aggressive decay (adjust as needed)
+  checkpoint_iter: 5000
+  checkpoint_dir: 'checkpoints_GraphLevelRNN' # Specific directory
+  log_dir: 'logs_GraphLevelRNNP'            # Specific directory
+  lr_schedule_milestones: [5000, 10000, 15000, 20000, 30000, 40000]
+  lr_schedule_gamma: 0.3

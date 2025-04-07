@@ -1,42 +1,63 @@
-# Config file for the attention-based RNN model
+# Config for GraphLevelAttentionRNN + EdgeLevelAttentionRNN
+
 data:
-  dataset_type: 'aig-directed-multiclass'
-  # m: (Removed - not needed for topological sort / attention approach)
+  dataset_type: 'aig-directed-multiclass' # Or your specific AIG dataset key
+  # graph_file should point to your AIG dataset pickle file
   graph_file: 'dataset/inputs8_outputs8max_nodes128max.pkl' # Verify this path
-  use_bfs: false
-  max_graphs: null
+  use_bfs: false          # Set true for BFS mode, false for TopSort mode
+  # m: null               # Only needed if use_bfs: true
+  max_graphs: null        # Optional: limit number of graphs loaded
 
 model:
-  mode: 'directed-multiclass'
-  edge_model: 'rnn' # Ensure this is 'rnn' to use the attention model
+  mode: 'directed-multiclass' # Correct mode for AIG generation
+  # --- Select the Edge Model ---
+  edge_model: 'attention_rnn' # *** Use the new attention RNN for edges ***
 
-  GraphRNN:
-    embedding_size: 256
-    hidden_size: 512     # This is the node_hidden_size for EdgeRNN attention
-    num_layers: 3
-    edge_feature_len: 3
-    # output_size: null # Should be null/absent for attention EdgeRNN
+  GraphRNN: # Settings for the NODE-level RNN
+    use_attention: true     # *** Use attention at the NODE level ***
+    embedding_size: 256   # Embedding dim within GraphLevelAttentionRNN
+    hidden_size: 512      # Hidden state size of GraphLevelAttentionRNN's GRU
+    num_layers: 3         # Number of GRU layers in GraphLevelAttentionRNN
+    edge_feature_len: 3   # Should be 3 for AIGs (None, Regular, Inverted)
+    # --- Node Attention Parameters ---
+    attention_heads: 8    # Number of heads for NODE attention
+    attention_dropout: 0.1 # Dropout for NODE attention
+    # --- Output Size (Link to EdgeAttentionRNN) ---
+    # MUST match the hidden_size of the chosen edge RNN (EdgeAttentionRNN in this case)
+    output_size: 256
 
-  EdgeMLP: # Settings ignored if edge_model is 'rnn'
+  EdgeMLP: # These settings are IGNORED because edge_model is not 'mlp'
     hidden_size: 512
     edge_feature_len: 3
 
-  EdgeRNN: # Settings for the attention-based EdgeRNN
-    embedding_size: 128    # Input embedding size for edge features
-    hidden_size: 256     # Hidden size of the EdgeRNN's *own* GRU (Query Dim)
+  EdgeRNN: # These settings are IGNORED because edge_model is not 'rnn'
+    embedding_size: 128
+    hidden_size: 256
     num_layers: 3
     edge_feature_len: 3
-    # --- New Attention Parameters ---
-    node_hidden_size: 512  # MUST match GraphRNN.hidden_size (Key/Value Dim)
-    attention_heads: 8     # Number of attention heads (e.g., 4 or 8)
+
+  EdgeAttentionRNN: # *** Settings for the EDGE-level attention RNN ***
+    embedding_size: 128     # Input embedding size for edge features
+    hidden_size: 256      # GRU hidden size (MUST match GraphRNN.output_size)
+    num_layers: 3         # Number of GRU layers in EdgeAttentionRNN
+    edge_feature_len: 3   # Should be 3 for AIGs
+    # --- Edge Attention Parameters ---
+    attention_heads: 4      # Number of heads for EDGE attention
+    attention_dropout: 0.1 # Dropout for EDGE attention
+    # Optional conditioning parameters (if you add them to the model):
+    # use_conditioning: false
+    # tt_size: null
+    # tt_embedding_size: 64
 
 train:
-  batch_size: 32
-  lr: 0.0005
-  steps: 50000
-  print_iter: 100
-  checkpoint_iter: 5000
-  checkpoint_dir: 'attn_checkpoints' # Suggest new directory
-  log_dir: 'attn_logs'           # Suggest new directory
-  lr_schedule_milestones: [5000, 10000, 15000, 20000, 30000, 40000]
-  lr_schedule_gamma: 0.3
+  batch_size: 32          # Adjust based on GPU memory
+  lr: 0.0003              # Learning rate (might need tuning for attention models)
+  steps: 50000            # Total training steps
+  print_iter: 100         # How often to print loss
+  checkpoint_iter: 5000   # How often to save checkpoints
+  # Use distinct names for different architectures
+  checkpoint_dir: 'checkpoints_NodeAttn_EdgeAttn' # Suggest specific directory
+  log_dir: 'logs_NodeAttn_EdgeAttn'            # Suggest specific directory
+  # Learning rate schedule
+  lr_schedule_milestones: [10000, 20000, 30000, 40000] # Example schedule
+  lr_schedule_gamma: 0.5                            # Example decay factor
