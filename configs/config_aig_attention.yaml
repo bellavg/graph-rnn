@@ -15,6 +15,7 @@ model:
 
   GraphRNN: # Settings for the NODE-level RNN
     use_attention: true     # *** Use attention at the NODE level ***
+    use_lstm: false
     embedding_size: 384   # Embedding dim within GraphLevelAttentionRNN
     hidden_size: 768      # Hidden state size of GraphLevelAttentionRNN's GRU
     num_layers: 4         # Number of GRU layers in GraphLevelAttentionRNN

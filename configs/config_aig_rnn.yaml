@@ -10,6 +10,7 @@ model:
 
   GraphRNN:
     use_attention: false    # <<< Flag set to false
+    use_lstm: false
     embedding_size: 384
     hidden_size: 768       # Needed for EdgeMLP input_size
     num_layers: 4

@@ -1,0 +1,47 @@
+data:
+  dataset_type: 'aig-directed-multiclass'
+  graph_file: 'dataset/inputs8_outputs8max_nodes128max.pkl' # CHECK PATH
+  use_bfs: false
+  max_graphs: null
+
+model:
+  mode: 'directed-multiclass'
+  use_lstm: true                  # <-- Use LSTM instead of GRU
+  use_attention: true             # <-- Use Attention for Node model
+  edge_model: 'attention_rnn'     # <-- Use 'attention_rnn' for EdgeAttentionLSTM (needs setup_models update)
+
+  # --- Attention LSTM Model Settings ---
+  GraphAttentionLSTM:             # Parameters for GraphLevelAttentionLSTM
+    embedding_size: 384
+    hidden_size: 768
+    num_layers: 3
+    edge_feature_len: 3
+    attention_heads: 8
+    attention_dropout: 0.1
+    output_size: 256              # Output projection size for EdgeAttentionLSTM input
+
+  EdgeAttentionLSTM:              # Parameters for EdgeAttentionLSTM
+    embedding_size: 128
+    hidden_size: 256              # Should match GraphAttentionLSTM.output_size
+    num_layers: 4
+    edge_feature_len: 3
+    attention_heads: 4
+    attention_dropout: 0.1
+
+  # --- Unused/Ignored Sections ---
+  # GraphLSTM: ...
+  # EdgeLSTM: ...
+  # GraphRNN: ...
+  # EdgeRNN: ...
+  # EdgeMLP: ...
+
+train:
+  batch_size: 32
+  lr: 0.0005
+  steps: 50000
+  print_iter: 100
+  checkpoint_iter: 1000
+  checkpoint_dir: 'lstm_attn_checkpoints' # Specific directory
+  log_dir: 'lstm_attn_logs'               # Specific directory
+  lr_schedule_milestones: [10000, 20000, 30000, 40000]
+  lr_schedule_gamma: 0.3
