@@ -20,11 +20,11 @@ source activate aig-rnn
 # --- Evaluation Specific Settings ---
 
 # Define the checkpoint to evaluate
-CHECKPOINT_PATH="new_runs/graphrnn_11003201/base_checkpoints/checkpoint-10000.pth"
+CHECKPOINT_PATH="new_runs/graphrnn_11003201_continued/base_checkpoints_long/checkpoint-48000.pth"
 
 # Define the output directory for this evaluation run
 # You might want to make this more specific, e.g., include checkpoint step
-EVAL_OUTPUT_DIR="evaluation_results/gru_lvl_${SLURM_JOB_ID}"
+EVAL_OUTPUT_DIR="evaluation_results/11003201_continued_${SLURM_JOB_ID}"
 mkdir -p $EVAL_OUTPUT_DIR
 
 TEST_DATASET_PATH="dataset/inputs8_outputs8max_nodes128max.pkl"
