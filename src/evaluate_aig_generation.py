@@ -168,13 +168,33 @@ def main():
         # if args.force_max_nodes_train: max_n_train = args.force_max_nodes_train
         # if args.force_max_level_train: max_l_train = args.force_max_level_train
 
-        if max_n_train is None or max_l_train is None:
-            print(f"  Error: Could not determine max_node_count_train or max_level_train from config for {model_path}.")
-            print(f"  Config 'data' section: {loaded_config.get('data', {})}")
-            print("  Please ensure these were saved in the checkpoint's config['data'] or use override args.")
-            continue # Skip this model
+        # --- Determine Training Params (max_n, max_l) ---
+        ### START: Modify Logic ###
+        max_n_train = loaded_config.get('data', {}).get('max_node_count_train', None)
+        max_l_train = loaded_config.get('data', {}).get('max_level_train', None)
 
-        print(f"  Using training params for model setup: max_nodes={max_n_train}, max_level={max_l_train}")
+        # Apply overrides if provided and config values are missing
+        config_source_msg = "from config"
+        if max_n_train is None and args.force_max_nodes_train is not None:
+            max_n_train = args.force_max_nodes_train
+            config_source_msg += ", max_nodes overridden"
+            print(f"  Using override max_nodes_train: {max_n_train}")
+        if max_l_train is None and args.force_max_level_train is not None:
+            max_l_train = args.force_max_level_train
+            config_source_msg += ", max_level overridden"
+            print(f"  Using override max_level_train: {max_l_train}")
+
+        # Final check if values are determined
+        if max_n_train is None or max_l_train is None:
+            print(f"  Error: Could not determine max_node_count_train or max_level_train ({config_source_msg}).")
+            print(f"  Config 'data': {loaded_config.get('data', {})}")
+            print(f"  Override args: nodes={args.force_max_nodes_train}, level={args.force_max_level_train}")
+            print("  Skipping this model.")
+            continue  # Skip this model if values are still missing
+
+        print(
+            f"  Using training params for model setup: max_nodes={max_n_train}, max_level={max_l_train} ({config_source_msg})")
+        ### END: Modify Logic ###
 
         # --- Setup Models ---
         try:
