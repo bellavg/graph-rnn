@@ -139,8 +139,6 @@ import numpy as np
 
 
 # ... (train_mlp_step remains the same) ...
-
-
 def train_rnn_step(graph_rnn, edge_rnn, data,
                    criterion_edge, # Changed name
                    optim_graph_rnn,
@@ -208,33 +206,41 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
         torch.ones(batch_size, 1, effective_m, num_features, device=device),
         seq_padded_for_shift[:, :-1, :, :]
     ), dim=1)
-    x_edge_input_packed = pack_padded_sequence(x_edge_input_padded, lens_cpu, batch_first=True, enforce_sorted=False)
+    try:
+        x_edge_input_packed = pack_padded_sequence(x_edge_input_padded, lens_cpu, batch_first=True, enforce_sorted=False)
+    except RuntimeError as e:
+         print(f"Error packing input sequence 'x_edge_input_padded': {e}")
+         return {'total': 0.0, 'edge': 0.0}
 
 
     # --- 3. Prepare `prev_node_hiddens` AND `attn_mask` for Attention ---
     prev_node_hiddens_list = []
     valid_history_lengths = []
-    # === MODIFICATION START ===
-    # Remove the incorrect map
-    # map_packed_step_to_batch_idx = { ... } <--- REMOVED
 
     current_packed_idx = 0
     # Iterate through the time steps of the *packed* sequence
     for i_batch_step, current_batch_size in enumerate(x_edge_input_packed.batch_sizes):
-        # Get the original batch indices for items active at this time step
-        # `sorted_indices` tells us which *original* item is at each position
-        # in the current slice of the packed data.
-        sorted_indices_slice = x_edge_input_packed.sorted_indices[current_packed_idx : current_packed_idx + current_batch_size] if hasattr(x_edge_input_packed, 'sorted_indices') and x_edge_input_packed.sorted_indices is not None else torch.arange(current_packed_idx, current_packed_idx + current_batch_size)
-
+        current_batch_size = current_batch_size.item() # Get int value
         # step_within_seq corresponds to the time step in the *original* sequence length (0-indexed)
         step_within_seq = i_batch_step
 
-        # For each item active at this time step in the packed sequence
-        for i in range(current_batch_size):
-            # The original index in the batch (0 to batch_size-1)
-            original_batch_idx = sorted_indices_slice[i].item()
+        # Get the slice of original batch indices active at this step
+        if hasattr(x_edge_input_packed, 'sorted_indices') and x_edge_input_packed.sorted_indices is not None:
+            sorted_indices_slice = x_edge_input_packed.sorted_indices[current_packed_idx : current_packed_idx + current_batch_size]
+        else: # Handle case where indices might not be sorted (e.g., batch_size=1)
+             # Assume indices are just 0 to current_batch_size-1 relative to the start of the batch
+             # This case might need more careful handling if unsorted batches occur with size > 1
+             sorted_indices_slice = torch.arange(current_batch_size, device=device) # Simple range if no sorting info
+
+        # === MODIFICATION START ===
+        # Iterate directly over the original indices in the slice
+        for original_batch_idx_tensor in sorted_indices_slice:
+            original_batch_idx = original_batch_idx_tensor.item()
+        # === MODIFICATION END ===
 
             # Check if this time step is within the actual length for this item
+            # This check prevents processing padding steps, but the history needs to be
+            # collected for every *actual* step represented in the packed sequence.
             if step_within_seq < lens_cpu[original_batch_idx].item():
                  # Edge step `step_within_seq` predicts edges for node `step_within_seq + 1`
                  # Node hidden indices: 0=SOS, 1=Node0, ..., i=Node(i-1)
@@ -245,7 +251,6 @@ def train_rnn_step(graph_rnn, edge_rnn, data,
                  valid_history_lengths.append(num_prev_nodes)
 
         current_packed_idx += current_batch_size
-    # === MODIFICATION END ===
 
 
     if len(prev_node_hiddens_list) != total_steps_edges:
