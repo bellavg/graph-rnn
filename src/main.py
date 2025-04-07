@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import MultiStepLR
 from torch.utils.tensorboard import SummaryWriter
 import pickle
-from utils import setup_models
+from utils import setup_models, setup_criteria
 
 # Assuming these imports are correct relative to your project structure
 # Make sure train_rnn_step/train_mlp_step signatures are updated
@@ -82,32 +82,6 @@ def get_max_node_count_from_pkl(graph_file: str) -> int:
         raise RuntimeError(f"An unexpected error occurred while reading {graph_file}: {e}")
 
     return max_nodes
-
-
-# MODIFIED setup_criteria function
-def setup_criteria(config, device, dataset):
-    """ Sets up loss criterion for edges, potentially using class weights from dataset. """
-    use_edge_features = config['model']['GraphRNN'].get('edge_feature_len', NUM_EDGE_FEATURES) > 1
-
-    if use_edge_features:
-        print(
-            f"Setting up CrossEntropyLoss for {config['model']['GraphRNN'].get('edge_feature_len', NUM_EDGE_FEATURES)} edge classes.")
-
-        # --- NEW: Use weights from dataset ---
-        edge_weights = None
-        if hasattr(dataset, 'edge_weights') and dataset.edge_weights is not None:
-            edge_weights = dataset.edge_weights.to(device)  # Move weights to the correct device
-            print(f"Applying edge class weights: {edge_weights.tolist()}")
-            criterion_edge = torch.nn.CrossEntropyLoss(weight=edge_weights).to(device)
-        else:
-            print("Warning: Dataset object does not have 'edge_weights'. Using uniform weights.")
-            criterion_edge = torch.nn.CrossEntropyLoss().to(device)
-    else:
-        print("Using BCELoss for binary edges.")
-        criterion_edge = torch.nn.BCELoss().to(device)
-
-    # Return only edge criterion and flag
-    return criterion_edge, use_edge_features
 
 
 def restore_checkpoint(path, device, node_model, edge_model,
