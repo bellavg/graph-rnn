@@ -1,23 +1,20 @@
-# aig_evaluate.py
-# Contains specific functions for evaluating the validity of generated And-Inverter Graphs (AIGs).
+"""
+Contains specific functions for evaluating the validity of generated And-Inverter Graphs (AIGs).
+"""
 
 import numpy as np
 import networkx as nx
 from collections import Counter
-from typing import Dict, Any, List # Use specific types needed
+from typing import Dict, Any, List
 
 # Attempt to import necessary constants and helpers from aig_dataset
-# Adjust the path if aig_dataset is not directly importable
 try:
     from aig_dataset import NODE_TYPES, EDGE_TYPES, _calculate_levels
 except ImportError:
     print("Warning: Could not import from aig_dataset. Assuming default values for NODE_TYPES/EDGE_TYPES.")
-    # Define fallbacks if import fails, although it's better if it succeeds
+    # Define fallbacks if import fails
     NODE_TYPES = {"PI": 1, "AND": 2, "PO": 3, "ZERO": 0, "UNKNOWN": -1}
     EDGE_TYPES = {"NONE": 0, "REGULAR": 1, "INVERTED": 2}
-    # Cannot provide _calculate_levels fallback easily
-
-# --- AIG Validity Functions ---
 
 def infer_node_types(g: nx.DiGraph) -> Dict[Any, str]:
     """Infers node types (PI, AND, PO, UNKNOWN, INVALID_FANIN) based on degrees."""
@@ -73,7 +70,6 @@ def calculate_paper_validity(g: nx.DiGraph) -> float:
         return 0.0
     else:
         return float(valid_gates) / total_relevant_gates
-
 
 def calculate_extensive_validity(g: nx.DiGraph, check_connectivity=True) -> Dict[str, Any]:
     """
@@ -218,7 +214,3 @@ def calculate_extensive_validity(g: nx.DiGraph, check_connectivity=True) -> Dict
     )
 
     return results
-
-# --- End of AIG-specific functions ---
-
-# No __main__ block needed if this is just a library of functions.

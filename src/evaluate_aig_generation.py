@@ -1,6 +1,7 @@
-from aig_evaluate import calculate_paper_validity, calculate_extensive_validity, infer_node_types
-# evaluate_aig_generation.py
-# Generates AIGs using trained models and evaluates their validity and structure.
+#!/usr/bin/env python3
+"""
+Generates AIGs using trained models and evaluates their validity and structure.
+"""
 
 import argparse
 import os
@@ -12,11 +13,9 @@ import numpy as np
 import pandas as pd
 import time
 from tqdm import tqdm
-import matplotlib.pyplot as plt # For visualization function
+import matplotlib.pyplot as plt
 
 # --- Imports from project structure ---
-# Ensure these paths are correct relative to where you run the script,
-# or that the 'src' directory is in your PYTHONPATH.
 try:
     from model import * # Import all model classes for setup_models
     from utils import setup_models
@@ -32,7 +31,6 @@ except ImportError as e:
     print("'model', 'utils', 'aig_dataset', 'generate', 'aig_evaluate' are importable.")
     exit(1)
 
-# --- Visualization Function (Included here as requested) ---
 def visualize_aig_structure(G, output_file='generated_aig_structure.png'):
     """Visualize the generated AIG structure, handling edge types."""
     if G is None or G.number_of_nodes() == 0:
@@ -109,7 +107,6 @@ def get_checkpoint_step(filename):
     return -1  # Return -1 or raise error if pattern doesn't match
 
 
-# --- Main Script Logic ---
 def main():
     parser = argparse.ArgumentParser(description="Generate and Evaluate AIGs from Trained Models")
     parser.add_argument('model_dir', type=str, help='Directory containing model checkpoints (.pth files)')
@@ -122,17 +119,14 @@ def main():
     parser.add_argument('--patience', type=int, default=10, help='Patience for stopping if no real edges are added')
 
     # Visualization Args
-
-    ### START: Add Checkpoint Limit Argument ###
     parser.add_argument('--num_checkpoints', type=int, default=None,
                         help='Evaluate only the latest N checkpoints (default: evaluate all found)')
-    ### END: Add Checkpoint Limit Argument ###
     parser.add_argument('--save_plots', action='store_true', help='Save visualizations of the best valid generated graphs')
     parser.add_argument('--plot_dir', type=str, default='./aig_plots', help='Directory to save visualizations')
     parser.add_argument('--num_plots', type=int, default=5, help='Maximum number of best plots to save per model')
     parser.add_argument('--plot_sort_by', type=str, default='nodes', choices=['nodes', 'level'], help='Sort criteria for best plots ("nodes" or "level")')
 
-    #Args potentially needed if info not in config (better to save in config)
+    # Args potentially needed if info not in config (better to save in config)
     parser.add_argument('--force_max_nodes_train', type=int, default=None, help='Manually override max_node_count_train if not in config')
     parser.add_argument('--force_max_level_train', type=int, default=None, help='Manually override max_level_train if not in config')
 
@@ -152,14 +146,13 @@ def main():
         print(f"Will save up to {args.num_plots} best valid plots per model (sorted by {args.plot_sort_by}) to {args.plot_dir}")
 
     # --- Find Models ---
-    # --- Find Models ---
     all_checkpoint_paths = sorted(glob.glob(os.path.join(args.model_dir, 'checkpoint-*.pth')))
 
     if not all_checkpoint_paths:
         print(f"Error: No 'checkpoint-*.pth' files found in {args.model_dir}")
         return 1
 
-    ### START: Filter Checkpoints ###
+    # --- Filter Checkpoints ---
     if args.num_checkpoints is not None and args.num_checkpoints > 0:
         # Sort by step number (descending) and take the top N
         print(f"Found {len(all_checkpoint_paths)} total checkpoints. Selecting latest {args.num_checkpoints}.")
@@ -171,7 +164,6 @@ def main():
         # Evaluate all found checkpoints if arg not provided or <= 0
         print(f"Found {len(all_checkpoint_paths)} total checkpoints. Evaluating all.")
         checkpoint_paths_to_evaluate = all_checkpoint_paths
-    ### END: Filter Checkpoints ###
 
     if not checkpoint_paths_to_evaluate:
         print(f"No checkpoints selected for evaluation in {args.model_dir}")
@@ -201,15 +193,6 @@ def main():
         max_n_train = loaded_config.get('data', {}).get('max_node_count_train', None)
         max_l_train = loaded_config.get('data', {}).get('max_level_train', None)
 
-        # Check if manual override is provided (optional)
-        # if args.force_max_nodes_train: max_n_train = args.force_max_nodes_train
-        # if args.force_max_level_train: max_l_train = args.force_max_level_train
-
-        # --- Determine Training Params (max_n, max_l) ---
-        ### START: Modify Logic ###
-        max_n_train = loaded_config.get('data', {}).get('max_node_count_train', None)
-        max_l_train = loaded_config.get('data', {}).get('max_level_train', None)
-
         # Apply overrides if provided and config values are missing
         config_source_msg = "from config"
         if max_n_train is None and args.force_max_nodes_train is not None:
@@ -229,9 +212,7 @@ def main():
             print("  Skipping this model.")
             continue  # Skip this model if values are still missing
 
-        print(
-            f"  Using training params for model setup: max_nodes={max_n_train}, max_level={max_l_train} ({config_source_msg})")
-        ### END: Modify Logic ###
+        print(f"  Using training params for model setup: max_nodes={max_n_train}, max_level={max_l_train} ({config_source_msg})")
 
         # --- Setup Models ---
         try:
@@ -268,12 +249,10 @@ def main():
             continue
         print(f"  Using edge generation function: {edge_func.__name__}")
 
-
         # --- Calculate effective_m ---
         # Ensure effective_m is at least 1
         effective_m_gen = max(1, max_n_train - 1)
         print(f"  Effective M for generation (max_n_train - 1): {effective_m_gen}")
-
 
         # --- Generation and Evaluation Loop for this Model ---
         all_graphs_data = [] # Stores dicts with graph data and results
@@ -339,7 +318,6 @@ def main():
                          paper_val = np.nan # Mark metrics as NaN on error
                          is_extensively_valid = False
 
-
                 all_graphs_data.append({
                     "graph": g_cleaned, # Store the cleaned graph object
                     "analysis_index": i,
@@ -350,7 +328,6 @@ def main():
                     "max_level": final_max_level_cleaned, # Level of cleaned graph
                 })
                 pbar.update(1) # End of generation loop for one graph
-
 
         # --- Aggregate and Report Results for the Current Model ---
         num_analyzed = len(all_graphs_data)
@@ -420,8 +397,7 @@ def main():
                         visualize_aig_structure(graph_data["graph"], plot_filename)
                     print(f"  Finished saving plots.")
                 else:
-                     print("  No extensively valid graphs found to plot.")
-
+                    print("  No extensively valid graphs found to plot.")
 
         else: # No graphs analyzed
             print("    No graphs were successfully generated or analyzed for this model.")
