@@ -77,15 +77,16 @@ def setup_models(config, device, max_node_count, max_level):
             print(f"INFO: Using GraphLevelLSTM for node level.")
     else: # GRU
         if use_node_attention:
-            # Add default attention params if missing and using GraphRNN section
-            node_params['attention_heads'] = node_params.get('attention_heads', 4)
-            node_params['attention_dropout'] = node_params.get('attention_dropout', 0.1)
+            # ... (code for GraphLevelAttentionRNN) ...
             node_model = GraphLevelAttentionRNN(**node_params).to(device)
             print(f"INFO: Using GraphLevelAttentionRNN for node level.")
         else:
             # Ensure attention keys aren't passed
             node_params.pop('attention_heads', None)
             node_params.pop('attention_dropout', None)
+            # --- ADD THE LINE BELOW ---
+            node_params.pop('use_attention', None)  # Remove the flag itself if it exists
+            # --- END ADDITION ---
             node_model = GraphLevelRNN(**node_params).to(device)
             print(f"INFO: Using standard GraphLevelRNN for node level.")
 
