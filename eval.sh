@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=gru-eval
+#SBATCH --job-name=lstm-eval
 #SBATCH --partition=gpu_a100     # Specify the appropriate partition here (adjust if needed)
 #SBATCH --gpus=1                 # Request 1 GPU (adjust if evaluation is faster/slower)
 #SBATCH --time=00:59:00          # Adjust time based on expected evaluation duration (e.g., 1 hour)
@@ -20,11 +20,11 @@ source activate aig-rnn
 # --- Evaluation Specific Settings ---
 
 # Define the checkpoint to evaluate
-CHECKPOINT_PATH="new_runs/graphrnn_11003135_continued/base_checkpoints_long/checkpoint-47000.pth"
+CHECKPOINT_PATH="new_runs/lstm_11022057/lstm_checkpoints/checkpoint-50000.pth"
 
 # Define the output directory for this evaluation run
 # You might want to make this more specific, e.g., include checkpoint step
-EVAL_OUTPUT_DIR="evaluation_results/11003135_continued_${SLURM_JOB_ID}"
+EVAL_OUTPUT_DIR="evaluation_results/lstm_small_${SLURM_JOB_ID}"
 mkdir -p $EVAL_OUTPUT_DIR
 
 TEST_DATASET_PATH="dataset/inputs8_outputs8max_nodes128max.pkl"
