@@ -126,7 +126,7 @@ def train_loop(config, node_model, edge_model, step_fn,
 
     # Determine flags once from config
     # REMOVED predict_node_types, use_conditioning
-    use_edge_features = config['model']['GraphRNN'].get('edge_feature_len', NUM_EDGE_FEATURES) > 1
+    use_edge_features = True
 
     node_model.train()
     edge_model.train()
