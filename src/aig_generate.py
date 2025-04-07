@@ -2,15 +2,34 @@
 Generation module for AIG (And-Inverter Graphs) using trained models.
 """
 
-import numpy as np
-import torch
-import networkx as nx
 import os
+import torch
+import numpy as np
+import networkx as nx
 from torch.distributions import Categorical
 
-# Import necessary model classes and setup function
-from model import *  # Import all model classes
-from aig_dataset import _calculate_levels, EDGE_TYPES, NUM_EDGE_FEATURES
+# Try to import necessary constants
+try:
+    from aig_dataset import _calculate_levels, EDGE_TYPES, NUM_EDGE_FEATURES
+except ImportError:
+    print("Warning: Failed to import from aig_dataset. Using default constants.")
+    # Default values as fallback
+    EDGE_TYPES = {"NONE": 0, "REGULAR": 1, "INVERTED": 2}
+    NUM_EDGE_FEATURES = 3
+
+    def _calculate_levels(g):
+        """Fallback implementation for calculate_levels if import fails."""
+        if not g or g.number_of_nodes() == 0:
+            return {}, -1
+
+        levels = {}
+        for node in nx.topological_sort(g):
+            pred_levels = [levels.get(pred, 0) for pred in g.predecessors(node)]
+            levels[node] = max(pred_levels + [-1]) + 1
+
+        max_level = max(levels.values()) if levels else -1
+        return levels, max_level
+
 
 def aig_seq_to_nx(adj_seq_list: list, edge_feature_len: int) -> nx.DiGraph:
     """
@@ -89,18 +108,6 @@ def rnn_edge_gen_aig(edge_rnn, h, num_edges_to_sample, effective_m, temperature=
     Returns:
         torch.Tensor: Sampled adjacency vector [1, 1, effective_m, NUM_EDGE_FEATURES] (one-hot encoded).
     """
-    import torch
-    import numpy as np
-    from torch.distributions import Categorical
-
-    # Import EDGE_TYPES if not defined in the global scope
-    try:
-        from aig_dataset import EDGE_TYPES, NUM_EDGE_FEATURES
-    except ImportError:
-        # Fallback definitions if import fails
-        EDGE_TYPES = {"NONE": 0, "REGULAR": 1, "INVERTED": 2}
-        NUM_EDGE_FEATURES = 3
-
     # Special case: If at the first step (num_edges_to_sample=0),
     # just return a tensor with NONE edges
     if num_edges_to_sample <= 0:
@@ -155,7 +162,6 @@ def rnn_edge_gen_aig(edge_rnn, h, num_edges_to_sample, effective_m, temperature=
 
                 # Force a valid edge (REGULAR or INVERTED) for at least the first edge
                 if force_valid_edge and i == 0 and sampled_type_idx.item() == EDGE_TYPES["NONE"]:
-                    print("Forcing a valid edge (REGULAR) for first position")
                     sampled_type_idx = torch.tensor([EDGE_TYPES["REGULAR"]], device=device)
                     force_valid_edge = False
 
@@ -179,8 +185,7 @@ def rnn_edge_gen_aig(edge_rnn, h, num_edges_to_sample, effective_m, temperature=
             try:
                 sampled_stack = torch.tensor(np.stack(sampled_edges[::-1]), device=device)  # Reverse before stacking
                 num_sampled = sampled_stack.shape[0]
-                adj_vec_sampled[0, 0, :num_sampled,
-                :] = sampled_stack  # Fill from the start (represents nearest predecessors)
+                adj_vec_sampled[0, 0, :num_sampled, :] = sampled_stack  # Fill from the start (represents nearest predecessors)
             except Exception as e:
                 print(f"Error stacking sampled edges: {e}")
                 # Ensure first edge is REGULAR on error
@@ -216,18 +221,6 @@ def mlp_edge_gen_aig(edge_mlp, h, num_edges_to_sample, effective_m, temperature=
     Returns:
         torch.Tensor: Sampled adjacency vector [1, 1, effective_m, NUM_EDGE_FEATURES] (one-hot encoded).
     """
-    import torch
-    import numpy as np
-    from torch.distributions import Categorical
-
-    # Import EDGE_TYPES if not defined in the global scope
-    try:
-        from aig_dataset import EDGE_TYPES, NUM_EDGE_FEATURES
-    except ImportError:
-        # Fallback definitions if import fails
-        EDGE_TYPES = {"NONE": 0, "REGULAR": 1, "INVERTED": 2}
-        NUM_EDGE_FEATURES = 3
-
     # Special case: If at the first step (num_edges_to_sample=0),
     # just return a tensor with NONE edges
     if num_edges_to_sample <= 0:
@@ -314,10 +307,8 @@ def mlp_edge_gen_aig(edge_mlp, h, num_edges_to_sample, effective_m, temperature=
     return adj_vec_sampled
 
 
-
 def generate_aig(num_nodes_target, node_model, edge_model, effective_m, max_level_model,
-                 edge_gen_fn, device,
-                 temperature=1.0, max_steps=None, eos_patience=10):
+                 edge_gen_fn, device, temperature=1.0, max_steps=None, eos_patience=10, debug=False):
     """
     Generates a single And-Inverter Graph (AIG).
 
@@ -331,7 +322,8 @@ def generate_aig(num_nodes_target, node_model, edge_model, effective_m, max_leve
         device: Torch device.
         temperature: Sampling temperature.
         max_steps: Optional maximum generation steps (nodes to add).
-        eos_patience: Stop if no actual edges (type 1 or 2) are added for this many consecutive steps.
+        eos_patience: Stop if no real edges (type 1 or 2) are added for this many consecutive steps.
+        debug: Enable additional debug output.
 
     Returns:
         nx.DiGraph: The generated AIG as a NetworkX graph.
@@ -341,130 +333,174 @@ def generate_aig(num_nodes_target, node_model, edge_model, effective_m, max_leve
     edge_model.eval()
 
     # --- Initialization ---
-    adj_vec_current = torch.zeros([1, 1, effective_m, NUM_EDGE_FEATURES], device=device)
-    adj_vec_current[:, :, :, EDGE_TYPES["NONE"]] = 1.0 # Initialize with NONE edges
+    # Important: Initialize with SOS token structure (ones)
+    adj_vec_current = torch.ones([1, 1, effective_m, NUM_EDGE_FEATURES], device=device)
+    # Clear and set the NONE channel to 1.0 for initial SOS token
+    adj_vec_current.zero_()
+    adj_vec_current[:, :, :, EDGE_TYPES["NONE"]] = 1.0
+
     list_adj_vecs_sampled = []
     node_model.reset_hidden()
-    current_levels = {0: 0} # Implicit source node 0 is at level 0
+    current_levels = {0: 0}
     max_level_gen = 0
     uses_level_embedding = hasattr(node_model, 'level_embedding') and node_model.level_embedding is not None
-    no_real_edge_steps_in_a_row = 0 # Initialize patience counter
+    no_real_edge_steps_in_a_row = 0  # Initialize patience counter
 
     # Determine max generation steps
     if max_steps is None:
         # Make max_steps slightly larger to allow patience to trigger before hard limit
-        # Adjusted default max_steps logic
-        max_steps = int(num_nodes_target * 1.5) + eos_patience + 5 # More generous default
-        max_steps = max(max_steps, num_nodes_target + eos_patience + 5) # Ensure it's at least target + patience
+        max_steps = int(num_nodes_target * 2.5) + eos_patience
     if num_nodes_target <= 1:
-        print("Warning: Target nodes <= 1, returning empty graph.")
-        return nx.DiGraph(), -1
+        return nx.DiGraph(), 0
+
+    if debug:
+        print(f"DEBUG: Starting generation with effective_m={effective_m}, target_nodes={num_nodes_target}")
+        print(f"DEBUG: Node model type: {type(node_model).__name__}, Edge model type: {type(edge_model).__name__}")
+        print(f"DEBUG: Uses level embedding: {uses_level_embedding}, Max level model: {max_level_model}")
+        print(f"DEBUG: Temperature: {temperature}, EOS patience: {eos_patience}")
 
     # --- Generation Loop ---
     for i in range(1, max_steps):
         current_node_idx = i
+
         # --- Node Level Hidden State Calculation ---
         level_for_input = None
         if uses_level_embedding:
-            # Simplified level calculation: max level of nodes < current_node_idx connected to it
-            # Build temporary graph to calculate levels dynamically
-            temp_g_so_far = aig_seq_to_nx(list_adj_vecs_sampled, NUM_EDGE_FEATURES)
             max_pred_level = -1
-            if temp_g_so_far.number_of_nodes() > 0: # Check if graph is not empty
-                try:
-                    if nx.is_directed_acyclic_graph(temp_g_so_far):
-                        temp_levels, _ = _calculate_levels(temp_g_so_far)
-                        # Find max level among potential predecessors of the node *about* to be added (node i)
-                        num_preds_possible = min(current_node_idx, effective_m)
-                        for k in range(num_preds_possible):
-                            source_node_idx = current_node_idx - 1 - k
-                            if source_node_idx in temp_levels: # Check if predecessor exists and has level
-                                max_pred_level = max(max_pred_level, temp_levels.get(source_node_idx, -1))
-                    else:
-                        # Handle non-DAG case if needed, maybe stop or use default level
-                        print(f"Warning: Temp graph became non-DAG at step {i}. Using previous level approx.")
-                        max_pred_level = current_levels.get(current_node_idx-1, -1)
-                except Exception as e:
-                    print(f"Warning: Error calculating temp levels at step {i}: {e}")
-                    max_pred_level = current_levels.get(current_node_idx-1, -1) # Fallback
-            else: # First step (i=1), max predecessor level is level of node 0
-                max_pred_level = current_levels.get(0, -1)
+            # Avoid repeatedly building the graph if performance is critical
+            # Only need predecessors of current_node_idx
+            # However, building it is simpler for now
+            temp_g_so_far = aig_seq_to_nx(list_adj_vecs_sampled, NUM_EDGE_FEATURES)
+            # Need to add the node we are about to generate to check predecessors
+            # This assumes node indices are contiguous from 0
+            if not temp_g_so_far.has_node(current_node_idx):
+                 temp_g_so_far.add_node(current_node_idx)  # Add node to check preds even if no edges yet
+
+            # Check predecessors using the structure *before* adding edges for this step
+            preds_of_current = []
+            if current_node_idx in temp_g_so_far:  # Check if node exists before getting preds
+                 # Logic based on list_adj_vecs_sampled index implies connectivity
+                 num_preds_possible = min(current_node_idx, effective_m)
+                 for k in range(num_preds_possible):
+                      source_node_idx = current_node_idx - 1 - k
+                      # Check the *previous* step's output if available
+                      if list_adj_vecs_sampled:
+                           # We need to look at the connectivity *to* current_node_idx
+                           # which was determined by the vector added at step i-1
+                           # Let's stick to the simpler graph build for level calc for now
+                           pass  # Simplified level calc below uses graph structure
+
+            # Simplified level calculation: max level of nodes < current_node_idx connected to it
+            # Re-calculate levels on the temp graph at each step (less efficient but simpler)
+            if temp_g_so_far.number_of_nodes() > 1 and nx.is_directed_acyclic_graph(temp_g_so_far):
+                 temp_levels, _ = _calculate_levels(temp_g_so_far)
+                 current_levels = temp_levels  # Update levels based on current graph
+                 max_pred_level = -1
+                 # Find max level among nodes that *could* connect to current_node_idx
+                 num_preds_possible = min(current_node_idx, effective_m)
+                 for k in range(num_preds_possible):
+                     source_node_idx = current_node_idx - 1 - k
+                     if source_node_idx in current_levels:
+                          max_pred_level = max(max_pred_level, current_levels.get(source_node_idx, -1))
+            else:
+                 # Fallback if not DAG or too small
+                 max_pred_level = current_levels.get(current_node_idx-1, -1)  # Approx level based on previous node
 
             current_node_level = max_pred_level + 1
             # Only add to current_levels if positive, avoid overwriting node 0?
-            # Store the calculated level for the node we are about to generate
-            current_levels[current_node_idx] = current_node_level
+            if current_node_idx > 0:
+                current_levels[current_node_idx] = current_node_level
             max_level_gen = max(max_level_gen, current_node_level)
 
-            # Clamp level for embedding lookup
             level_clamped = min(current_node_level, max_level_model)
             level_for_input = torch.tensor([[level_clamped]], dtype=torch.long, device=device)
 
         # --- Node model forward pass ---
-        # Pass the *current* adjacency vector (representing connections *to* previous nodes)
-        # and the calculated level for the *new* node
-        node_output = node_model(adj_vec_current, levels=level_for_input)
-        h_node = node_output[0] if isinstance(node_output, tuple) else node_output
+        try:
+            node_output = node_model(adj_vec_current, levels=level_for_input)
+            h_node = node_output[0] if isinstance(node_output, tuple) else node_output
+
+            if debug and i == 1:
+                print(f"DEBUG: First node hidden state shape: {h_node.shape}")
+                print(f"DEBUG: First node hidden state mean: {h_node.mean().item():.6f}, var: {h_node.var().item():.6f}")
+                print(f"DEBUG: First node hidden state contains NaN: {torch.isnan(h_node).any().item()}")
+
+        except Exception as e:
+            print(f"ERROR in node model forward pass: {e}")
+            # Return empty graph on error
+            return nx.DiGraph(), -1
 
         # --- Edge Sampling ---
-        # Predict edges for the *new* node (current_node_idx) based on the node model's output
         num_edges_to_sample = min(current_node_idx, effective_m)
-        adj_vec_next_sampled = edge_gen_fn(edge_model, h_node, num_edges_to_sample, effective_m, temperature, device)
+
+        if debug and i == 1:
+            print(f"DEBUG: Step {i}, sampling {num_edges_to_sample} edges")
+
+        try:
+            adj_vec_next_sampled = edge_gen_fn(edge_model, h_node, num_edges_to_sample, effective_m, temperature, device)
+
+            if debug and i == 1:
+                print(f"DEBUG: First adj_vec_next_sampled shape: {adj_vec_next_sampled.shape}")
+                edge_dist = adj_vec_next_sampled[0, 0, :num_edges_to_sample].sum(dim=0).cpu().numpy() if num_edges_to_sample > 0 else "N/A"
+                print(f"DEBUG: Edge type distribution in first step: {edge_dist}")
+
+        except Exception as e:
+            print(f"ERROR in edge generation: {e}")
+            # Return current graph on error
+            if not list_adj_vecs_sampled:
+                return nx.DiGraph(), -1
+            else:
+                return aig_seq_to_nx(list_adj_vecs_sampled, NUM_EDGE_FEATURES), max_level_gen
 
         # --- Store and Prepare for Next Step ---
-        # Store the sampled adjacency vector (connections *to* current_node_idx)
         adj_vec_np = adj_vec_next_sampled.squeeze(0).squeeze(0).cpu().numpy()
         list_adj_vecs_sampled.append(adj_vec_np)
-        # Update adj_vec_current for the *next* iteration's node model input
         adj_vec_current = adj_vec_next_sampled
 
         # --- Termination Checks ---
         # 1. Check for actual edges added in this step
         has_real_edge = False
-        if num_edges_to_sample > 0: # Only check if we actually sampled something
+        if num_edges_to_sample > 0:  # Only check if we actually sampled something
             sampled_part = adj_vec_np[:num_edges_to_sample, :]
-            # Check if any edge type other than NONE was sampled
             has_real_edge = np.any(sampled_part[:, EDGE_TYPES["REGULAR"]] == 1.0) or \
                             np.any(sampled_part[:, EDGE_TYPES["INVERTED"]] == 1.0)
 
         if has_real_edge:
-            no_real_edge_steps_in_a_row = 0 # Reset patience counter
+            no_real_edge_steps_in_a_row = 0  # Reset patience counter
         else:
-            # *** MODIFICATION START ***
-            # Only increment patience if we expected to sample edges (i.e., i > 0 conceptually)
-            # And importantly, don't increment if it was the very first node (i=1)
-            # as predicting no edge here is expected for a PI.
-            if i > 1: # Don't count lack of edge for the first node against patience
-                 no_real_edge_steps_in_a_row += 1 # Increment patience counter
-            # *** MODIFICATION END ***
+            no_real_edge_steps_in_a_row += 1  # Increment patience counter
 
         # 2. Check explicit EOS signal (all NONE in sampled region)
         is_eos = False
-        # *** MODIFICATION START ***
-        # Only check for EOS *after* the first step (i > 1)
-        if i > 1 and num_edges_to_sample > 0:
-             # Check if all sampled edge types for this step were NONE
-             is_eos = np.all(adj_vec_np[:num_edges_to_sample, EDGE_TYPES["NONE"]] == 1.0)
-        # *** MODIFICATION END ***
+        if num_edges_to_sample > 0:
+            is_eos = np.all(adj_vec_np[:num_edges_to_sample, EDGE_TYPES["NONE"]] == 1.0)
+        elif num_edges_to_sample == 0:  # First step (i=1), num_edges_to_sample=0
+             is_eos = False  # Cannot be EOS on first step
+
+        # SPECIAL DEBUG CHECK FOR STEP 1
+        if is_eos and i == 1:
+            print(f"WARNING: EOS detected at step 1! This indicates a potential issue.")
+            # For step 1, let's create a simpler graph as fallback
+            if debug:
+                print(f"DEBUG: Trying to continue despite first-step EOS...")
+                is_eos = False  # Override EOS for debugging
 
         if is_eos:
             print(f"INFO: EOS signal detected at step {i}. Stopping generation.")
-            # Pop the EOS vector itself, as it shouldn't be part of the final graph
-            list_adj_vecs_sampled.pop()
+            list_adj_vecs_sampled.pop()  # Remove the EOS vector
             break
 
-        # 3. Check Patience (depends on the updated counter)
-        # Stop if patience runs out *after* the first step
+        # 3. Check Patience
         if no_real_edge_steps_in_a_row >= eos_patience:
-            print(f"INFO: Patience ({eos_patience}) exceeded. No real edges added for {no_real_edge_steps_in_a_row} steps (after step 1). Stopping at step {i}.")
-            # Do NOT pop the last vector here, as it wasn't a clean EOS signal, just lack of progress
+            print(f"INFO: Patience ({eos_patience}) exceeded. No real edges added for {no_real_edge_steps_in_a_row} steps. Stopping at step {i}.")
+            # Do NOT pop the last vector here, it wasn't a clean EOS
             break
 
         # 4. Check target node count
-        # Stop *after* adding the target node index.
-        # This allows generation up to target size, letting EOS/Patience/MaxSteps handle exact stop.
+        # Stop *after* adding the target node index
         if current_node_idx >= num_nodes_target - 1:
-             pass
+            # Let loop continue if target is reached exactly, break on next iteration if needed
+            pass  # Allow loop to potentially finish via EOS/Patience/MaxSteps
 
         # 5. Max steps reached (handled by loop limit)
         if i == max_steps - 1:
@@ -481,18 +517,18 @@ def generate_aig(num_nodes_target, node_model, edge_model, effective_m, max_leve
                   final_graph.graph['levels'] = final_levels
              else:
                   print("Warning: Generated graph is not a DAG. Max level calculation might be inaccurate.")
-                  # Attempt level calculation even for non-DAGs for debugging? Or assign specific code.
-                  # final_levels = {n: 0 for n in final_graph.nodes()} # Simple assignment
-                  final_max_level = -2 # Use negative code for non-DAG
+                  final_levels = {n: 0 for n in final_graph.nodes()}
+                  final_max_level = -2  # Use negative code for non-DAG
          except Exception as e:
               print(f"Warning: Error calculating final levels: {e}")
-              final_max_level = -3 # Use negative code for error
+              final_max_level = -3  # Use negative code for error
 
     # Print final node count relative to target
     final_node_count = final_graph.number_of_nodes()
     print(f"Generated graph with {final_node_count} nodes (target: {num_nodes_target}) and max level {final_max_level}.")
 
     return final_graph, final_max_level
+
 
 def load_model_and_config(model_path, device):
     """Loads model state dict and config from checkpoint."""
