@@ -34,10 +34,10 @@ model:
 train:
   batch_size: 32
   lr: 0.001
-  steps: 50000
+  steps: 100000
   print_iter: 100
   checkpoint_iter: 5000
-  checkpoint_dir: 'small_lstm_checkpoints'
-  log_dir: 'small_lstm_logs'
+  checkpoint_dir: 'long_small_lstm_checkpoints'
+  log_dir: 'long_small_lstm_logs'
   lr_schedule_milestones: [10000, 20000, 30000, 40000]
   lr_schedule_gamma: 0.3
