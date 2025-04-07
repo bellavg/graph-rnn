@@ -1,0 +1,42 @@
+data:
+  dataset_type: 'aig-directed-multiclass'
+  graph_file: 'dataset/inputs8_outputs8max_nodes128max.pkl'
+  use_bfs: false
+  max_graphs: null
+
+model:
+  mode: 'directed-multiclass'
+  edge_model: 'mlp' # Use 'mlp'
+
+  GraphRNN:
+    use_attention: false    # <<< Flag set to false
+    embedding_size: 256
+    hidden_size: 512      # Needed for EdgeMLP input_size
+    num_layers: 3
+    edge_feature_len: 3
+    # attention_heads: 8      # Ignored if use_attention: false
+    # attention_dropout: 0.1 # Ignored if use_attention: false
+    output_size: null       # Not needed when edge_model is 'mlp'
+
+  EdgeMLP: # Used settings
+    hidden_size: 512      # Internal hidden size for MLP
+    edge_feature_len: 3
+    # input_size is automatically set from GraphRNN.hidden_size in setup_models
+    # output_size is automatically set from effective_input_size in setup_models
+
+  EdgeRNN: # Ignored settings
+    embedding_size: 128
+    hidden_size: 256
+    num_layers: 3
+    edge_feature_len: 3
+
+train:
+  batch_size: 32
+  lr: 0.0005
+  steps: 50000
+  print_iter: 100
+  checkpoint_iter: 5000
+  checkpoint_dir: 'checkpoints_GraphLevelRNN' # Specific directory
+  log_dir: 'logs_GraphLevelRNNP'            # Specific directory
+  lr_schedule_milestones: [5000, 10000, 15000, 20000, 30000, 40000]
+  lr_schedule_gamma: 0.3

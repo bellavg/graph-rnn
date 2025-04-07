@@ -242,86 +242,86 @@ class EdgeLevelAttentionRNN(nn.Module):
 
         # --- In class EdgeLevelAttentionRNN in model.py ---
 
-        def forward(self, x, x_lens=None, return_logits=False, truth_table=None):
-            # x shape: [batch (packed), seq_len_edge, edge_feature_len]
-            # x_lens shape: [batch (packed)] (tensor of actual edge sequence lengths)
-            # truth_table shape: [batch (packed), tt_size] (if used)
-            assert self.hidden is not None, "Hidden state not set for EdgeLevelAttentionRNN!"
-            device = x.device  # Get device from input tensor
+    def forward(self, x, x_lens=None, return_logits=False, truth_table=None):
+        # x shape: [batch (packed), seq_len_edge, edge_feature_len]
+        # x_lens shape: [batch (packed)] (tensor of actual edge sequence lengths)
+        # truth_table shape: [batch (packed), tt_size] (if used)
+        assert self.hidden is not None, "Hidden state not set for EdgeLevelAttentionRNN!"
+        device = x.device  # Get device from input tensor
 
-            # 1. Embed edge features
-            embedded_x = self.relu(self.linear_in(x))  # [batch, seq_len_edge, embedding_size]
-            batch_size, seq_len_edge, _ = embedded_x.shape  # Get dimensions after embedding
+        # 1. Embed edge features
+        embedded_x = self.relu(self.linear_in(x))  # [batch, seq_len_edge, embedding_size]
+        batch_size, seq_len_edge, _ = embedded_x.shape  # Get dimensions after embedding
 
-            # --- 2. Create Padding Mask ---
-            padding_mask = None
-            if x_lens is not None:
-                # Ensure x_lens is a tensor on the correct device
-                if not isinstance(x_lens, torch.Tensor):
-                    # NOTE: If x_lens comes from pack_padded_sequence's batch_sizes,
-                    # it needs careful handling. Assuming x_lens is passed correctly
-                    # corresponding to the batch dimension of x.
-                    x_lens_tensor = torch.tensor(x_lens, dtype=torch.long, device=device)
-                else:
-                    x_lens_tensor = x_lens.to(device)
-
-                # Create mask: True for positions >= length
-                max_len = seq_len_edge  # Use seq dim size from embedded_x
-                indices = torch.arange(max_len, device=device).expand(batch_size, max_len)  # [batch, seq_len_edge]
-                padding_mask = indices >= x_lens_tensor.unsqueeze(
-                    1)  # [batch, seq_len_edge] -> True where index >= length
-
-            # --- 3. Apply Self-Attention over edge sequence ---
-            attn_output, _ = self.self_attention(
-                query=embedded_x,
-                key=embedded_x,
-                value=embedded_x,
-                key_padding_mask=padding_mask  # <<< Pass the mask here
-            )
-            attended_edges = embedded_x + self.attention_dropout_layer(attn_output)
-            attended_edges_norm = self.attention_norm(attended_edges)
-            # --- End Attention ---
-
-            # 4. Condition on Truth Table (if enabled) - AFTER attention
-            gru_input = attended_edges_norm
-            if self.use_conditioning and truth_table is not None and self.tt_embedding is not None:
-                truth_table = truth_table.to(gru_input.device)
-                tt_emb = self.tt_embedding(truth_table)
-                tt_emb_expanded = tt_emb.unsqueeze(1).expand(-1, seq_len_edge, -1)
-                gru_input = torch.cat((gru_input, tt_emb_expanded), dim=2)
-
-            # 5. Pack sequence (if lengths provided)
-            # Note: Packing *after* attention here. If you pack *before* attention,
-            # the masking logic would need adjustment.
-            target_padded_length = gru_input.shape[1]
-            if x_lens is not None:
-                x_lens_cpu = x_lens if isinstance(x_lens, torch.Tensor) else torch.tensor(x_lens)
-                x_lens_cpu = x_lens_cpu.cpu()
-                try:
-                    gru_input = pack_padded_sequence(gru_input, x_lens_cpu, batch_first=True, enforce_sorted=False)
-                except RuntimeError as e:
-                    print(f"Error packing sequence in EdgeLevelAttentionRNN: {e}")
-
-            # 6. Process through GRU
-            gru_output_packed, self.hidden = self.gru(gru_input, self.hidden)
-
-            # 7. Unpack sequence
-            gru_output = gru_output_packed
-            if x_lens is not None:
-                try:
-                    gru_output, _ = pad_packed_sequence(gru_output_packed, batch_first=True,
-                                                        total_length=target_padded_length)
-                except RuntimeError as e:
-                    print(f"Error unpacking sequence in EdgeLevelAttentionRNN: {e}")
-
-            # 8. Output layers
-            out = self.relu(self.linear_out1(gru_output))
-            logits = self.linear_out2(out)
-
-            if not return_logits:
-                return self.sigmoid(logits)
+        # --- 2. Create Padding Mask ---
+        padding_mask = None
+        if x_lens is not None:
+            # Ensure x_lens is a tensor on the correct device
+            if not isinstance(x_lens, torch.Tensor):
+                # NOTE: If x_lens comes from pack_padded_sequence's batch_sizes,
+                # it needs careful handling. Assuming x_lens is passed correctly
+                # corresponding to the batch dimension of x.
+                x_lens_tensor = torch.tensor(x_lens, dtype=torch.long, device=device)
             else:
-                return logits
+                x_lens_tensor = x_lens.to(device)
+
+            # Create mask: True for positions >= length
+            max_len = seq_len_edge  # Use seq dim size from embedded_x
+            indices = torch.arange(max_len, device=device).expand(batch_size, max_len)  # [batch, seq_len_edge]
+            padding_mask = indices >= x_lens_tensor.unsqueeze(
+                1)  # [batch, seq_len_edge] -> True where index >= length
+
+        # --- 3. Apply Self-Attention over edge sequence ---
+        attn_output, _ = self.self_attention(
+            query=embedded_x,
+            key=embedded_x,
+            value=embedded_x,
+            key_padding_mask=padding_mask  # <<< Pass the mask here
+        )
+        attended_edges = embedded_x + self.attention_dropout_layer(attn_output)
+        attended_edges_norm = self.attention_norm(attended_edges)
+        # --- End Attention ---
+
+        # 4. Condition on Truth Table (if enabled) - AFTER attention
+        gru_input = attended_edges_norm
+        if self.use_conditioning and truth_table is not None and self.tt_embedding is not None:
+            truth_table = truth_table.to(gru_input.device)
+            tt_emb = self.tt_embedding(truth_table)
+            tt_emb_expanded = tt_emb.unsqueeze(1).expand(-1, seq_len_edge, -1)
+            gru_input = torch.cat((gru_input, tt_emb_expanded), dim=2)
+
+        # 5. Pack sequence (if lengths provided)
+        # Note: Packing *after* attention here. If you pack *before* attention,
+        # the masking logic would need adjustment.
+        target_padded_length = gru_input.shape[1]
+        if x_lens is not None:
+            x_lens_cpu = x_lens if isinstance(x_lens, torch.Tensor) else torch.tensor(x_lens)
+            x_lens_cpu = x_lens_cpu.cpu()
+            try:
+                gru_input = pack_padded_sequence(gru_input, x_lens_cpu, batch_first=True, enforce_sorted=False)
+            except RuntimeError as e:
+                print(f"Error packing sequence in EdgeLevelAttentionRNN: {e}")
+
+        # 6. Process through GRU
+        gru_output_packed, self.hidden = self.gru(gru_input, self.hidden)
+
+        # 7. Unpack sequence
+        gru_output = gru_output_packed
+        if x_lens is not None:
+            try:
+                gru_output, _ = pad_packed_sequence(gru_output_packed, batch_first=True,
+                                                    total_length=target_padded_length)
+            except RuntimeError as e:
+                print(f"Error unpacking sequence in EdgeLevelAttentionRNN: {e}")
+
+        # 8. Output layers
+        out = self.relu(self.linear_out1(gru_output))
+        logits = self.linear_out2(out)
+
+        if not return_logits:
+            return self.sigmoid(logits)
+        else:
+            return logits
 
 
 # --- Original GraphLevelRNN (No Attention) ---
