@@ -346,10 +346,12 @@ def generate_aig(num_nodes_target, node_model, edge_model, effective_m, max_leve
     uses_level_embedding = hasattr(node_model, 'level_embedding') and node_model.level_embedding is not None
     no_real_edge_steps_in_a_row = 0  # Initialize patience counter
 
-    # Determine max generation steps
+    # Determine max generation steps (make it reasonably limited)
     if max_steps is None:
-        # Make max_steps slightly larger to allow patience to trigger before hard limit
-        max_steps = int(num_nodes_target * 2.5) + eos_patience
+        # Set a reasonable upper limit - this was causing the issue!
+        max_steps = min(int(num_nodes_target * 1.5) + eos_patience, num_nodes_target + 10)
+        print(f"Setting max_steps to {max_steps} for target {num_nodes_target} nodes")
+
     if num_nodes_target <= 1:
         return nx.DiGraph(), 0
 
@@ -496,16 +498,15 @@ def generate_aig(num_nodes_target, node_model, edge_model, effective_m, max_leve
             # Do NOT pop the last vector here, it wasn't a clean EOS
             break
 
-        # 4. Check target node count
-        # Stop *after* adding the target node index
+        # 4. Check target node count - THIS IS IMPORTANT!
+        # We want to stop when we've generated num_nodes_target nodes (which means i = num_nodes_target - 1)
         if current_node_idx >= num_nodes_target - 1:
-            # Let loop continue if target is reached exactly, break on next iteration if needed
-            pass  # Allow loop to potentially finish via EOS/Patience/MaxSteps
+            print(f"INFO: Reached target node count ({num_nodes_target}) at step {i+1}. Stopping generation.")
+            break  # Stop immediately when we hit the target
 
         # 5. Max steps reached (handled by loop limit)
         if i == max_steps - 1:
              print(f"INFO: Reached max_steps ({max_steps}). Stopping generation.")
-
 
     # --- Final Graph Construction ---
     final_graph = aig_seq_to_nx(list_adj_vecs_sampled, NUM_EDGE_FEATURES)
