@@ -9,7 +9,7 @@
 set -e  # Exit immediately if a command exits with a non-zero status
 
 # --- Script Configuration ---
-BASE_DIR=$(pwd)
+BASE_DIR="./monday"
 SCRIPT_DIR="${BASE_DIR}/src"  # Adjust if needed
 DEBUG_SCRIPT="${SCRIPT_DIR}/all_gen_eval.py"
 RUNS_DIR="${BASE_DIR}/monday_runs"
@@ -18,7 +18,7 @@ PLOTS_BASE_DIR="${BASE_DIR}/current_evaluation_plots"
 
 # --- Parameters for the Python Script ---
 NUM_GRAPHS_PER_CHECKPOINT=10
-NUM_PLOTS_TO_SAVE=0
+NUM_PLOTS_TO_SAVE=1
 TARGET_NODES=64
 SORT_PLOTS_BY="nodes"
 FORCE_MAX_NODES=64

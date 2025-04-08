@@ -221,6 +221,37 @@ def get_checkpoint_step(filename):
 
 
 # --- Main Execution Logic ---
+# src/all_gen_eval.py
+
+# --- Ensure these imports are present at the top of the file ---
+import argparse
+import os
+import glob
+import sys
+import torch
+import networkx as nx
+import re
+import numpy as np
+import pandas as pd
+import time
+import traceback
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+import importlib.util
+import logging
+
+# Assuming the dynamic import functions and module loading happened before this main function
+# Ensure the necessary functions are imported correctly, including the new one:
+# from aig_evaluate import (calculate_paper_validity,
+#                           calculate_extensive_validity, infer_node_types,
+#                           calculate_pi_po_connectivity) # <-- Ensure this is imported
+# from aig_generate import generate_aig, load_model_and_config, mlp_edge_gen_aig, rnn_edge_gen_aig
+# from aig_dataset import _calculate_levels, EDGE_TYPES, NUM_EDGE_FEATURES
+# from utils import setup_models
+# from model import EdgeLevelMLP, EdgeLevelRNN, EdgeLevelAttentionRNN, EdgeLevelLSTM, EdgeLevelAttentionLSTM # Add specific model imports if needed by isinstance checks
+
+
+# --- Main Execution Logic ---
 def main():
     parser = argparse.ArgumentParser(description="Generate and Evaluate AIGs from Trained Models")
     # --- Input/Output ---
@@ -230,7 +261,6 @@ def main():
     # --- Generation Parameters ---
     parser.add_argument('-n', '--num_graphs', type=int, default=100, help='Number of AIGs to generate per model')
     parser.add_argument('--nodes_target', type=int, default=64, help='Target number of nodes for generated AIGs')
-    # MODIFIED: Removed --temp, --try_temps. Added --temperatures
     parser.add_argument('--temperatures', type=float, nargs='+', default=[0.8, 1.0, 1.2], help='List of temperatures to try for generation')
     parser.add_argument('--max_gen_steps', type=int, default=None, help='Optional max generation steps per graph')
     parser.add_argument('--patience', type=int, default=10, help='Patience for stopping generation if no edges are added')
@@ -248,9 +278,7 @@ def main():
     parser.add_argument('--plot_sort_by', type=str, default='nodes', choices=['nodes', 'level'], help='Sort criteria for best plots')
     # --- Debugging ---
     parser.add_argument('--debug', action='store_true', help='Enable detailed debug output')
-    # Keep debug_script argument if called from another script
-    parser.add_argument('--debug_script', type=str, default=__file__, help=argparse.SUPPRESS)
-
+    parser.add_argument('--debug_script', type=str, default=__file__, help=argparse.SUPPRESS) # Keep if needed
 
     args = parser.parse_args()
 
@@ -292,7 +320,7 @@ def main():
         # Filter by num_checkpoints if specified
         if args.num_checkpoints is not None and args.num_checkpoints > 0:
             logger.info(f"Found {len(all_checkpoint_paths)} total checkpoints. Selecting latest {args.num_checkpoints}.")
-            all_checkpoint_paths.sort(key=get_checkpoint_step, reverse=True)
+            all_checkpoint_paths.sort(key=get_checkpoint_step, reverse=True) # Make sure get_checkpoint_step is defined
             checkpoint_paths_to_evaluate = all_checkpoint_paths[:args.num_checkpoints]
         else:
             checkpoint_paths_to_evaluate = all_checkpoint_paths
@@ -342,7 +370,7 @@ def main():
             logger.info(f"  Using training params: max_nodes={max_n_train}, max_level={max_l_train} ({config_source_msg})")
 
             # --- Setup Models ---
-            # Using the standard setup_models from utils - assuming it handles config structure
+            # Make sure 'model_module' refers to your imported model module
             node_model_gen, edge_model_gen, _ = setup_models(loaded_config, device, max_n_train, max_l_train)
             logger.info(f"  Node model type: {type(node_model_gen).__name__}")
             logger.info(f"  Edge model type: {type(edge_model_gen).__name__}")
@@ -354,14 +382,16 @@ def main():
 
             # --- Select Edge Function ---
             edge_func = None
+            # Ensure model_module is defined and refers to your imported model definitions
             if isinstance(edge_model_gen, model_module.EdgeLevelMLP):
                 edge_func = mlp_edge_gen_aig
                 logger.info("  Using MLP edge generation function")
             elif any(base_name in type(edge_model_gen).__name__.lower() for base_name in ['rnn', 'lstm', 'gru']):
-                edge_func = rnn_edge_gen_aig
-                logger.info("  Using RNN/LSTM edge generation function")
+                 edge_func = rnn_edge_gen_aig
+                 logger.info("  Using RNN/LSTM edge generation function")
             else:
-                raise ValueError(f"Could not determine edge function for model type '{type(edge_model_gen).__name__}'")
+                 raise ValueError(f"Could not determine edge function for model type '{type(edge_model_gen).__name__}'")
+
 
             effective_m_gen = max(1, max_n_train - 1)
             logger.info(f"  Effective M for generation: {effective_m_gen}")
@@ -374,8 +404,8 @@ def main():
 
             with tqdm(total=args.num_graphs, desc=f"  Generating {model_basename}", leave=False, disable=None) as pbar:
                 for i in range(args.num_graphs):
-                    # Call the modified generate_aig which handles the temperature list internally
-                    gen_graph, gen_max_level = generate_aig(
+                    # Generate graph using generate_aig (which tries multiple temperatures)
+                    gen_graph, gen_max_level = generate_aig( # generate_aig returns the best graph found across temps
                         num_nodes_target=args.nodes_target,
                         node_model=node_model_gen,
                         edge_model=edge_model_gen,
@@ -383,104 +413,217 @@ def main():
                         max_level_model=max_l_train,
                         edge_gen_fn=edge_func,
                         device=device,
-                        temperatures=temps_to_try, # Pass the list
+                        temperatures=temps_to_try, # Pass the list of temperatures
                         max_steps=args.max_gen_steps,
                         eos_patience=args.patience,
                         debug=args.debug
                     )
 
-                    # --- Clean and Analyze ---
+                    # --- Analyze BEFORE cleaning isolates ---
+                    initial_analysis_results = {}
+                    paper_val_initial = float('nan') # Default to NaN
+                    is_structurally_valid_initial = False
+                    if gen_graph is not None and gen_graph.number_of_nodes() > 0:
+                        try:
+                            # Perform structural checks first on the raw generated graph
+                            is_dag_initial = nx.is_directed_acyclic_graph(gen_graph)
+                            inferred_types_initial = infer_node_types(gen_graph)
+                            # Run extensive check focusing on structure (connectivity maybe later)
+                            extensive_val_details_initial = calculate_extensive_validity(gen_graph, check_connectivity=False) # Check structure first
+                            paper_val_initial = calculate_paper_validity(gen_graph) # Paper validity on raw graph
+                            # Structural validity depends on DAG and the structure-related checks in extensive_validity
+                            is_structurally_valid_initial = is_dag_initial and \
+                                                            extensive_val_details_initial.get("no_self_loops", False) and \
+                                                            extensive_val_details_initial.get("has_pis", False) and \
+                                                            extensive_val_details_initial.get("has_ands", False) and \
+                                                            extensive_val_details_initial.get("has_pos", False) and \
+                                                            extensive_val_details_initial.get("correct_fanin", False)
+
+
+                            # Store results
+                            initial_analysis_results['is_structurally_valid'] = is_structurally_valid_initial
+                            initial_analysis_results['paper_validity_initial'] = paper_val_initial
+                            initial_analysis_results['extensive_details_initial'] = extensive_val_details_initial # Store details if needed
+
+                        except Exception as e_analyze_initial:
+                            logger.error(f"Error during initial analysis for graph {i}: {e_analyze_initial}")
+                            initial_analysis_results['is_structurally_valid'] = False
+                            initial_analysis_results['paper_validity_initial'] = float('nan')
+
+
+                    # --- Clean: Remove Isolated Nodes ---
                     g_cleaned = gen_graph
+                    num_nodes_before_cleaning = 0
                     if gen_graph is not None: # Check if graph generation succeeded
+                        num_nodes_before_cleaning = gen_graph.number_of_nodes()
                         isolates = list(nx.isolates(gen_graph))
                         if isolates:
+                            logger.debug(f"Graph {i}: Removing {len(isolates)} isolated nodes: {isolates}")
                             nodes_to_keep = list(set(gen_graph.nodes()) - set(isolates))
                             g_cleaned = gen_graph.subgraph(nodes_to_keep).copy() if nodes_to_keep else nx.DiGraph()
+                        else:
+                             g_cleaned = gen_graph # No isolates to remove, use original (still copy if mutable operations planned)
+                             if g_cleaned is not None: g_cleaned = g_cleaned.copy() # Ensure copy if further modifications happen
 
-                    cleaned_node_count = g_cleaned.number_of_nodes()
-                    cleaned_edge_count = g_cleaned.number_of_edges()
-                    final_max_level_cleaned, paper_val, is_extensively_valid = -1, 0.0, False
+
+                    # --- Analyze Cleaned Graph ---
+                    cleaned_node_count = g_cleaned.number_of_nodes() if g_cleaned else 0
+                    cleaned_edge_count = g_cleaned.number_of_edges() if g_cleaned else 0
+                    final_max_level_cleaned, paper_val_cleaned, is_extensively_valid_cleaned = -1, float('nan'), False
+                    pi_po_conn_results = {'percent_pis_to_pos': float('nan'), 'percent_pos_from_pis': float('nan')} # Default NaN
 
                     if cleaned_node_count > 0:
                         try:
-                            if nx.is_directed_acyclic_graph(g_cleaned):
+                            is_dag_cleaned = nx.is_directed_acyclic_graph(g_cleaned)
+                            if is_dag_cleaned:
                                 _, final_max_level_cleaned = _calculate_levels(g_cleaned)
-                            else: final_max_level_cleaned = -2
-                            inferred_types_cleaned = infer_node_types(g_cleaned)
-                            g_cleaned.graph['_inferred_types_cleaned'] = inferred_types_cleaned
-                            paper_val = calculate_paper_validity(g_cleaned)
-                            extensive_val_details = calculate_extensive_validity(g_cleaned, check_connectivity=True)
-                            is_extensively_valid = extensive_val_details.get("overall_valid", False)
-                        except Exception as e_analyze:
-                            logger.error(f"Error during analysis for graph {i}: {e_analyze}")
-                            final_max_level_cleaned = -3
-                            paper_val = np.nan
-                            is_extensively_valid = False
+                            else:
+                                final_max_level_cleaned = -2 # Not a DAG after cleaning
 
+                            inferred_types_cleaned = infer_node_types(g_cleaned)
+                            # Store inferred types on the graph object itself if needed for visualization
+                            g_cleaned.graph['_inferred_types_cleaned'] = inferred_types_cleaned
+                            paper_val_cleaned = calculate_paper_validity(g_cleaned)
+
+                            # Run extensive validity on cleaned graph, NOW check connectivity
+                            extensive_val_details_cleaned = calculate_extensive_validity(g_cleaned, check_connectivity=True)
+                            # Overall validity now includes DAG check on cleaned graph and connectivity
+                            is_extensively_valid_cleaned = is_dag_cleaned and extensive_val_details_cleaned.get("overall_valid", False)
+
+
+                            # Calculate PI-PO connectivity on the cleaned graph
+                            pi_po_conn_results = calculate_pi_po_connectivity(g_cleaned)
+
+                        except Exception as e_analyze_cleaned:
+                            logger.error(f"Error during cleaned graph analysis for graph {i}: {e_analyze_cleaned}")
+                            final_max_level_cleaned = -3 # Analysis error
+                            paper_val_cleaned = float('nan')
+                            is_extensively_valid_cleaned = False
+                            # pi_po_conn_results remains NaN default
+
+                    # Store all desired metrics
                     all_graphs_data.append({
-                        "graph": g_cleaned, "analysis_index": i,
-                        "is_extensively_valid": is_extensively_valid, "paper_validity": paper_val,
-                        "node_count": cleaned_node_count, "edge_count": cleaned_edge_count,
-                        "max_level": final_max_level_cleaned,
+                        "graph": g_cleaned, # Store the potentially cleaned graph object for plotting
+                        "analysis_index": i,
+                        "is_initially_structurally_valid": initial_analysis_results.get('is_structurally_valid', False),
+                        "is_extensively_valid_cleaned": is_extensively_valid_cleaned,
+                        "paper_validity_initial": initial_analysis_results.get('paper_validity_initial', float('nan')),
+                        "paper_validity_cleaned": paper_val_cleaned,
+                        "node_count_initial": num_nodes_before_cleaning,
+                        "node_count_cleaned": cleaned_node_count,
+                        "edge_count_cleaned": cleaned_edge_count,
+                        "max_level_cleaned": final_max_level_cleaned,
+                        "percent_pis_to_pos": pi_po_conn_results.get('percent_pis_to_pos', float('nan')),
+                        "percent_pos_from_pis": pi_po_conn_results.get('percent_pos_from_pis', float('nan')),
                     })
                     pbar.update(1) # End of loop for one graph generation attempt
 
             # --- Aggregate and Report Results for Model ---
             num_analyzed = len(all_graphs_data)
             logger.info(f"  Finished generation for {model_basename}. Analyzing {num_analyzed} results...")
-            # ... (Aggregation and logging logic - same as previous response) ...
+
             if num_analyzed > 0:
-                all_node_counts = [d["node_count"] for d in all_graphs_data]
-                all_edge_counts = [d["edge_count"] for d in all_graphs_data]
-                all_valid_levels = [d["max_level"] for d in all_graphs_data if d["max_level"] >= 0]
-                all_paper_validities = [d["paper_validity"] for d in all_graphs_data]
-                all_extensive_valid = [d["is_extensively_valid"] for d in all_graphs_data]
+                # Calculate averages, handling potential NaNs using nanmean
+                avg_nodes_init = np.nanmean([d["node_count_initial"] for d in all_graphs_data])
+                avg_nodes_cleaned = np.nanmean([d["node_count_cleaned"] for d in all_graphs_data])
+                avg_edges_cleaned = np.nanmean([d["edge_count_cleaned"] for d in all_graphs_data])
+                valid_levels = [d["max_level_cleaned"] for d in all_graphs_data if d["max_level_cleaned"] >= 0]
+                avg_level_cleaned = np.nanmean(valid_levels) if valid_levels else float('nan') # Use nanmean here too
+                max_level_cleaned = np.nanmax(valid_levels) if valid_levels else -1 # Use nanmax
 
-                avg_nodes = np.mean(all_node_counts) if all_node_counts else 0.0
-                avg_edges = np.mean(all_edge_counts) if all_edge_counts else 0.0
-                avg_max_level = np.mean(all_valid_levels) if all_valid_levels else 0.0
-                max_max_level = np.max(all_valid_levels) if all_valid_levels else 0.0
-                avg_paper_validity = np.nanmean(all_paper_validities) if all_paper_validities else 0.0
-                percent_extensive_valid = np.mean(all_extensive_valid) * 100.0 if all_extensive_valid else 0.0
+                percent_init_struct_valid = np.nanmean([d["is_initially_structurally_valid"] for d in all_graphs_data]) * 100.0
+                percent_cleaned_ext_valid = np.nanmean([d["is_extensively_valid_cleaned"] for d in all_graphs_data]) * 100.0
+                avg_paper_validity_init = np.nanmean([d["paper_validity_initial"] for d in all_graphs_data])
+                avg_paper_validity_cleaned = np.nanmean([d["paper_validity_cleaned"] for d in all_graphs_data])
 
+                avg_pis_to_pos = np.nanmean([d["percent_pis_to_pos"] for d in all_graphs_data])
+                avg_pos_from_pis = np.nanmean([d["percent_pos_from_pis"] for d in all_graphs_data])
+
+                # Store aggregated results
                 results_list.append({
                     "model": model_basename, "num_generated": args.num_graphs, "num_analyzed": num_analyzed,
-                    "target_nodes": args.nodes_target, "avg_nodes": f"{avg_nodes:.2f}",
-                    "avg_edges": f"{avg_edges:.2f}", "avg_paper_validity": f"{avg_paper_validity:.4f}",
-                    "percent_extensive_valid": f"{percent_extensive_valid:.2f}",
-                    "avg_max_level": f"{avg_max_level:.2f}", "max_max_level": f"{max_max_level:.0f}",
-                    "temperatures": ','.join(map(str, args.temperatures)), "patience": args.patience,
+                    "target_nodes": args.nodes_target,
+                    "avg_nodes_initial": f"{avg_nodes_init:.2f}",
+                    "avg_nodes_cleaned": f"{avg_nodes_cleaned:.2f}",
+                    "avg_edges_cleaned": f"{avg_edges_cleaned:.2f}",
+                    "percent_init_struct_valid": f"{percent_init_struct_valid:.2f}",
+                    "percent_cleaned_ext_valid": f"{percent_cleaned_ext_valid:.2f}",
+                    "avg_paper_validity_init": f"{avg_paper_validity_init:.4f}",
+                    "avg_paper_validity_cleaned": f"{avg_paper_validity_cleaned:.4f}",
+                    "avg_percent_pis_to_pos": f"{avg_pis_to_pos:.2f}",
+                    "avg_percent_pos_from_pis": f"{avg_pos_from_pis:.2f}",
+                    "avg_max_level_cleaned": f"{avg_level_cleaned:.2f}",
+                    "max_max_level_cleaned": f"{max_level_cleaned:.0f}",
+                    "temperatures": ','.join(map(str, args.temperatures)),
+                    "patience": args.patience,
                 })
-                logger.info(f"    Avg Nodes (cleaned): {avg_nodes:.2f}")
-                logger.info(f"    Avg Edges (cleaned): {avg_edges:.2f}")
-                logger.info(f"    Avg Paper Validity: {avg_paper_validity:.4f}")
-                logger.info(f"    Extensively Valid: {percent_extensive_valid:.2f}% ({sum(all_extensive_valid)}/{num_analyzed})")
-                logger.info(f"    Avg Max Level (valid DAGs): {avg_max_level:.2f}")
-                logger.info(f"    Max Max Level (valid DAGs): {max_max_level}")
 
-                # --- Plotting ---
+                # Log aggregated results
+                logger.info(f"    Avg Nodes (Initial): {avg_nodes_init:.2f}")
+                logger.info(f"    Avg Nodes (Cleaned): {avg_nodes_cleaned:.2f}")
+                logger.info(f"    Avg Edges (Cleaned): {avg_edges_cleaned:.2f}")
+                logger.info(f"    Initial Struct Valid: {percent_init_struct_valid:.2f}%")
+                logger.info(f"    Cleaned Extens Valid: {percent_cleaned_ext_valid:.2f}%")
+                logger.info(f"    Avg Paper Valid (Init): {avg_paper_validity_init:.4f}")
+                logger.info(f"    Avg Paper Valid (Clean): {avg_paper_validity_cleaned:.4f}")
+                logger.info(f"    Avg % PIs->POs (Clean): {avg_pis_to_pos:.2f}%")
+                logger.info(f"    Avg % POs<-PIs (Clean): {avg_pos_from_pis:.2f}%")
+                logger.info(f"    Avg Max Level (Clean, DAGs): {avg_level_cleaned:.2f}")
+                logger.info(f"    Max Max Level (Clean, DAGs): {max_level_cleaned}")
+
+
+                # --- Plotting (operates on cleaned valid graphs) ---
                 if args.save_plots:
-                     # ... (Plotting logic - same as previous response) ...
-                    valid_graphs_data = [d for d in all_graphs_data if d["is_extensively_valid"]]
-                    logger.info(f"  Found {len(valid_graphs_data)} extensively valid graphs for plotting.")
+                    # Select graphs that passed the *final* extensive validity check on the cleaned graph
+                    valid_graphs_data = [d for d in all_graphs_data if d["is_extensively_valid_cleaned"]]
+                    logger.info(f"  Found {len(valid_graphs_data)} extensively valid cleaned graphs for plotting.")
                     if valid_graphs_data:
-                        sort_key = "node_count" if args.plot_sort_by == "nodes" else "max_level"
-                        valid_graphs_data_sorted = sorted(valid_graphs_data, key=lambda x: x.get(sort_key, 0), reverse=True)
+                        # Sort based on cleaned metrics
+                        sort_key = "node_count_cleaned" if args.plot_sort_by == "nodes" else "max_level_cleaned"
+                        # Handle potential NaN or None values in sorting key
+                        valid_graphs_data_sorted = sorted(
+                            valid_graphs_data,
+                            key=lambda x: x.get(sort_key, 0) if pd.notna(x.get(sort_key)) else 0, # Default to 0 if key missing/NaN
+                            reverse=True
+                        )
                         num_plots_to_save = min(len(valid_graphs_data_sorted), args.num_plots)
-                        logger.info(f"  Saving plots for top {num_plots_to_save} valid graphs...")
+                        logger.info(f"  Saving plots for top {num_plots_to_save} valid cleaned graphs (sorted by {args.plot_sort_by})...")
                         for rank, graph_data in enumerate(valid_graphs_data_sorted[:num_plots_to_save]):
-                            plot_filename = os.path.join(args.plot_dir, f"{model_basename}_valid_{args.plot_sort_by}_rank{rank + 1}_idx{graph_data['analysis_index']}.png")
-                            visualize_aig_structure(graph_data["graph"], plot_filename)
+                            # Use cleaned graph for plotting
+                            plot_filename = os.path.join(args.plot_dir, f"{model_basename}_valid_cleaned_{args.plot_sort_by}_rank{rank + 1}_idx{graph_data['analysis_index']}.png")
+                            # Make sure visualize_aig_structure function is defined and available
+                            visualize_aig_structure(graph_data["graph"], plot_filename) # Pass the graph object stored in dict
                         logger.info(f"  Finished saving plots.")
-                    else: logger.info("  No extensively valid graphs found to plot.")
+                    else:
+                        logger.info("  No extensively valid cleaned graphs found to plot.")
             else:
                 logger.warning("    No graphs were successfully generated or analyzed for this model.")
-                results_list.append({"model": model_basename, "num_generated": args.num_graphs, "num_analyzed": 0, **{k:"N/A" for k in ["target_nodes", "avg_nodes", "avg_edges", "avg_paper_validity", "percent_extensive_valid", "avg_max_level", "max_max_level", "temperatures", "patience"]}})
+                # Add empty/error result row with new columns
+                results_list.append({
+                    "model": model_basename, "num_generated": args.num_graphs, "num_analyzed": 0,
+                    **{k:"N/A" for k in [
+                        "target_nodes", "avg_nodes_initial", "avg_nodes_cleaned", "avg_edges_cleaned",
+                        "percent_init_struct_valid", "percent_cleaned_ext_valid",
+                        "avg_paper_validity_init", "avg_paper_validity_cleaned",
+                        "avg_percent_pis_to_pos", "avg_percent_pos_from_pis",
+                        "avg_max_level_cleaned", "max_max_level_cleaned",
+                        "temperatures", "patience"]}
+                    })
 
         except Exception as model_e:
             logger.error(f"  FATAL Error processing model {model_path}: {model_e}")
             logger.error(traceback.format_exc())
-            results_list.append({"model": model_basename, "num_generated": 0, "num_analyzed": 0, "error": str(model_e)})
+            # Add error row with new columns marked N/A
+            results_list.append({
+                "model": model_basename, "num_generated": 0, "num_analyzed": 0, "error": str(model_e),
+                 **{k:"N/A" for k in [
+                        "target_nodes", "avg_nodes_initial", "avg_nodes_cleaned", "avg_edges_cleaned",
+                        "percent_init_struct_valid", "percent_cleaned_ext_valid",
+                        "avg_paper_validity_init", "avg_paper_validity_cleaned",
+                        "avg_percent_pis_to_pos", "avg_percent_pos_from_pis",
+                        "avg_max_level_cleaned", "max_max_level_cleaned",
+                        "temperatures", "patience"]}
+                })
             continue # Skip to the next model
 
         finally:
@@ -491,12 +634,16 @@ def main():
     # --- Save Final Results ---
     if results_list:
         results_df = pd.DataFrame(results_list)
-        cols_order = [ # Define desired column order
+        # Define desired column order including new metrics
+        cols_order = [
             "model", "num_generated", "num_analyzed", "target_nodes", "temperatures", "patience",
-            "avg_nodes", "avg_edges", "avg_paper_validity", "percent_extensive_valid",
-            "avg_max_level", "max_max_level", "error"
+            "avg_nodes_initial", "avg_nodes_cleaned", "avg_edges_cleaned",
+            "percent_init_struct_valid", "percent_cleaned_ext_valid",
+            "avg_paper_validity_init", "avg_paper_validity_cleaned",
+            "avg_percent_pis_to_pos", "avg_percent_pos_from_pis",
+            "avg_max_level_cleaned", "max_max_level_cleaned", "error"
         ]
-        final_cols = [col for col in cols_order if col in results_df.columns]
+        final_cols = [col for col in cols_order if col in results_df.columns] # Ensure only existing columns are selected
         results_df = results_df[final_cols]
         try:
             results_df.to_csv(args.output_csv, index=False)
@@ -504,12 +651,12 @@ def main():
         except Exception as e:
             logger.error(f"\nError saving results to CSV: {e}")
             logger.error("\nResults DataFrame:")
+            # Use pandas to_string for potentially better formatting if logger truncates
             logger.error(results_df.to_string())
     else:
         logger.error("\nNo models were successfully evaluated.")
 
     return 0
-
 
 if __name__ == "__main__":
     # Optional: Increase recursion depth if needed for deep graph processing
