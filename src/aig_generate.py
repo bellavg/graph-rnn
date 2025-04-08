@@ -237,6 +237,7 @@ def rnn_edge_gen_aig(edge_rnn, h, num_edges_to_sample, effective_m,
     return adj_vec_sampled
 
 
+# src/aig_generate.py
 def mlp_edge_gen_aig(edge_mlp, h, num_edges_to_sample, effective_m, temperature=1.0, device='cpu', debug=False, current_node_idx_for_log=None):
     """
     Generates AIG edges for one node using MLP method with categorical sampling.
@@ -251,30 +252,27 @@ def mlp_edge_gen_aig(edge_mlp, h, num_edges_to_sample, effective_m, temperature=
     adj_vec_sampled[:, :, :, EDGE_TYPES["NONE"]] = 1.0
 
     try:
-        all_logits = edge_mlp(h, return_logits=True) # Expects h shape [1, 1, node_hidden_size]
+        all_logits = edge_mlp(h, return_logits=True)
         if all_logits is None:
             logger.error("ERROR: edge_mlp returned None")
             return adj_vec_sampled
 
-        logits_for_sampling = all_logits.squeeze(0).squeeze(0) # Shape: [output_m, features=3]
+        logits_for_sampling = all_logits.squeeze(0).squeeze(0)
 
         if logits_for_sampling.shape[0] < num_edges_to_sample:
             logger.warning(f"Not enough logits ({logits_for_sampling.shape[0]}) for sampling {num_edges_to_sample}. Using available.")
             num_edges_to_sample = logits_for_sampling.shape[0]
 
-        if num_edges_to_sample <= 0: # Check again after potential reduction
+        if num_edges_to_sample <= 0:
              return adj_vec_sampled
 
         relevant_logits = logits_for_sampling[:num_edges_to_sample, :]
 
-        # --- DIAGNOSTIC LOGGING ---
         if debug and current_node_idx_for_log is not None and current_node_idx_for_log <= 2:
             logger.debug(f"  MLP Edge Logits (Node {current_node_idx_for_log}, Shape={relevant_logits.shape}):")
-            # Log logits for first few potential predecessors
             for k_log in range(min(num_edges_to_sample, 5)):
                 source_node_log_idx = (current_node_idx_for_log - 1 - k_log)
                 logger.debug(f"    k={k_log} (From={source_node_log_idx}): {relevant_logits[k_log].cpu().numpy()}")
-        # --- END DIAGNOSTIC ---
 
         if torch.isnan(relevant_logits).any() or torch.isinf(relevant_logits).any():
             logger.warning(f"NaN or Inf values detected in MLP logits. Using default edges.")
@@ -285,7 +283,7 @@ def mlp_edge_gen_aig(edge_mlp, h, num_edges_to_sample, effective_m, temperature=
         try:
             scaled_logits = relevant_logits / temperature
             dist = torch.distributions.Categorical(logits=scaled_logits)
-            sampled_type_indices = dist.sample() # Shape: [num_edges_to_sample]
+            sampled_type_indices = dist.sample()
 
             one_hot_sampled = torch.nn.functional.one_hot(
                 sampled_type_indices, num_classes=NUM_EDGE_FEATURES
@@ -293,18 +291,21 @@ def mlp_edge_gen_aig(edge_mlp, h, num_edges_to_sample, effective_m, temperature=
 
             adj_vec_sampled[0, 0, :num_edges_to_sample, :] = one_hot_sampled
 
-            # Ensure not all NONE if num_edges_to_sample > 0
+            # --- Ensure this section is commented out or removed ---
+            # if num_edges_to_sample > 0 and adj_vec_sampled[0, 0, 0, EDGE_TYPES["NONE"]] == 1.0:
+            #     logger.debug(f"  DIAGNOSTIC: Forcing first edge (idx 0) from NONE to REGULAR for node {current_node_idx_for_log}")
+            #     adj_vec_sampled[0, 0, 0, EDGE_TYPES["NONE"]] = 0.0
+            #     adj_vec_sampled[0, 0, 0, EDGE_TYPES["REGULAR"]] = 1.0
+            # --- End section to disable ---
+
+
+            # Optional check: Avoid all-NONE if possible, maybe force one edge?
+            # This is less aggressive than forcing the *first* edge.
             if num_edges_to_sample > 0 and torch.all(one_hot_sampled[:, EDGE_TYPES["NONE"]] == 1.0):
-                adj_vec_sampled[0, 0, 0, EDGE_TYPES["NONE"]] = 0.0
-                adj_vec_sampled[0, 0, 0, EDGE_TYPES["REGULAR"]] = 1.0
-                logger.debug("MLP: Forced first edge to REGULAR to avoid all-NONE.")
-                # --- DIAGNOSTIC: Ensure first edge (index 0) is not NONE if edges were sampled ---
-            if num_edges_to_sample > 0 and adj_vec_sampled[0, 0, 0, EDGE_TYPES["NONE"]] == 1.0:
-                logger.debug(
-                    f"  DIAGNOSTIC: Forcing first edge (idx 0) from NONE to REGULAR for node {current_node_idx_for_log}")
-                adj_vec_sampled[0, 0, 0, EDGE_TYPES["NONE"]] = 0.0
-                adj_vec_sampled[0, 0, 0, EDGE_TYPES["REGULAR"]] = 1.0
-                # --- END DIAGNOSTIC ---
+                 adj_vec_sampled[0, 0, 0, EDGE_TYPES["NONE"]] = 0.0 # Force first potential edge slot
+                 adj_vec_sampled[0, 0, 0, EDGE_TYPES["REGULAR"]] = 1.0 # to be REGULAR
+                 logger.debug("MLP: Forced one edge to REGULAR to avoid all-NONE.")
+
 
         except Exception as e_sample:
             logger.error(f"Error during MLP sampling: {e_sample}. Using default edges.")
@@ -314,7 +315,6 @@ def mlp_edge_gen_aig(edge_mlp, h, num_edges_to_sample, effective_m, temperature=
 
     except Exception as e_outer:
         logger.error(f"Error in mlp_edge_gen_aig: {e_outer}")
-        # Return default (initialized to NONEs)
 
     return adj_vec_sampled
 
