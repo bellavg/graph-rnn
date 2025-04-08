@@ -17,16 +17,14 @@ OUTPUT_BASE_DIR="${BASE_DIR}/current_evaluation_results"
 PLOTS_BASE_DIR="${BASE_DIR}/current_evaluation_plots"
 
 # --- Parameters for the Python Script ---
-NUM_GRAPHS_PER_CHECKPOINT=100
-NUM_PLOTS_TO_SAVE=5
+NUM_GRAPHS_PER_CHECKPOINT=10
+NUM_PLOTS_TO_SAVE=0
 TARGET_NODES=64
 SORT_PLOTS_BY="nodes"
 FORCE_MAX_NODES=64
 FORCE_MAX_LEVEL=13
-NUM_CHECKPOINTS_TO_EVAL=5
-TEMPERATURE=0.8
 MAX_GEN_STEPS=1000
-PATIENCE=10
+PATIENCE=15
 CHECKPOINT_PATTERN="checkpoint-[0-9]*.pth"  # Pattern to match checkpoint files
 
 # --- Setup directories
@@ -84,39 +82,43 @@ validate_checkpoint_dir() {
 
 # --- Function to run evaluation
 run_evaluation() {
-    local ckpt_dir=$1
-    local model_run_name=$2
+        local ckpt_dir=$1
+        local model_run_name=$2
 
-    echo "-----------------------------------------------------"
-    echo "Processing Model Run: $model_run_name, Checkpoint Dir: $ckpt_dir"
+        echo "-----------------------------------------------------"
+        echo "Processing Model Run: $model_run_name, Checkpoint Dir: $ckpt_dir"
 
-    EVAL_OUTPUT_DIR="${OUTPUT_BASE_DIR}/${model_run_name}_eval_${SLURM_JOB_ID}"
-    PLOT_DIR="${PLOTS_BASE_DIR}/${model_run_name}_plots_${SLURM_JOB_ID}"
-    mkdir -p $EVAL_OUTPUT_DIR
-    mkdir -p $PLOT_DIR
+        EVAL_OUTPUT_DIR="${OUTPUT_BASE_DIR}/${model_run_name}_eval_${SLURM_JOB_ID}"
+        PLOT_DIR="${PLOTS_BASE_DIR}/${model_run_name}_plots_${SLURM_JOB_ID}"
+        mkdir -p $EVAL_OUTPUT_DIR
+        mkdir -p $PLOT_DIR
 
-    OUTPUT_CSV="${EVAL_OUTPUT_DIR}/results_summary.csv"
+        OUTPUT_CSV="${EVAL_OUTPUT_DIR}/results_summary.csv"
 
-    echo "  Launching evaluation job for directory: $ckpt_dir"
+        echo "  Launching evaluation job for directory: $ckpt_dir"
+        echo "  Using Temperatures: 1.0 1.5 2.0 2.5" # Indicate new temps
 
-    # Launch the evaluation with comprehensive options
-    python -u $DEBUG_SCRIPT \
-        "$ckpt_dir" \
-        --num_graphs $NUM_GRAPHS_PER_CHECKPOINT \
-        --nodes_target $TARGET_NODES \
-        --output_csv "$OUTPUT_CSV" \
-        --save_plots \
-        --plot_dir "$PLOT_DIR" \
-        --num_plots $NUM_PLOTS_TO_SAVE \
-        --plot_sort_by $SORT_PLOTS_BY \
-        --force_max_nodes_train $FORCE_MAX_NODES \
-        --force_max_level_train $FORCE_MAX_LEVEL \
-        --num_checkpoints $NUM_CHECKPOINTS_TO_EVAL \
-        --temp $TEMPERATURE \
-        --max_gen_steps $MAX_GEN_STEPS \
-        --patience $PATIENCE \
-        --checkpoint_pattern "$CHECKPOINT_PATTERN" \
-        --find_checkpoints
+        # --- MODIFIED PYTHON CALL ---
+        srun python -u $DEBUG_SCRIPT \
+            "$ckpt_dir" \
+            --num_graphs $NUM_GRAPHS_PER_CHECKPOINT \
+            --nodes_target $TARGET_NODES \
+            --output_csv "$OUTPUT_CSV" \
+            --save_plots \
+            --plot_dir "$PLOT_DIR" \
+            --num_plots $NUM_PLOTS_TO_SAVE \
+            --plot_sort_by $SORT_PLOTS_BY \
+            --force_max_nodes_train $FORCE_MAX_NODES \
+            --force_max_level_train $FORCE_MAX_LEVEL \
+            # --num_checkpoints $NUM_CHECKPOINTS_TO_EVAL \ # Removed this line
+            --temperatures 1.0 1.5 2.0 2.5 \                 # Added this line (adjust values as needed)
+            # --temp $TEMPERATURE \                       # Removed this line
+            --max_gen_steps $MAX_GEN_STEPS \
+            --patience $PATIENCE \
+            --debug \                                     # Keep debug if you want logs from all_gen_eval
+            # --try_temps \                               # Removed this line
+            --checkpoint_pattern "$CHECKPOINT_PATTERN" \
+            --find_checkpoints                            # Keep if needed
 
     local exit_code=$?
     if [ $exit_code -ne 0 ]; then
