@@ -16,6 +16,81 @@ except ImportError:
     NODE_TYPES = {"PI": 1, "AND": 2, "PO": 3, "ZERO": 0, "UNKNOWN": -1}
     EDGE_TYPES = {"NONE": 0, "REGULAR": 1, "INVERTED": 2}
 
+
+def calculate_pi_po_connectivity(g: nx.DiGraph) -> Dict[str, float]:
+    """
+    Calculates the percentage of PIs connected to any PO, and the
+    percentage of POs reachable from any PI.
+
+    Args:
+        g: The NetworkX DiGraph to analyze. Should ideally be cleaned of
+           isolated nodes if assessing functional connectivity.
+
+    Returns:
+        A dictionary containing:
+        - 'percent_pis_to_pos': Percentage (0-100) of PI nodes with a path to any PO node.
+        - 'percent_pos_from_pis': Percentage (0-100) of PO nodes reachable from any PI node.
+        Returns {'percent_pis_to_pos': 0.0, 'percent_pos_from_pis': 0.0} if no PIs or POs exist.
+    """
+    results = {'percent_pis_to_pos': 0.0, 'percent_pos_from_pis': 0.0}
+    if not isinstance(g, nx.DiGraph) or g.number_of_nodes() == 0:
+        return results
+
+    # Check if it's a DAG, necessary for reliable path finding often
+    if not nx.is_directed_acyclic_graph(g):
+        print("Warning: Graph is not a DAG, connectivity results may be unreliable.")
+        # Optionally return default results or proceed with caution
+        # return results
+
+    try:
+        inferred_types = infer_node_types(g) # Assumes this function exists in aig_evaluate.py
+        pi_nodes = {n for n, t in inferred_types.items() if t == "PI"}
+        po_nodes = {n for n, t in inferred_types.items() if t == "PO"}
+
+        total_pis = len(pi_nodes)
+        total_pos = len(po_nodes)
+
+        if total_pis == 0 or total_pos == 0:
+            # If no PIs or no POs, connectivity is 0% by definition here
+            return results
+
+        # Calculate % PIs connected TO POs
+        connected_pi_count = 0
+        for pi_node in pi_nodes:
+            has_path_to_po = False
+            for po_node in po_nodes:
+                if nx.has_path(g, pi_node, po_node):
+                    has_path_to_po = True
+                    break # Found a path from this PI to at least one PO
+            if has_path_to_po:
+                connected_pi_count += 1
+        results['percent_pis_to_pos'] = (connected_pi_count / total_pis) * 100.0
+
+        # Calculate % POs reachable FROM PIs
+        reachable_po_count = 0
+        for po_node in po_nodes:
+            is_reachable_from_pi = False
+            for pi_node in pi_nodes:
+                 # Using has_path is generally safer than ancestors for potentially large graphs
+                if nx.has_path(g, pi_node, po_node):
+                    is_reachable_from_pi = True
+                    break # Found a path from at least one PI to this PO
+            if is_reachable_from_pi:
+                reachable_po_count += 1
+        results['percent_pos_from_pis'] = (reachable_po_count / total_pos) * 100.0
+
+    except nx.NetworkXError as e:
+        print(f"NetworkX error during connectivity calculation: {e}")
+        # Return default/error values
+        results = {'percent_pis_to_pos': float('nan'), 'percent_pos_from_pis': float('nan')}
+    except Exception as e:
+        print(f"Unexpected error during connectivity calculation: {e}")
+        results = {'percent_pis_to_pos': float('nan'), 'percent_pos_from_pis': float('nan')}
+
+
+    return results
+
+
 def infer_node_types(g: nx.DiGraph) -> Dict[Any, str]:
     """Infers node types (PI, AND, PO, UNKNOWN, INVALID_FANIN) based on degrees."""
     types = {}

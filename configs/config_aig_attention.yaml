@@ -16,7 +16,7 @@ model:
     hidden_size: 768
     num_layers: 4
     edge_feature_len: 3
-    attention_heads: 12     # Node attention heads
+    attention_heads: 8     # Node attention heads
     attention_dropout: 0.1
     output_size: 256        # MUST match EdgeRNN.hidden_size
 
@@ -27,11 +27,11 @@ model:
     edge_feature_len: 3
 
 train:
-  batch_size: 32
-  lr: 0.0001                # Lower LR suggested for attention
+  batch_size: 64
+  lr: 0.001                # Lower LR suggested for attention
   steps: 75000              # Total training steps
   print_iter: 100
-  checkpoint_iter: 7500
+  checkpoint_iter: 5000
   checkpoint_dir: 'checkpoints/checkpoints_gru_mhsa' # Specific directory
   log_file: 'train_results/logs_gru_mhsa'               # Specific directory
   # lr_schedule_* removed; code uses CosineAnnealingLR

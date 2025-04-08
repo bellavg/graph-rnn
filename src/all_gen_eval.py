@@ -19,6 +19,9 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import importlib.util
 import logging
+from aig_evaluate import (calculate_paper_validity,
+                          calculate_extensive_validity, infer_node_types,
+                          calculate_pi_po_connectivity)
 
 # --- Setup Logging ---
 logging.basicConfig(

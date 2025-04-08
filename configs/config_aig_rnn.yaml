@@ -25,8 +25,8 @@ model:
     edge_feature_len: 3
 
 train:
-  batch_size: 32
-  lr: 0.0005              # Initial Learning Rate
+  batch_size: 64
+  lr: 0.001              # Initial Learning Rate
   steps: 75000            # Total training steps
   print_iter: 100
   checkpoint_iter: 7500

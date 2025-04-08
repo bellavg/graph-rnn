@@ -16,7 +16,7 @@ module load 2024
 module load Anaconda3/2024.06-1
 
 # Activate your environment
-conda activate aig-rnn  # Changed from 'source activate'
+source activate aig-rnn  # Changed from 'source activate'
 
 # Set output directory with job ID
 

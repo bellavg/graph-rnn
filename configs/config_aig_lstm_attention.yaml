@@ -30,10 +30,10 @@ model:
 
 train:
   batch_size: 32
-  lr: 0.0001                # Lower LR suggested for attention
-  steps: 75000              # Total training steps
+  lr: 0.0003                # Lower LR suggested for attention
+  steps: 80000              # Total training steps
   print_iter: 100
-  checkpoint_iter: 7500
+  checkpoint_iter: 5000
   checkpoint_dir: 'checkpoints/checkpoints_lstm_mhsa' # Specific directory
   log_file: 'train_results/logs_lstm_mhsa'               # Specific directory
   # lr_schedule_* removed; code uses CosineAnnealingLR
