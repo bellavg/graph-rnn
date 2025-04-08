@@ -2,7 +2,7 @@
 #SBATCH --job-name=aig-dir-eval
 #SBATCH --partition=gpu_a100
 #SBATCH --gpus=1
-#SBATCH --time=10:00:00
+#SBATCH --time=00:59:00
 #SBATCH --mem=64G
 #SBATCH --output=slurm_logs/aig_dir_eval_%j.out
 
@@ -17,13 +17,13 @@ OUTPUT_BASE_DIR="${BASE_DIR}/monday_evaluation_results"
 PLOTS_BASE_DIR="${BASE_DIR}/current_evaluation_plots"
 
 # --- Parameters for the Python Script ---
-NUM_GRAPHS_PER_CHECKPOINT=10
+NUM_GRAPHS_PER_CHECKPOINT=5
 NUM_PLOTS_TO_SAVE=1
 TARGET_NODES=64
 SORT_PLOTS_BY="nodes"
 FORCE_MAX_NODES=64
 FORCE_MAX_LEVEL=13
-MAX_GEN_STEPS=1000
+MAX_GEN_STEPS=100
 PATIENCE=15
 CHECKPOINT_PATTERN="checkpoint-[0-9]*.pth"  # Pattern to match checkpoint files
 
