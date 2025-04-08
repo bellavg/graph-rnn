@@ -1,7 +1,7 @@
 # Config: Node Attention LSTM + Edge Attention LSTM
 data:
   dataset_type: 'aig-directed-multiclass'
-  graph_file: 'dataset/data.pkl'
+  graph_file: 'dataset/final_data.pkl'
   use_bfs: false
   max_graphs: null
 
