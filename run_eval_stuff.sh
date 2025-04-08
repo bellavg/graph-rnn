@@ -115,8 +115,6 @@ run_evaluation() {
         --temp $TEMPERATURE \
         --max_gen_steps $MAX_GEN_STEPS \
         --patience $PATIENCE \
-        --debug \
-        --try_temps \
         --checkpoint_pattern "$CHECKPOINT_PATTERN" \
         --find_checkpoints
 
