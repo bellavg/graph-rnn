@@ -2,32 +2,43 @@
 Generation module for AIG (And-Inverter Graphs) using trained models.
 """
 
+# src/aig_generate.py
 import os
 import torch
 import numpy as np
 import networkx as nx
 from torch.distributions import Categorical
+import torch.nn.functional as F # <--- Added Import
+import logging # <--- Added Import
+import traceback
+# --- Setup logger if not already configured ---
+logger = logging.getLogger("aig_generator")
+if not logger.hasHandlers():
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 # Try to import necessary constants
 try:
+    # Adjust relative path if needed, or ensure src is in PYTHONPATH
     from aig_dataset import _calculate_levels, EDGE_TYPES, NUM_EDGE_FEATURES
 except ImportError:
-    print("Warning: Failed to import from aig_dataset. Using default constants.")
+    logger.warning("Failed to import from aig_dataset. Using default constants.")
     # Default values as fallback
     EDGE_TYPES = {"NONE": 0, "REGULAR": 1, "INVERTED": 2}
     NUM_EDGE_FEATURES = 3
 
     def _calculate_levels(g):
         """Fallback implementation for calculate_levels if import fails."""
-        if not g or g.number_of_nodes() == 0:
-            return {}, -1
-
+        if not g or g.number_of_nodes() == 0: return {}, -1
         levels = {}
-        for node in nx.topological_sort(g):
-            pred_levels = [levels.get(pred, 0) for pred in g.predecessors(node)]
-            levels[node] = max(pred_levels + [-1]) + 1
-
-        max_level = max(levels.values()) if levels else -1
+        try:
+            for node in nx.topological_sort(g):
+                pred_levels = [levels.get(pred, -1) for pred in g.predecessors(node)]
+                levels[node] = max(pred_levels) + 1 if pred_levels else 0
+            max_level = max(levels.values()) if levels else -1
+        except nx.NetworkXUnfeasible: # Handle non-DAG case
+             logger.warning("Graph is not a DAG during level calculation fallback.")
+             return {n:0 for n in g.nodes()}, -2
         return levels, max_level
 
 
@@ -52,6 +63,9 @@ def aig_seq_to_nx(adj_seq_list: list, edge_feature_len: int) -> nx.DiGraph:
     g = nx.DiGraph()
     g.add_nodes_from(range(num_nodes))  # Nodes 0 to num_nodes-1
 
+    if not adj_seq_list: # Check again after node add
+        return g
+
     effective_m = adj_seq_list[0].shape[0]  # Get m from the shape
 
     for target_node_idx, adj_vec in enumerate(adj_seq_list, start=1):
@@ -60,483 +74,408 @@ def aig_seq_to_nx(adj_seq_list: list, edge_feature_len: int) -> nx.DiGraph:
         num_possible_preds = min(target_node_idx, effective_m)
 
         # The adj_vec is reversed relative to node indices 0..i-1
-        # adj_vec[0] corresponds to connection from node target_node_idx - 1
         # adj_vec[k] corresponds to connection from node target_node_idx - 1 - k
         for k in range(num_possible_preds):
             source_node_idx = target_node_idx - 1 - k
             if source_node_idx < 0: continue  # Should not happen with correct slicing
 
-            edge_type_probs = adj_vec[k, :]  # Probabilities/logits for this edge
-            # Assuming the adj_vec contains the *sampled* one-hot representation
-            edge_type = np.argmax(edge_type_probs).item()  # Get the sampled class index
+            # Check if adj_vec has the expected dimension
+            if adj_vec.shape[1] != edge_feature_len:
+                 logger.error(f"Mismatch: adj_vec features ({adj_vec.shape[1]}) != edge_feature_len ({edge_feature_len}) at target {target_node_idx}")
+                 continue
+
+            try:
+                edge_type_probs = adj_vec[k, :]  # Probabilities/logits for this edge
+                # Assuming the adj_vec contains the *sampled* one-hot representation
+                edge_type = np.argmax(edge_type_probs).item()  # Get the sampled class index
+            except IndexError:
+                 logger.error(f"IndexError accessing adj_vec[{k}] for target {target_node_idx} (shape: {adj_vec.shape})")
+                 continue
 
             if edge_type != EDGE_TYPES["NONE"]:
                 g.add_edge(source_node_idx, target_node_idx, type=edge_type)
 
     # Basic node type inference based on topology (can be refined in validation)
-    for n in g.nodes():
-         in_deg = g.in_degree(n)
-         out_deg = g.out_degree(n)
-         if in_deg == 0:
-             g.nodes[n]['inferred_type'] = 'PI'  # Or ZERO
-         elif in_deg == 2:
-             g.nodes[n]['inferred_type'] = 'AND'
-         elif out_deg == 0 and in_deg > 0:  # Sink nodes (might be POs)
-             g.nodes[n]['inferred_type'] = 'PO'
-         else:  # Could be intermediate, buffer, or invalid fan-in
-              g.nodes[n]['inferred_type'] = 'UNKNOWN'  # Or based on in_deg == 1?
+    # Removed as it's better done in the evaluation script after cleaning
+    # for n in g.nodes(): ...
 
     return g
 
-
-def rnn_edge_gen_aig(edge_rnn, h, num_edges_to_sample, effective_m, temperature=1.0, device='cpu'):
+def rnn_edge_gen_aig(edge_rnn, h, num_edges_to_sample, effective_m,
+                     temperature=1.0, device='cpu', debug=False, current_node_idx_for_log=None):
     """
     Generates AIG edges for one node using RNN method with categorical sampling.
-
-    Fixed version with better error handling and fallbacks.
+    Includes optional probability logging.
 
     Args:
-        edge_rnn: Trained EdgeLevel RNN/LSTM model.
-        h: Hidden state from the NodeLevel model for the current node step.
-           Shape typically [1, 1, node_hidden_size] for MLP input,
-           or needs to be set via set_first_layer_hidden for EdgeRNN/LSTM.
-        num_edges_to_sample: The number of potential incoming edges to sample (min(current_node_idx, effective_m)).
-        effective_m: The maximum number of predecessors considered (max_nodes - 1).
-        temperature: Sampling temperature (higher -> more random).
-        device: Torch device.
+        # ... (other args) ...
+        debug: Enable debug logging.
+        current_node_idx_for_log: The index of the node being generated (for logging context).
 
     Returns:
         torch.Tensor: Sampled adjacency vector [1, 1, effective_m, NUM_EDGE_FEATURES] (one-hot encoded).
     """
-    # Special case: If at the first step (num_edges_to_sample=0),
-    # just return a tensor with NONE edges
     if num_edges_to_sample <= 0:
         adj_vec_sampled = torch.zeros([1, 1, effective_m, NUM_EDGE_FEATURES], device=device)
         adj_vec_sampled[:, :, :, EDGE_TYPES["NONE"]] = 1.0
         return adj_vec_sampled
 
-    # Initialize output tensor (default to NONE edges)
     adj_vec_sampled = torch.zeros([1, 1, effective_m, NUM_EDGE_FEATURES], device=device)
     adj_vec_sampled[:, :, :, EDGE_TYPES["NONE"]] = 1.0
 
-    # Handle setting initial hidden state based on model type
     hidden_state_set = False
     if hasattr(edge_rnn, 'set_first_layer_hidden') and callable(getattr(edge_rnn, 'set_first_layer_hidden')):
         try:
-            if h.dim() == 3:  # shape [1, 1, hidden_size]
-                edge_rnn.set_first_layer_hidden(h.squeeze(0))  # Try squeezing one dim
-            else:  # shape [1, hidden_size] or [hidden_size]
-                edge_rnn.set_first_layer_hidden(h)
+            if h.dim() == 3: edge_rnn.set_first_layer_hidden(h.squeeze(0))
+            else: edge_rnn.set_first_layer_hidden(h)
             hidden_state_set = True
         except Exception as e:
-            print(f"Warning: Could not set hidden state for EdgeRNN/LSTM: {e}")
+            logger.warning(f"Could not set hidden state for EdgeRNN/LSTM: {e}")
 
-    if not hidden_state_set:
-        print("Warning: EdgeRNN hidden state not set, generation might fail")
+    if not hidden_state_set: logger.warning("EdgeRNN hidden state not set")
+
+    # --- Probability Logging Setup ---
+    # Log only for a few initial graphs if debug is enabled extensively elsewhere,
+    # or control via a separate flag/counter if needed.
+    log_probs_this_call = debug and (current_node_idx_for_log is not None and current_node_idx_for_log < 5) # Log first 5 nodes
+    if log_probs_this_call:
+        logger.debug(f"--- Logging Edge Probs (Node {current_node_idx_for_log}) ---")
 
     try:
-        # SOS token (one-hot encoded for NONE type)
-        # Shape: [batch=1, seq=1, features=3]
         x = torch.zeros([1, 1, NUM_EDGE_FEATURES], device=device)
-        x[:, :, EDGE_TYPES["NONE"]] = 1.0  # Start with SOS = NONE
-
+        x[:, :, EDGE_TYPES["NONE"]] = 1.0 # Start with SOS = NONE
         sampled_edges = []
-        force_valid_edge = True  # Force at least one valid edge to avoid all-NONE
 
-        for i in range(num_edges_to_sample):
+        for k in range(num_edges_to_sample): # Loop over potential predecessors
             try:
-                # Get logits for the next edge type
                 logits = edge_rnn(x, return_logits=True)
 
-                # Check for NaN or Inf values
                 if torch.isnan(logits).any() or torch.isinf(logits).any():
-                    print(f"Warning: NaN/Inf detected in logits at step {i}")
-                    # Set to a reasonable fallback
-                    logits = torch.zeros([1, 1, NUM_EDGE_FEATURES], device=device)
-                    logits[0, 0, EDGE_TYPES["REGULAR"]] = 1.0
+                    logger.warning(f"NaN/Inf detected in logits at edge step k={k}. Using default.")
+                    logits = torch.zeros_like(logits)
+                    logits[0, 0, EDGE_TYPES["REGULAR"]] = 1.0 # Default to REGULAR
 
-                # Apply temperature and sample
-                scaled_logits = logits.squeeze(1) / temperature  # Shape: [1, 3]
-                dist = Categorical(logits=scaled_logits)
-                sampled_type_idx = dist.sample()  # Tensor containing index [0, 1, or 2]
+                scaled_logits = logits.squeeze(1) / temperature
 
-                # Force a valid edge (REGULAR or INVERTED) for at least the first edge
-                if force_valid_edge and i == 0 and sampled_type_idx.item() == EDGE_TYPES["NONE"]:
-                    sampled_type_idx = torch.tensor([EDGE_TYPES["REGULAR"]], device=device)
-                    force_valid_edge = False
+                # --- ADD PROBABILITY LOGGING ---
+                if log_probs_this_call:
+                    probs = F.softmax(scaled_logits, dim=-1).squeeze().cpu().numpy()
+                    # Node index this edge connects FROM
+                    source_node_log_idx = (current_node_idx_for_log - 1 - k) if current_node_idx_for_log is not None else "N/A"
+                    logger.debug(f"  k={k} (from node {source_node_log_idx}): Probs=[N:{probs[0]:.3f}, R:{probs[1]:.3f}, I:{probs[2]:.3f}]")
+                # --- END LOGGING ---
 
-                # Create next input (one-hot encoding of sampled type)
-                x.zero_()
+                dist = torch.distributions.Categorical(logits=scaled_logits)
+                sampled_type_idx = dist.sample()
+
+                # Optional: Force first edge to be non-NONE?
+                # if k == 0 and sampled_type_idx.item() == EDGE_TYPES["NONE"] and num_edges_to_sample > 0:
+                #     sampled_type_idx = torch.tensor([EDGE_TYPES["REGULAR"]], device=device)
+                #     logger.debug(f"  k=0 forced to REGULAR")
+
+                x.zero_() # Prepare next input x
                 x[0, 0, sampled_type_idx.item()] = 1.0
-                sampled_edges.append(x.clone().squeeze().cpu().numpy())  # Store sampled one-hot vector
+                # Store sampled one-hot vector: shape [NUM_EDGE_FEATURES]
+                sampled_edges.append(x.clone().squeeze(0).squeeze(0).cpu().numpy())
 
-            except Exception as e:
-                print(f"Error in edge sampling at step {i}: {e}")
-                # Provide a fallback value for this step
+            except Exception as e_inner:
+                logger.error(f"Error in edge sampling step k={k}: {e_inner}")
                 fallback = np.zeros(NUM_EDGE_FEATURES)
-                if i == 0:  # Force a valid edge for position 0 if error
-                    fallback[EDGE_TYPES["REGULAR"]] = 1.0
-                else:
-                    fallback[EDGE_TYPES["NONE"]] = 1.0
+                fallback[EDGE_TYPES["NONE"]] = 1.0 # Default to NONE on error
                 sampled_edges.append(fallback)
+                # Optionally break if one step fails: break
 
-        # Place sampled edges into the correct (reversed) positions in adj_vec_sampled
+        # Place sampled edges into the correct (reversed) positions
         if sampled_edges:
             try:
-                sampled_stack = torch.tensor(np.stack(sampled_edges[::-1]), device=device)  # Reverse before stacking
+                # Stack requires consistent shapes, squeeze() above ensures shape [3]
+                # Reverse the list of sampled vectors before stacking
+                sampled_stack = torch.tensor(np.stack(sampled_edges[::-1]), device=device, dtype=torch.float32)
                 num_sampled = sampled_stack.shape[0]
-                adj_vec_sampled[0, 0, :num_sampled, :] = sampled_stack  # Fill from the start (represents nearest predecessors)
-            except Exception as e:
-                print(f"Error stacking sampled edges: {e}")
-                # Ensure first edge is REGULAR on error
+                # Ensure sampled_stack is 2D: [num_sampled, NUM_EDGE_FEATURES]
+                if sampled_stack.dim() == 1: # Handle case of single sampled edge
+                    sampled_stack = sampled_stack.unsqueeze(0)
+
+                if num_sampled > 0 and sampled_stack.shape[1] == NUM_EDGE_FEATURES:
+                    adj_vec_sampled[0, 0, :num_sampled, :] = sampled_stack
+                elif num_sampled > 0:
+                    logger.error(f"Shape mismatch after stacking: {sampled_stack.shape}, expected [, {NUM_EDGE_FEATURES}]")
+
+            except Exception as e_stack:
+                logger.error(f"Error stacking/assigning sampled edges: {e_stack}")
+                # Fallback: Ensure first edge is REGULAR on error if possible
                 if num_edges_to_sample > 0:
-                    adj_vec_sampled[0, 0, 0, EDGE_TYPES["NONE"]] = 0.0
+                    adj_vec_sampled.zero_()
                     adj_vec_sampled[0, 0, 0, EDGE_TYPES["REGULAR"]] = 1.0
 
-    except Exception as e:
-        print(f"Error in rnn_edge_gen_aig: {e}")
-        # On error, ensure we have at least one REGULAR edge in the output
+    except Exception as e_outer:
+        logger.error(f"Error in rnn_edge_gen_aig outer loop: {e_outer}")
+        # Fallback on major error
         if num_edges_to_sample > 0:
-            adj_vec_sampled[0, 0, 0, EDGE_TYPES["NONE"]] = 0.0
-            adj_vec_sampled[0, 0, 0, EDGE_TYPES["REGULAR"]] = 1.0
+             adj_vec_sampled.zero_()
+             adj_vec_sampled[0, 0, 0, EDGE_TYPES["REGULAR"]] = 1.0
 
     return adj_vec_sampled
 
 
-def mlp_edge_gen_aig(edge_mlp, h, num_edges_to_sample, effective_m, temperature=1.0, device='cpu'):
+def mlp_edge_gen_aig(edge_mlp, h, num_edges_to_sample, effective_m, temperature=1.0, device='cpu', debug=False, current_node_idx_for_log=None):
     """
     Generates AIG edges for one node using MLP method with categorical sampling.
-
-    Fixed version that handles edge cases better.
-
-    Args:
-        edge_mlp: Trained EdgeLevel MLP model.
-        h: Output from the NodeLevel model for the current node step.
-           Shape typically [1, 1, node_hidden_size].
-        num_edges_to_sample: The number of potential incoming edges to sample (min(current_node_idx, effective_m)).
-        effective_m: The maximum number of predecessors considered (max_nodes - 1).
-        temperature: Sampling temperature.
-        device: Torch device.
-
-    Returns:
-        torch.Tensor: Sampled adjacency vector [1, 1, effective_m, NUM_EDGE_FEATURES] (one-hot encoded).
+    (Includes placeholder args for debug/logging consistency)
     """
-    # Special case: If at the first step (num_edges_to_sample=0),
-    # just return a tensor with NONE edges
     if num_edges_to_sample <= 0:
         adj_vec_sampled = torch.zeros([1, 1, effective_m, NUM_EDGE_FEATURES], device=device)
         adj_vec_sampled[:, :, :, EDGE_TYPES["NONE"]] = 1.0
         return adj_vec_sampled
 
-    # Initialize output tensor (default to NONE edges)
     adj_vec_sampled = torch.zeros([1, 1, effective_m, NUM_EDGE_FEATURES], device=device)
     adj_vec_sampled[:, :, :, EDGE_TYPES["NONE"]] = 1.0
 
     try:
-        # Get logits for all potential edges at once
-        # edge_mlp output shape: [batch=1, seq=1, output_m, features=3]
-        all_logits = edge_mlp(h, return_logits=True)
-
-        # Debug info
+        all_logits = edge_mlp(h, return_logits=True) # Expects h shape [1, 1, node_hidden_size]
         if all_logits is None:
-            print("ERROR: edge_mlp returned None")
+            logger.error("ERROR: edge_mlp returned None")
             return adj_vec_sampled
 
-        # Squeeze batch and sequence dims: [output_m, features=3]
-        logits_for_sampling = all_logits.squeeze(0).squeeze(0)
+        logits_for_sampling = all_logits.squeeze(0).squeeze(0) # Shape: [output_m, features=3]
 
-        # Ensure we have enough logits for sampling
         if logits_for_sampling.shape[0] < num_edges_to_sample:
-            print(f"WARNING: Not enough logits for sampling: {logits_for_sampling.shape[0]} < {num_edges_to_sample}")
-            # Use what we have
-            num_edges_to_sample = min(num_edges_to_sample, logits_for_sampling.shape[0])
+            logger.warning(f"Not enough logits ({logits_for_sampling.shape[0]}) for sampling {num_edges_to_sample}. Using available.")
+            num_edges_to_sample = logits_for_sampling.shape[0]
 
-        # Select logits for the edges we need to sample
+        if num_edges_to_sample <= 0: # Check again after potential reduction
+             return adj_vec_sampled
+
         relevant_logits = logits_for_sampling[:num_edges_to_sample, :]
 
-        # Check for NaN/Inf values in logits
         if torch.isnan(relevant_logits).any() or torch.isinf(relevant_logits).any():
-            print(f"WARNING: NaN or Inf values detected in logits. Using default edges.")
-            # Force some reasonable values in edge[0] to avoid all NONE
-            if num_edges_to_sample > 0:
-                # Make a manual probability distribution favoring REGULAR edges
-                adj_vec_sampled[0, 0, 0, EDGE_TYPES["REGULAR"]] = 1.0
-                adj_vec_sampled[0, 0, 0, EDGE_TYPES["NONE"]] = 0.0
+            logger.warning(f"NaN or Inf values detected in MLP logits. Using default edges.")
+            adj_vec_sampled[0, 0, 0, EDGE_TYPES["REGULAR"]] = 1.0
+            adj_vec_sampled[0, 0, 0, EDGE_TYPES["NONE"]] = 0.0
             return adj_vec_sampled
 
-        # Apply temperature and try to sample
         try:
-            # Apply temperature scaling
             scaled_logits = relevant_logits / temperature
+            dist = torch.distributions.Categorical(logits=scaled_logits)
+            sampled_type_indices = dist.sample() # Shape: [num_edges_to_sample]
 
-            # Initialize distribution for sampling
-            dist = Categorical(logits=scaled_logits)
-
-            # Sample edge types - catch any other potential errors
-            sampled_type_indices = dist.sample()  # Shape: [num_edges_to_sample]
-
-            # Create one-hot encodings
             one_hot_sampled = torch.nn.functional.one_hot(
-                sampled_type_indices,
-                num_classes=NUM_EDGE_FEATURES
+                sampled_type_indices, num_classes=NUM_EDGE_FEATURES
             ).float()
 
-            # Place into the adjacency vector (correct positions)
             adj_vec_sampled[0, 0, :num_edges_to_sample, :] = one_hot_sampled
 
-            # Ensure we got at least one actual edge (not all NONE)
-            # This is especially important for step 1
+            # Ensure not all NONE if num_edges_to_sample > 0
             if num_edges_to_sample > 0 and torch.all(one_hot_sampled[:, EDGE_TYPES["NONE"]] == 1.0):
-                # Force at least one edge in the first position to be REGULAR
-                # This helps avoid immediate EOS signals
                 adj_vec_sampled[0, 0, 0, EDGE_TYPES["NONE"]] = 0.0
                 adj_vec_sampled[0, 0, 0, EDGE_TYPES["REGULAR"]] = 1.0
-                print("Adding forced REGULAR edge to avoid all-NONE output")
+                logger.debug("MLP: Forced first edge to REGULAR to avoid all-NONE.")
 
-        except Exception as e:
-            print(f"Error during sampling: {e}. Using default edges.")
-            # Force a reasonable result
+        except Exception as e_sample:
+            logger.error(f"Error during MLP sampling: {e_sample}. Using default edges.")
             if num_edges_to_sample > 0:
                 adj_vec_sampled[0, 0, 0, EDGE_TYPES["REGULAR"]] = 1.0
                 adj_vec_sampled[0, 0, 0, EDGE_TYPES["NONE"]] = 0.0
 
-    except Exception as e:
-        print(f"Error in mlp_edge_gen_aig: {e}")
-        # Return default (already initialized above)
+    except Exception as e_outer:
+        logger.error(f"Error in mlp_edge_gen_aig: {e_outer}")
+        # Return default (initialized to NONEs)
 
     return adj_vec_sampled
 
 
+
 def generate_aig(num_nodes_target, node_model, edge_model, effective_m, max_level_model,
-                 edge_gen_fn, device, temperature=1.0, max_steps=None, eos_patience=10, debug=False):
+                 edge_gen_fn, device,
+                 temperatures: list, # Accept list
+                 max_steps=None, eos_patience=10, debug=False):
     """
-    Generates a single And-Inverter Graph (AIG).
-
-    Args:
-        num_nodes_target: Desired number of nodes (generation might stop earlier/later).
-        node_model: Trained NodeLevel model.
-        edge_model: Trained EdgeLevel model.
-        effective_m: Max predecessors considered (max_nodes_train - 1).
-        max_level_model: Max level the node_model was trained with (for level embedding).
-        edge_gen_fn: The edge generation function to use (rnn_edge_gen_aig or mlp_edge_gen_aig).
-        device: Torch device.
-        temperature: Sampling temperature.
-        max_steps: Optional maximum generation steps (nodes to add).
-        eos_patience: Stop if no real edges (type 1 or 2) are added for this many consecutive steps.
-        debug: Enable additional debug output.
-
-    Returns:
-        nx.DiGraph: The generated AIG as a NetworkX graph.
-        int: The maximum level reached in the generated graph.
+    Generates a single And-Inverter Graph (AIG). Tries multiple temperatures.
     """
     node_model.eval()
     edge_model.eval()
 
-    # --- Initialization ---
-    # Important: Initialize with SOS token structure (ones)
-    adj_vec_current = torch.ones([1, 1, effective_m, NUM_EDGE_FEATURES], device=device)
-    # Clear and set the NONE channel to 1.0 for initial SOS token
-    adj_vec_current.zero_()
-    adj_vec_current[:, :, :, EDGE_TYPES["NONE"]] = 1.0
+    best_graph = None
+    best_max_level = -1
+    best_temp = -1.0
 
-    list_adj_vecs_sampled = []
-    node_model.reset_hidden()
-    current_levels = {0: 0}
-    max_level_gen = 0
-    uses_level_embedding = hasattr(node_model, 'level_embedding') and node_model.level_embedding is not None
-    no_real_edge_steps_in_a_row = 0  # Initialize patience counter
+    if not temperatures: # Handle empty temperature list
+        logger.error("Temperature list is empty. Cannot generate graph.")
+        return nx.DiGraph(), -1
 
-    # Determine max generation steps (make it reasonably limited)
-    if max_steps is None:
-        # Set a reasonable upper limit - this was causing the issue!
-        max_steps = min(int(num_nodes_target * 1.5) + eos_patience, num_nodes_target + 10)
-        print(f"Setting max_steps to {max_steps} for target {num_nodes_target} nodes")
+    logger.info(f"Starting generation for target N={num_nodes_target} with Temps={temperatures}")
 
-    if num_nodes_target <= 1:
-        return nx.DiGraph(), 0
+    for temp_idx, temperature in enumerate(temperatures):
+        logger.debug(f"--- Attempting Temp={temperature} ---")
 
-    if debug:
-        print(f"DEBUG: Starting generation with effective_m={effective_m}, target_nodes={num_nodes_target}")
-        print(f"DEBUG: Node model type: {type(node_model).__name__}, Edge model type: {type(edge_model).__name__}")
-        print(f"DEBUG: Uses level embedding: {uses_level_embedding}, Max level model: {max_level_model}")
-        print(f"DEBUG: Temperature: {temperature}, EOS patience: {eos_patience}")
+        # Reset state for each temperature attempt
+        adj_vec_current = torch.zeros([1, 1, effective_m, NUM_EDGE_FEATURES], device=device)
+        adj_vec_current[:, :, :, EDGE_TYPES["NONE"]] = 1.0 # SOS Token
 
-    # --- Generation Loop ---
-    for i in range(1, max_steps):
-        current_node_idx = i
+        list_adj_vecs_sampled = []
+        node_model.reset_hidden()
+        current_levels = {0: 0} # Level of implicit PI node 0
+        max_level_gen = 0
+        uses_level_embedding = hasattr(node_model, 'level_embedding') and node_model.level_embedding is not None
+        no_real_edge_steps_in_a_row = 0
 
-        # --- Node Level Hidden State Calculation ---
-        level_for_input = None
-        if uses_level_embedding:
-            max_pred_level = -1
-            # Avoid repeatedly building the graph if performance is critical
-            # Only need predecessors of current_node_idx
-            # However, building it is simpler for now
-            temp_g_so_far = aig_seq_to_nx(list_adj_vecs_sampled, NUM_EDGE_FEATURES)
-            # Need to add the node we are about to generate to check predecessors
-            # This assumes node indices are contiguous from 0
-            if not temp_g_so_far.has_node(current_node_idx):
-                 temp_g_so_far.add_node(current_node_idx)  # Add node to check preds even if no edges yet
+        # --- Determine max generation steps ---
+        gen_limit = max_steps
+        if gen_limit is None:
+            gen_limit = max(num_nodes_target + eos_patience + 5, int(num_nodes_target * 1.5))
+            logger.debug(f"Setting max_steps automatically to {gen_limit}")
 
-            # Check predecessors using the structure *before* adding edges for this step
-            preds_of_current = []
-            if current_node_idx in temp_g_so_far:  # Check if node exists before getting preds
-                 # Logic based on list_adj_vecs_sampled index implies connectivity
-                 num_preds_possible = min(current_node_idx, effective_m)
-                 for k in range(num_preds_possible):
-                      source_node_idx = current_node_idx - 1 - k
-                      # Check the *previous* step's output if available
-                      if list_adj_vecs_sampled:
-                           # We need to look at the connectivity *to* current_node_idx
-                           # which was determined by the vector added at step i-1
-                           # Let's stick to the simpler graph build for level calc for now
-                           pass  # Simplified level calc below uses graph structure
+        if num_nodes_target <= 1: return nx.DiGraph(), 0
 
-            # Simplified level calculation: max level of nodes < current_node_idx connected to it
-            # Re-calculate levels on the temp graph at each step (less efficient but simpler)
-            if temp_g_so_far.number_of_nodes() > 1 and nx.is_directed_acyclic_graph(temp_g_so_far):
-                 temp_levels, _ = _calculate_levels(temp_g_so_far)
-                 current_levels = temp_levels  # Update levels based on current graph
-                 max_pred_level = -1
-                 # Find max level among nodes that *could* connect to current_node_idx
-                 num_preds_possible = min(current_node_idx, effective_m)
-                 for k in range(num_preds_possible):
-                     source_node_idx = current_node_idx - 1 - k
-                     if source_node_idx in current_levels:
-                          max_pred_level = max(max_pred_level, current_levels.get(source_node_idx, -1))
-            else:
-                 # Fallback if not DAG or too small
-                 max_pred_level = current_levels.get(current_node_idx-1, -1)  # Approx level based on previous node
-
-            current_node_level = max_pred_level + 1
-            # Only add to current_levels if positive, avoid overwriting node 0?
-            if current_node_idx > 0:
-                current_levels[current_node_idx] = current_node_level
-            max_level_gen = max(max_level_gen, current_node_level)
-
-            level_clamped = min(current_node_level, max_level_model)
-            level_for_input = torch.tensor([[level_clamped]], dtype=torch.long, device=device)
-
-        # --- Node model forward pass ---
+        # --- Generation Loop ---
         try:
-            node_output = node_model(adj_vec_current, levels=level_for_input)
-            h_node = node_output[0] if isinstance(node_output, tuple) else node_output
+            for i in range(1, gen_limit):
+                current_node_idx = i # Generating edges FOR node i (connecting FROM nodes 0 to i-1)
 
-            if debug and i == 1:
-                print(f"DEBUG: First node hidden state shape: {h_node.shape}")
-                print(f"DEBUG: First node hidden state mean: {h_node.mean().item():.6f}, var: {h_node.var().item():.6f}")
-                print(f"DEBUG: First node hidden state contains NaN: {torch.isnan(h_node).any().item()}")
+                # --- Node Level Hidden State ---
+                level_for_input = None
+                if uses_level_embedding:
+                    # Calculate level based on predecessors added so far
+                    max_pred_level = -1
+                    num_preds_possible = min(current_node_idx, effective_m)
+                    for k in range(num_preds_possible):
+                        source_node_idx = current_node_idx - 1 - k
+                        max_pred_level = max(max_pred_level, current_levels.get(source_node_idx, -1))
 
-        except Exception as e:
-            print(f"ERROR in node model forward pass: {e}")
-            # Return empty graph on error
-            return nx.DiGraph(), -1
+                    current_node_level = max_pred_level + 1
+                    current_levels[current_node_idx] = current_node_level # Store level of node we are about to add
+                    max_level_gen = max(max_level_gen, current_node_level)
+                    level_clamped = min(current_node_level, max_level_model)
+                    level_for_input = torch.tensor([[level_clamped]], dtype=torch.long, device=device)
 
-        # --- Edge Sampling ---
-        num_edges_to_sample = min(current_node_idx, effective_m)
+                # --- Node model forward pass ---
+                node_output = node_model(adj_vec_current, levels=level_for_input)
+                h_node = node_output[0] if isinstance(node_output, tuple) else node_output
 
-        if debug and i == 1:
-            print(f"DEBUG: Step {i}, sampling {num_edges_to_sample} edges")
+                # --- Edge Sampling ---
+                num_edges_to_sample = min(current_node_idx, effective_m)
+                adj_vec_next_sampled = edge_gen_fn(edge_model, h_node, num_edges_to_sample, effective_m,
+                                                 temperature, device, debug, current_node_idx) # Pass current node idx for logging
 
-        try:
-            adj_vec_next_sampled = edge_gen_fn(edge_model, h_node, num_edges_to_sample, effective_m, temperature, device)
+                # --- Store and Check Termination ---
+                adj_vec_np = adj_vec_next_sampled.squeeze().cpu().numpy()
+                list_adj_vecs_sampled.append(adj_vec_np)
+                adj_vec_current = adj_vec_next_sampled # Use sampled as input for next step
 
-            if debug and i == 1:
-                print(f"DEBUG: First adj_vec_next_sampled shape: {adj_vec_next_sampled.shape}")
-                edge_dist = adj_vec_next_sampled[0, 0, :num_edges_to_sample].sum(dim=0).cpu().numpy() if num_edges_to_sample > 0 else "N/A"
-                print(f"DEBUG: Edge type distribution in first step: {edge_dist}")
+                # Termination checks
+                has_real_edge = False
+                if num_edges_to_sample > 0:
+                    sampled_part = adj_vec_np[:num_edges_to_sample, :]
+                    has_real_edge = np.any(sampled_part[:, EDGE_TYPES["REGULAR"]] == 1.0) or \
+                                    np.any(sampled_part[:, EDGE_TYPES["INVERTED"]] == 1.0)
 
-        except Exception as e:
-            print(f"ERROR in edge generation: {e}")
-            # Return current graph on error
-            if not list_adj_vecs_sampled:
-                return nx.DiGraph(), -1
-            else:
-                return aig_seq_to_nx(list_adj_vecs_sampled, NUM_EDGE_FEATURES), max_level_gen
+                if has_real_edge: no_real_edge_steps_in_a_row = 0
+                else: no_real_edge_steps_in_a_row += 1
 
-        # --- Store and Prepare for Next Step ---
-        adj_vec_np = adj_vec_next_sampled.squeeze(0).squeeze(0).cpu().numpy()
-        list_adj_vecs_sampled.append(adj_vec_np)
-        adj_vec_current = adj_vec_next_sampled
+                is_eos = False
+                if num_edges_to_sample > 0:
+                     # Check if *all* sampled entries are NONE
+                     is_eos = np.all(np.argmax(sampled_part, axis=-1) == EDGE_TYPES["NONE"])
 
-        # --- Termination Checks ---
-        # 1. Check for actual edges added in this step
-        has_real_edge = False
-        if num_edges_to_sample > 0:  # Only check if we actually sampled something
-            sampled_part = adj_vec_np[:num_edges_to_sample, :]
-            has_real_edge = np.any(sampled_part[:, EDGE_TYPES["REGULAR"]] == 1.0) or \
-                            np.any(sampled_part[:, EDGE_TYPES["INVERTED"]] == 1.0)
+                # Stop conditions
+                if is_eos and i > 1: # Don't stop on EOS at step 1
+                    logger.info(f"EOS signal detected at step {i} (temp={temperature}).")
+                    list_adj_vecs_sampled.pop() # Remove the EOS vector
+                    break
+                if no_real_edge_steps_in_a_row >= eos_patience:
+                    logger.info(f"Patience ({eos_patience}) exceeded at step {i} (temp={temperature}).")
+                    break
+                # Stop when we have generated *enough* nodes (i.e., added node num_nodes_target)
+                # Loop generates node i, so stop after generating node num_nodes_target
+                if current_node_idx >= num_nodes_target:
+                    logger.info(f"Reached target node count ({num_nodes_target+1} nodes total including node 0) at step {i} (temp={temperature}).")
+                    break
+                if i == gen_limit - 1:
+                    logger.info(f"Reached max_steps ({gen_limit}) (temp={temperature}).")
+            # --- End Generation Loop for this temp ---
 
-        if has_real_edge:
-            no_real_edge_steps_in_a_row = 0  # Reset patience counter
-        else:
-            no_real_edge_steps_in_a_row += 1  # Increment patience counter
+            # --- Construct and Evaluate Graph for this temperature ---
+            temp_graph = aig_seq_to_nx(list_adj_vecs_sampled, NUM_EDGE_FEATURES)
+            temp_max_level = -1
+            if temp_graph.number_of_nodes() > 0:
+                try:
+                    if nx.is_directed_acyclic_graph(temp_graph):
+                        _, temp_max_level = _calculate_levels(temp_graph)
+                    else: temp_max_level = -2
+                except Exception as e_level:
+                    logger.error(f"Error calculating level for temp {temperature}: {e_level}")
+                    temp_max_level = -3
 
-        # 2. Check explicit EOS signal (all NONE in sampled region)
-        is_eos = False
-        if num_edges_to_sample > 0:
-            is_eos = np.all(adj_vec_np[:num_edges_to_sample, EDGE_TYPES["NONE"]] == 1.0)
-        elif num_edges_to_sample == 0:  # First step (i=1), num_edges_to_sample=0
-             is_eos = False  # Cannot be EOS on first step
+            logger.debug(f"  Temp {temperature} finished: N={temp_graph.number_of_nodes()}, L={temp_max_level}")
 
-        # SPECIAL DEBUG CHECK FOR STEP 1
-        if is_eos and i == 1:
-            print(f"WARNING: EOS detected at step 1! This indicates a potential issue.")
-            # For step 1, let's create a simpler graph as fallback
-            if debug:
-                print(f"DEBUG: Trying to continue despite first-step EOS...")
-                is_eos = False  # Override EOS for debugging
+            # --- Update Best Graph ---
+            is_better = False
+            if temp_graph is not None and temp_graph.number_of_nodes() > 0:
+                 # Prioritize graphs closer to target size, then higher level
+                 current_best_nodes = best_graph.number_of_nodes() if best_graph else 0
+                 nodes_closer_to_target = abs(temp_graph.number_of_nodes() - num_nodes_target) < abs(current_best_nodes - num_nodes_target)
+                 nodes_equal_distance = abs(temp_graph.number_of_nodes() - num_nodes_target) == abs(current_best_nodes - num_nodes_target)
 
-        if is_eos:
-            print(f"INFO: EOS signal detected at step {i}. Stopping generation.")
-            list_adj_vecs_sampled.pop()  # Remove the EOS vector
-            break
+                 if best_graph is None:
+                      is_better = True
+                 elif nodes_closer_to_target:
+                      is_better = True
+                 elif nodes_equal_distance and temp_max_level > best_max_level:
+                      is_better = True
+                 # Optional: If levels equal, maybe prefer higher node count?
+                 elif nodes_equal_distance and temp_max_level == best_max_level and temp_graph.number_of_nodes() > current_best_nodes:
+                      is_better = True
 
-        # 3. Check Patience
-        if no_real_edge_steps_in_a_row >= eos_patience:
-            print(f"INFO: Patience ({eos_patience}) exceeded. No real edges added for {no_real_edge_steps_in_a_row} steps. Stopping at step {i}.")
-            # Do NOT pop the last vector here, it wasn't a clean EOS
-            break
 
-        # 4. Check target node count - THIS IS IMPORTANT!
-        # We want to stop when we've generated num_nodes_target nodes (which means i = num_nodes_target - 1)
-        if current_node_idx >= num_nodes_target - 1:
-            print(f"INFO: Reached target node count ({num_nodes_target}) at step {i+1}. Stopping generation.")
-            break  # Stop immediately when we hit the target
+            if is_better:
+                logger.debug(f"  Updating best graph (from Temp {temperature}, N={temp_graph.number_of_nodes()}, L={temp_max_level})")
+                best_graph = temp_graph
+                best_max_level = temp_max_level
+                best_temp = temperature
 
-        # 5. Max steps reached (handled by loop limit)
-        if i == max_steps - 1:
-             print(f"INFO: Reached max_steps ({max_steps}). Stopping generation.")
+        except Exception as e_gen:
+            logger.error(f"Major error during generation loop (Temp={temperature}): {e_gen}")
+            logger.error(traceback.format_exc())
+            continue # Try next temperature
 
-    # --- Final Graph Construction ---
-    final_graph = aig_seq_to_nx(list_adj_vecs_sampled, NUM_EDGE_FEATURES)
-    final_levels, final_max_level = {}, -1
-    if final_graph.number_of_nodes() > 0:
-         try:
-             if nx.is_directed_acyclic_graph(final_graph):
-                  final_levels, final_max_level = _calculate_levels(final_graph)
-                  final_graph.graph['levels'] = final_levels
-             else:
-                  print("Warning: Generated graph is not a DAG. Max level calculation might be inaccurate.")
-                  final_levels = {n: 0 for n in final_graph.nodes()}
-                  final_max_level = -2  # Use negative code for non-DAG
-         except Exception as e:
-              print(f"Warning: Error calculating final levels: {e}")
-              final_max_level = -3  # Use negative code for error
+    # --- End Temperature Loop ---
 
-    # Print final node count relative to target
-    final_node_count = final_graph.number_of_nodes()
-    print(f"Generated graph with {final_node_count} nodes (target: {num_nodes_target}) and max level {final_max_level}.")
+    if best_graph is None:
+        logger.warning("Failed to generate any graph.")
+        return nx.DiGraph(), -1
 
-    return final_graph, final_max_level
+    logger.info(f"Selected best graph: N={best_graph.number_of_nodes()}, L={best_max_level} (from Temp={best_temp})")
+    return best_graph, best_max_level
 
 
 def load_model_and_config(model_path, device):
     """Loads model state dict and config from checkpoint."""
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Checkpoint file not found: {model_path}")
-    state = torch.load(model_path, map_location=device)
+    try:
+        state = torch.load(model_path, map_location=device)
+    except Exception as e:
+        raise IOError(f"Failed to load torch checkpoint {model_path}: {e}")
+
     if 'config' not in state:
         raise ValueError(f"Checkpoint {model_path} does not contain 'config'.")
     config = state['config']
+
+    # Basic validation of state dict keys needed later
+    required_keys = ['node_model', 'edge_model']
+    missing_keys = [key for key in required_keys if key not in state]
+    if missing_keys:
+         # Attempt to find alternative keys
+         alt_keys_found = False
+         alt_map = {'node_model': 'node_net', 'edge_model': 'edge_net'} # Add more if needed
+         for req_key, alt_key in alt_map.items():
+              if req_key in missing_keys and alt_key in state:
+                   logger.warning(f"Using alternative key '{alt_key}' for missing '{req_key}' in state_dict.")
+                   state[req_key] = state[alt_key]
+                   missing_keys.remove(req_key)
+                   alt_keys_found = True
+
+         if missing_keys: # Check again after trying alternatives
+              raise ValueError(f"Checkpoint {model_path} missing state_dict keys: {missing_keys}")
+
     return state, config
