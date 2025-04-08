@@ -12,8 +12,8 @@ set -e  # Exit immediately if a command exits with a non-zero status
 BASE_DIR=$(pwd)
 SCRIPT_DIR="${BASE_DIR}/src"  # Adjust if needed
 DEBUG_SCRIPT="${SCRIPT_DIR}/all_gen_eval.py"
-RUNS_DIR="${BASE_DIR}/current_runs"
-OUTPUT_BASE_DIR="${BASE_DIR}/current_evaluation_results"
+RUNS_DIR="${BASE_DIR}/monday_runs"
+OUTPUT_BASE_DIR="${BASE_DIR}/monday_evaluation_results"
 PLOTS_BASE_DIR="${BASE_DIR}/current_evaluation_plots"
 
 # --- Parameters for the Python Script ---

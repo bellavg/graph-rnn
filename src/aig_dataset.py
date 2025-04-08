@@ -100,16 +100,27 @@ class AIGDataset(torch.utils.data.Dataset):
                  graph_file: str,
                  training: bool = True,
                  train_split: float = 0.9,
-                 include_node_types: bool = False,  # Keep this argument
-                 max_graphs: Optional[int] = None):
+                 include_node_types: bool = False,
+                 max_graphs: Optional[int] = None,
+                 max_train_graphs: Optional[int] = None):
         """
         Initialize the AIG dataset using Topological Sort. Calculates node levels
         and edge type counts for class weighting.
+
+        Args:
+            graph_file: Path to the pickle file containing the graphs.
+            training: Whether this dataset is for training (True) or testing (False).
+            train_split: Fraction of data to use for training (between 0 and 1).
+            include_node_types: Whether to include node type information.
+            max_graphs: Maximum number of graphs to load in total.
+            max_train_graphs: Maximum number of graphs to use for training.
+                              Only applies when training=True. If None, uses train_split.
         """
         # Basic setup
         self.graph_file = graph_file
-        self.include_node_types = include_node_types  # Store this
+        self.include_node_types = include_node_types
         self.m_internal = None  # Will be calculated later
+        self.max_train_graphs = max_train_graphs
 
         # Load raw graph data
         print(f"Loading AIG graphs from {graph_file}...")
@@ -174,7 +185,14 @@ class AIGDataset(torch.utils.data.Dataset):
 
         # Determine the range of graphs to use for weights (training split)
         final_num_graphs_before_split = len(self.graphs)  # Use length after level filtering
-        train_size = int(final_num_graphs_before_split * train_split)
+
+        # Calculate the train size based on either train_split or max_train_graphs
+        train_size_by_split = int(final_num_graphs_before_split * train_split)
+        if max_train_graphs is not None:
+            train_size = min(train_size_by_split, max_train_graphs)
+        else:
+            train_size = train_size_by_split
+
         start_idx_weights = 0
         # Always calculate weights based on the training portion
         num_graphs_for_weights = train_size
@@ -274,15 +292,29 @@ class AIGDataset(torch.utils.data.Dataset):
         # Set up train/test split indices (needed for __len__ and __getitem__)
         np.random.seed(42)  # Ensure consistent shuffle for split definition
         np.random.shuffle(self.graphs)  # Shuffle the final list of graphs
+
         final_num_graphs = len(self.graphs)
-        train_size = int(final_num_graphs * train_split)
+
+        # Calculate train_size based on split or max_train_graphs
+        train_size_by_split = int(final_num_graphs * train_split)
+        if max_train_graphs is not None:
+            train_size = min(train_size_by_split, max_train_graphs)
+        else:
+            train_size = train_size_by_split
+
         self.start_idx = 0 if training else train_size
         # Adjust length based on whether we want train or test split
         self.length = train_size if training else final_num_graphs - train_size
-        print(
-            f"Dataset ready: {self.length} graphs ({'training' if training else 'testing'} split). Ordering: Topological Sort")
 
-        # --- Keep your other methods like _preprocess_graphs, __len__, __getitem__ here ---
+        # Log detailed information about the dataset split
+        print(f"Dataset ready: {self.length} graphs ({'training' if training else 'testing'} split).")
+        print(f"Total available graphs: {final_num_graphs}")
+        print(
+            f"Training graphs: {train_size} (limited by {'max_train_graphs' if max_train_graphs is not None and train_size < train_size_by_split else 'split ratio'})")
+        print(f"Testing graphs: {final_num_graphs - train_size}")
+        print(f"Ordering: Topological Sort")
+
+    # The rest of the methods remain unchanged
 
 
     def _preprocess_graphs(self) -> List[nx.DiGraph]:
