@@ -2,7 +2,7 @@
 #SBATCH --job-name=attention
 #SBATCH --partition=gpu_a100     # Specify the appropriate partition here
 #SBATCH --gpus=1
-#SBATCH --time=06:00:00
+#SBATCH --time=12:00:00
 #SBATCH --output=slurm_logs/attention_%j.out
 
 # Create log directories if they don't exist
