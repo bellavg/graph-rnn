@@ -26,7 +26,7 @@ model:
 
 train:
   batch_size: 32
-  lr: 0.0005              # Initial Learning Rate
+  lr: 0.001              # Initial Learning Rate
   steps: 60000            # Total training steps
   print_iter: 100
   checkpoint_iter: 6000

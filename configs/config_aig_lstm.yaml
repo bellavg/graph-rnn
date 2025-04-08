@@ -14,22 +14,22 @@ model:
   GraphLSTM:              # Used because use_lstm: true, use_attention: false
     embedding_size: 128
     hidden_size: 256
-    num_layers: 4
+    num_layers: 3
     edge_feature_len: 3
     output_size: 128      # MUST match EdgeLSTM.hidden_size
 
   EdgeLSTM:               # Used because edge_model: 'rnn' and use_lstm: true
     embedding_size: 64
     hidden_size: 128      # MUST match GraphLSTM.output_size
-    num_layers: 4
+    num_layers: 3
     edge_feature_len: 3
 
 train:
-  batch_size: 32
-  lr: 0.0005              # Initial Learning Rate
+  batch_size: 64
+  lr: 0.001             # Initial Learning Rate
   steps: 75000            # Total training steps
   print_iter: 100
-  checkpoint_iter: 7500
+  checkpoint_iter: 5000
   checkpoint_dir: 'checkpoints/checkpoints_lstm_rnn' # Specific directory
   log_file: 'train_results/logs_lstm_rnn'               # Specific directory
   # lr_schedule_* removed; code uses CosineAnnealingLR
