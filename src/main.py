@@ -211,7 +211,7 @@ def main():
             graph_file=config['data']['graph_file'],
             training=True,
             train_split=config['data'].get('train_split', 0.9),
-            max_graphs=20000,
+            max_graphs=30000,
             max_train_graphs=config['data'].get('max_train_graphs'),
             include_node_types=False  # Force False as we removed node type logic
         )
