@@ -1,0 +1,473 @@
+============================================================================================== 
+Warning! Mixing Conda and module environments may lead to corruption of the
+user environment. 
+We do not recommend users mixing those two environments unless absolutely
+necessary. Note that 
+SURF does not provide any support for Conda environment.
+For more information, please refer to our software policy page:
+https://servicedesk.surf.nl/wiki/display/WIKI/Software+policy+Snellius#SoftwarepolicySnellius-UseofAnacondaandMinicondaenvironmentsonSnellius 
+
+Remember that many packages have already been installed on the system and can
+be loaded using 
+the 'module load <package__name>' command. If you are uncertain if a package is
+already available 
+on the system, please use 'module avail' or 'module spider' to search for it.
+============================================================================================== 
+Using config file: configs/config_aig_lstm.yaml
+Output directory: current_runs/lstm_11050779
+Loaded config:
+data:
+  dataset_type: aig-directed-multiclass
+  graph_file: dataset/inputs8_outputs8max_nodes128max.pkl
+  use_bfs: false
+  max_graphs: null
+model:
+  mode: directed-multiclass
+  use_lstm: true
+  use_attention: false
+  edge_model: rnn
+  GraphLSTM:
+    embedding_size: 256
+    hidden_size: 512
+    num_layers: 4
+    edge_feature_len: 3
+    output_size: 256
+  EdgeLSTM:
+    embedding_size: 128
+    hidden_size: 256
+    num_layers: 4
+    edge_feature_len: 3
+train:
+  batch_size: 32
+  lr: 0.001
+  steps: 50000
+  print_iter: 100
+  checkpoint_iter: 5000
+  checkpoint_dir: lstm_checkpoints
+  log_dir: lstm_logs
+  lr_schedule_milestones:
+  - 10000
+  - 20000
+  - 30000
+  - 40000
+  lr_schedule_gamma: 0.3
+
+Loading AIG graphs from dataset/inputs8_outputs8max_nodes128max.pkl...
+Preprocessing graphs...
+Graph preprocessing complete. 2704 graphs processed, 0 skipped.
+Maximum node count in processed dataset: 64
+INFO: Topological Sort mode. Effective input size (m_internal): 63
+Calculating node levels...
+Maximum node level across dataset: 13
+Calculating edge type counts for class weighting...
+Calculating weights based on 2433 training graphs...
+Total edge slots considered for weights: 6737031
+Raw edge counts: {0: 6590773, 1: 88996, 2: 57262}
+Calculated edge weights (Inverse Frequency): [0.015776561573147774, 1.16836416721344, 1.815859317779541]
+Dataset ready: 2433 graphs (training split). Ordering: Topological Sort
+Dataset initialized. Max node count: 64, Max level: 13
+INFO: Using Topological Sort mode. Effective input/output size (max_nodes-1): 63
+INFO: GraphLevelLSTM using level embedding up to level 13
+INFO: Using GraphLevelLSTM for node level.
+Selected EdgeLevelLSTM model.
+Setting up CrossEntropyLoss for 3 edge classes.
+Applying edge class weights: [0.015776561573147774, 1.16836416721344, 1.815859317779541]
+TensorBoard logs will be saved to: current_runs/lstm_11050779/lstm_logs
+[100/50000] loss=0.8906 lr=1.0E-03 time/iter=0.109s eta=1:30:15
+[200/50000] loss=0.8390 lr=1.0E-03 time/iter=0.106s eta=1:27:44
+[300/50000] loss=0.8117 lr=1.0E-03 time/iter=0.105s eta=1:26:44
+[400/50000] loss=0.8025 lr=1.0E-03 time/iter=0.104s eta=1:25:53
+[500/50000] loss=0.8018 lr=1.0E-03 time/iter=0.104s eta=1:25:32
+[600/50000] loss=0.8039 lr=1.0E-03 time/iter=0.104s eta=1:25:15
+[700/50000] loss=0.7997 lr=1.0E-03 time/iter=0.103s eta=1:24:49
+[800/50000] loss=0.7997 lr=1.0E-03 time/iter=0.103s eta=1:24:36
+[900/50000] loss=0.8002 lr=1.0E-03 time/iter=0.103s eta=1:24:23
+[1000/50000] loss=0.8004 lr=1.0E-03 time/iter=0.103s eta=1:24:09
+[1100/50000] loss=0.7998 lr=1.0E-03 time/iter=0.103s eta=1:23:53
+[1200/50000] loss=0.8290 lr=1.0E-03 time/iter=0.103s eta=1:23:41
+[1300/50000] loss=0.8143 lr=1.0E-03 time/iter=0.103s eta=1:23:30
+[1400/50000] loss=0.8173 lr=1.0E-03 time/iter=0.103s eta=1:23:15
+[1500/50000] loss=0.8130 lr=1.0E-03 time/iter=0.103s eta=1:23:04
+[1600/50000] loss=0.8146 lr=1.0E-03 time/iter=0.103s eta=1:22:52
+[1700/50000] loss=0.8148 lr=1.0E-03 time/iter=0.103s eta=1:22:39
+[1800/50000] loss=0.8093 lr=1.0E-03 time/iter=0.103s eta=1:22:28
+[1900/50000] loss=0.8007 lr=1.0E-03 time/iter=0.103s eta=1:22:18
+[2000/50000] loss=0.7999 lr=1.0E-03 time/iter=0.103s eta=1:22:07
+[2100/50000] loss=0.7967 lr=1.0E-03 time/iter=0.103s eta=1:21:54
+[2200/50000] loss=0.7993 lr=1.0E-03 time/iter=0.103s eta=1:21:43
+[2300/50000] loss=0.8005 lr=9.9E-04 time/iter=0.103s eta=1:21:33
+[2400/50000] loss=0.8023 lr=9.9E-04 time/iter=0.103s eta=1:21:20
+[2500/50000] loss=0.7998 lr=9.9E-04 time/iter=0.103s eta=1:21:10
+[2600/50000] loss=0.8003 lr=9.9E-04 time/iter=0.103s eta=1:21:00
+[2700/50000] loss=0.8058 lr=9.9E-04 time/iter=0.103s eta=1:20:48
+[2800/50000] loss=0.8002 lr=9.9E-04 time/iter=0.103s eta=1:20:38
+[2900/50000] loss=0.8006 lr=9.9E-04 time/iter=0.103s eta=1:20:28
+[3000/50000] loss=0.8020 lr=9.9E-04 time/iter=0.103s eta=1:20:18
+[3100/50000] loss=0.8018 lr=9.9E-04 time/iter=0.102s eta=1:20:06
+[3200/50000] loss=0.8007 lr=9.9E-04 time/iter=0.102s eta=1:19:56
+[3300/50000] loss=0.7994 lr=9.9E-04 time/iter=0.102s eta=1:19:45
+[3400/50000] loss=0.8004 lr=9.9E-04 time/iter=0.102s eta=1:19:34
+[3500/50000] loss=0.8023 lr=9.9E-04 time/iter=0.102s eta=1:19:24
+[3600/50000] loss=0.7992 lr=9.9E-04 time/iter=0.102s eta=1:19:14
+[3700/50000] loss=0.8062 lr=9.9E-04 time/iter=0.102s eta=1:19:02
+[3800/50000] loss=0.8258 lr=9.9E-04 time/iter=0.102s eta=1:18:52
+[3900/50000] loss=0.8092 lr=9.9E-04 time/iter=0.102s eta=1:18:41
+[4000/50000] loss=0.8004 lr=9.8E-04 time/iter=0.102s eta=1:18:31
+[4100/50000] loss=0.8009 lr=9.8E-04 time/iter=0.102s eta=1:18:19
+[4200/50000] loss=0.7988 lr=9.8E-04 time/iter=0.102s eta=1:18:09
+[4300/50000] loss=0.7996 lr=9.8E-04 time/iter=0.102s eta=1:17:59
+[4400/50000] loss=0.8014 lr=9.8E-04 time/iter=0.102s eta=1:17:49
+[4500/50000] loss=0.7998 lr=9.8E-04 time/iter=0.102s eta=1:17:38
+[4600/50000] loss=0.8002 lr=9.8E-04 time/iter=0.102s eta=1:17:28
+[4700/50000] loss=0.8009 lr=9.8E-04 time/iter=0.102s eta=1:17:17
+[4800/50000] loss=0.7981 lr=9.8E-04 time/iter=0.102s eta=1:17:07
+[4900/50000] loss=0.8001 lr=9.8E-04 time/iter=0.102s eta=1:16:57
+[5000/50000] loss=0.7996 lr=9.8E-04 time/iter=0.102s eta=1:16:47
+Saving checkpoint to current_runs/lstm_11050779/lstm_checkpoints/checkpoint-5000.pth...
+Checkpoint saved.
+[5100/50000] loss=0.7994 lr=9.7E-04 time/iter=0.102s eta=1:16:37
+[5200/50000] loss=0.7992 lr=9.7E-04 time/iter=0.102s eta=1:16:26
+[5300/50000] loss=0.7989 lr=9.7E-04 time/iter=0.102s eta=1:16:17
+[5400/50000] loss=0.7995 lr=9.7E-04 time/iter=0.102s eta=1:16:06
+[5500/50000] loss=0.8005 lr=9.7E-04 time/iter=0.102s eta=1:15:56
+[5600/50000] loss=0.7997 lr=9.7E-04 time/iter=0.102s eta=1:15:45
+[5700/50000] loss=0.7960 lr=9.7E-04 time/iter=0.102s eta=1:15:35
+[5800/50000] loss=0.8014 lr=9.7E-04 time/iter=0.102s eta=1:15:24
+[5900/50000] loss=0.7996 lr=9.7E-04 time/iter=0.102s eta=1:15:14
+[6000/50000] loss=0.7991 lr=9.6E-04 time/iter=0.102s eta=1:15:04
+[6100/50000] loss=0.8003 lr=9.6E-04 time/iter=0.102s eta=1:14:54
+[6200/50000] loss=0.7998 lr=9.6E-04 time/iter=0.102s eta=1:14:44
+[6300/50000] loss=0.7991 lr=9.6E-04 time/iter=0.102s eta=1:14:33
+[6400/50000] loss=0.7956 lr=9.6E-04 time/iter=0.102s eta=1:14:23
+[6500/50000] loss=0.7996 lr=9.6E-04 time/iter=0.102s eta=1:14:13
+[6600/50000] loss=0.7995 lr=9.6E-04 time/iter=0.102s eta=1:14:03
+[6700/50000] loss=0.8017 lr=9.6E-04 time/iter=0.102s eta=1:13:52
+[6800/50000] loss=0.8005 lr=9.6E-04 time/iter=0.102s eta=1:13:42
+[6900/50000] loss=0.8000 lr=9.5E-04 time/iter=0.102s eta=1:13:32
+[7000/50000] loss=0.8099 lr=9.5E-04 time/iter=0.102s eta=1:13:21
+[7100/50000] loss=0.7990 lr=9.5E-04 time/iter=0.102s eta=1:13:11
+[7200/50000] loss=0.8009 lr=9.5E-04 time/iter=0.102s eta=1:13:00
+[7300/50000] loss=0.7994 lr=9.5E-04 time/iter=0.102s eta=1:12:50
+[7400/50000] loss=0.7996 lr=9.5E-04 time/iter=0.102s eta=1:12:40
+[7500/50000] loss=0.8005 lr=9.5E-04 time/iter=0.102s eta=1:12:29
+[7600/50000] loss=0.7974 lr=9.4E-04 time/iter=0.102s eta=1:12:19
+[7700/50000] loss=0.8002 lr=9.4E-04 time/iter=0.102s eta=1:12:08
+[7800/50000] loss=0.7970 lr=9.4E-04 time/iter=0.102s eta=1:11:58
+[7900/50000] loss=0.7969 lr=9.4E-04 time/iter=0.102s eta=1:11:48
+[8000/50000] loss=0.7976 lr=9.4E-04 time/iter=0.102s eta=1:11:38
+[8100/50000] loss=0.7971 lr=9.4E-04 time/iter=0.102s eta=1:11:27
+[8200/50000] loss=0.7985 lr=9.4E-04 time/iter=0.102s eta=1:11:17
+[8300/50000] loss=0.7973 lr=9.3E-04 time/iter=0.102s eta=1:11:07
+[8400/50000] loss=0.7982 lr=9.3E-04 time/iter=0.102s eta=1:10:57
+[8500/50000] loss=0.7939 lr=9.3E-04 time/iter=0.102s eta=1:10:46
+[8600/50000] loss=0.7961 lr=9.3E-04 time/iter=0.102s eta=1:10:36
+[8700/50000] loss=0.7960 lr=9.3E-04 time/iter=0.102s eta=1:10:26
+[8800/50000] loss=0.7967 lr=9.3E-04 time/iter=0.102s eta=1:10:15
+[8900/50000] loss=0.7978 lr=9.2E-04 time/iter=0.102s eta=1:10:06
+[9000/50000] loss=0.7962 lr=9.2E-04 time/iter=0.102s eta=1:09:55
+[9100/50000] loss=0.7958 lr=9.2E-04 time/iter=0.102s eta=1:09:45
+[9200/50000] loss=0.7984 lr=9.2E-04 time/iter=0.102s eta=1:09:35
+[9300/50000] loss=0.7964 lr=9.2E-04 time/iter=0.102s eta=1:09:24
+[9400/50000] loss=0.7955 lr=9.2E-04 time/iter=0.102s eta=1:09:14
+[9500/50000] loss=0.7974 lr=9.1E-04 time/iter=0.102s eta=1:09:04
+[9600/50000] loss=0.7957 lr=9.1E-04 time/iter=0.102s eta=1:08:53
+[9700/50000] loss=0.7959 lr=9.1E-04 time/iter=0.102s eta=1:08:43
+[9800/50000] loss=0.7977 lr=9.1E-04 time/iter=0.102s eta=1:08:33
+[9900/50000] loss=0.7961 lr=9.1E-04 time/iter=0.102s eta=1:08:23
+[10000/50000] loss=0.7972 lr=9.0E-04 time/iter=0.102s eta=1:08:12
+Saving checkpoint to current_runs/lstm_11050779/lstm_checkpoints/checkpoint-10000.pth...
+Checkpoint saved.
+[10100/50000] loss=0.7965 lr=9.0E-04 time/iter=0.102s eta=1:08:02
+[10200/50000] loss=0.7981 lr=9.0E-04 time/iter=0.102s eta=1:07:52
+[10300/50000] loss=0.7963 lr=9.0E-04 time/iter=0.102s eta=1:07:41
+[10400/50000] loss=0.7963 lr=9.0E-04 time/iter=0.102s eta=1:07:31
+[10500/50000] loss=0.7961 lr=9.0E-04 time/iter=0.102s eta=1:07:21
+[10600/50000] loss=0.7961 lr=8.9E-04 time/iter=0.102s eta=1:07:10
+[10700/50000] loss=0.7958 lr=8.9E-04 time/iter=0.102s eta=1:07:00
+[10800/50000] loss=0.7957 lr=8.9E-04 time/iter=0.102s eta=1:06:49
+[10900/50000] loss=0.7956 lr=8.9E-04 time/iter=0.102s eta=1:06:39
+[11000/50000] loss=0.7963 lr=8.9E-04 time/iter=0.102s eta=1:06:28
+[11100/50000] loss=0.7968 lr=8.8E-04 time/iter=0.102s eta=1:06:18
+[11200/50000] loss=0.7994 lr=8.8E-04 time/iter=0.102s eta=1:06:08
+[11300/50000] loss=0.7965 lr=8.8E-04 time/iter=0.102s eta=1:05:57
+[11400/50000] loss=0.7923 lr=8.8E-04 time/iter=0.102s eta=1:05:47
+[11500/50000] loss=0.7975 lr=8.8E-04 time/iter=0.102s eta=1:05:36
+[11600/50000] loss=0.7966 lr=8.7E-04 time/iter=0.102s eta=1:05:26
+[11700/50000] loss=0.7963 lr=8.7E-04 time/iter=0.102s eta=1:05:16
+[11800/50000] loss=0.7954 lr=8.7E-04 time/iter=0.102s eta=1:05:05
+[11900/50000] loss=0.7971 lr=8.7E-04 time/iter=0.102s eta=1:04:55
+[12000/50000] loss=0.7962 lr=8.6E-04 time/iter=0.102s eta=1:04:44
+[12100/50000] loss=0.7958 lr=8.6E-04 time/iter=0.102s eta=1:04:34
+[12200/50000] loss=0.7959 lr=8.6E-04 time/iter=0.102s eta=1:04:24
+[12300/50000] loss=0.7964 lr=8.6E-04 time/iter=0.102s eta=1:04:13
+[12400/50000] loss=0.7932 lr=8.6E-04 time/iter=0.102s eta=1:04:03
+[12500/50000] loss=0.7961 lr=8.5E-04 time/iter=0.102s eta=1:03:52
+[12600/50000] loss=0.7967 lr=8.5E-04 time/iter=0.102s eta=1:03:42
+[12700/50000] loss=0.7966 lr=8.5E-04 time/iter=0.102s eta=1:03:32
+[12800/50000] loss=0.7977 lr=8.5E-04 time/iter=0.102s eta=1:03:21
+[12900/50000] loss=0.7976 lr=8.4E-04 time/iter=0.102s eta=1:03:11
+[13000/50000] loss=0.7965 lr=8.4E-04 time/iter=0.102s eta=1:03:01
+[13100/50000] loss=0.7999 lr=8.4E-04 time/iter=0.102s eta=1:02:50
+[13200/50000] loss=0.7953 lr=8.4E-04 time/iter=0.102s eta=1:02:40
+[13300/50000] loss=0.7968 lr=8.4E-04 time/iter=0.102s eta=1:02:30
+[13400/50000] loss=0.8015 lr=8.3E-04 time/iter=0.102s eta=1:02:19
+[13500/50000] loss=0.7966 lr=8.3E-04 time/iter=0.102s eta=1:02:09
+[13600/50000] loss=0.7965 lr=8.3E-04 time/iter=0.102s eta=1:01:59
+[13700/50000] loss=0.7963 lr=8.3E-04 time/iter=0.102s eta=1:01:48
+[13800/50000] loss=0.7949 lr=8.2E-04 time/iter=0.102s eta=1:01:38
+[13900/50000] loss=0.7979 lr=8.2E-04 time/iter=0.102s eta=1:01:28
+[14000/50000] loss=0.7959 lr=8.2E-04 time/iter=0.102s eta=1:01:17
+[14100/50000] loss=0.7950 lr=8.2E-04 time/iter=0.102s eta=1:01:07
+[14200/50000] loss=0.7981 lr=8.1E-04 time/iter=0.102s eta=1:00:57
+[14300/50000] loss=0.7972 lr=8.1E-04 time/iter=0.102s eta=1:00:46
+[14400/50000] loss=0.7863 lr=8.1E-04 time/iter=0.102s eta=1:00:36
+[14500/50000] loss=0.7968 lr=8.1E-04 time/iter=0.102s eta=1:00:26
+[14600/50000] loss=0.7949 lr=8.0E-04 time/iter=0.102s eta=1:00:15
+[14700/50000] loss=0.7960 lr=8.0E-04 time/iter=0.102s eta=1:00:05
+[14800/50000] loss=0.7973 lr=8.0E-04 time/iter=0.102s eta=0:59:55
+[14900/50000] loss=0.7971 lr=8.0E-04 time/iter=0.102s eta=0:59:45
+[15000/50000] loss=0.7949 lr=7.9E-04 time/iter=0.102s eta=0:59:34
+Saving checkpoint to current_runs/lstm_11050779/lstm_checkpoints/checkpoint-15000.pth...
+Checkpoint saved.
+[15100/50000] loss=0.7929 lr=7.9E-04 time/iter=0.102s eta=0:59:24
+[15200/50000] loss=0.7957 lr=7.9E-04 time/iter=0.102s eta=0:59:14
+[15300/50000] loss=0.7959 lr=7.9E-04 time/iter=0.102s eta=0:59:04
+[15400/50000] loss=0.7962 lr=7.8E-04 time/iter=0.102s eta=0:58:53
+[15500/50000] loss=0.7980 lr=7.8E-04 time/iter=0.102s eta=0:58:43
+[15600/50000] loss=0.7959 lr=7.8E-04 time/iter=0.102s eta=0:58:33
+[15700/50000] loss=0.7966 lr=7.8E-04 time/iter=0.102s eta=0:58:23
+[15800/50000] loss=0.7940 lr=7.7E-04 time/iter=0.102s eta=0:58:12
+[15900/50000] loss=0.7956 lr=7.7E-04 time/iter=0.102s eta=0:58:02
+[16000/50000] loss=0.7959 lr=7.7E-04 time/iter=0.102s eta=0:57:52
+[16100/50000] loss=0.7927 lr=7.7E-04 time/iter=0.102s eta=0:57:42
+[16200/50000] loss=0.7968 lr=7.6E-04 time/iter=0.102s eta=0:57:31
+[16300/50000] loss=0.7947 lr=7.6E-04 time/iter=0.102s eta=0:57:21
+[16400/50000] loss=0.7966 lr=7.6E-04 time/iter=0.102s eta=0:57:11
+[16500/50000] loss=0.7955 lr=7.5E-04 time/iter=0.102s eta=0:57:00
+[16600/50000] loss=0.7949 lr=7.5E-04 time/iter=0.102s eta=0:56:50
+[16700/50000] loss=0.7962 lr=7.5E-04 time/iter=0.102s eta=0:56:40
+[16800/50000] loss=0.7989 lr=7.5E-04 time/iter=0.102s eta=0:56:30
+[16900/50000] loss=0.7952 lr=7.4E-04 time/iter=0.102s eta=0:56:19
+[17000/50000] loss=0.7956 lr=7.4E-04 time/iter=0.102s eta=0:56:09
+[17100/50000] loss=0.7959 lr=7.4E-04 time/iter=0.102s eta=0:55:59
+[17200/50000] loss=0.7957 lr=7.4E-04 time/iter=0.102s eta=0:55:49
+[17300/50000] loss=0.7952 lr=7.3E-04 time/iter=0.102s eta=0:55:38
+[17400/50000] loss=0.7993 lr=7.3E-04 time/iter=0.102s eta=0:55:28
+[17500/50000] loss=0.8097 lr=7.3E-04 time/iter=0.102s eta=0:55:18
+[17600/50000] loss=0.7992 lr=7.2E-04 time/iter=0.102s eta=0:55:08
+[17700/50000] loss=0.7985 lr=7.2E-04 time/iter=0.102s eta=0:54:57
+[17800/50000] loss=0.7997 lr=7.2E-04 time/iter=0.102s eta=0:54:47
+[17900/50000] loss=0.7996 lr=7.2E-04 time/iter=0.102s eta=0:54:37
+[18000/50000] loss=0.7982 lr=7.1E-04 time/iter=0.102s eta=0:54:27
+[18100/50000] loss=0.7989 lr=7.1E-04 time/iter=0.102s eta=0:54:16
+[18200/50000] loss=0.7990 lr=7.1E-04 time/iter=0.102s eta=0:54:06
+[18300/50000] loss=0.7987 lr=7.0E-04 time/iter=0.102s eta=0:53:56
+[18400/50000] loss=0.7984 lr=7.0E-04 time/iter=0.102s eta=0:53:46
+[18500/50000] loss=0.8007 lr=7.0E-04 time/iter=0.102s eta=0:53:35
+[18600/50000] loss=0.7978 lr=7.0E-04 time/iter=0.102s eta=0:53:25
+[18700/50000] loss=0.7988 lr=6.9E-04 time/iter=0.102s eta=0:53:15
+[18800/50000] loss=0.7972 lr=6.9E-04 time/iter=0.102s eta=0:53:05
+[18900/50000] loss=0.7992 lr=6.9E-04 time/iter=0.102s eta=0:52:54
+[19000/50000] loss=0.7989 lr=6.8E-04 time/iter=0.102s eta=0:52:44
+[19100/50000] loss=0.7990 lr=6.8E-04 time/iter=0.102s eta=0:52:34
+[19200/50000] loss=0.8003 lr=6.8E-04 time/iter=0.102s eta=0:52:24
+[19300/50000] loss=0.7993 lr=6.8E-04 time/iter=0.102s eta=0:52:13
+[19400/50000] loss=0.7983 lr=6.7E-04 time/iter=0.102s eta=0:52:03
+[19500/50000] loss=0.7982 lr=6.7E-04 time/iter=0.102s eta=0:51:53
+[19600/50000] loss=0.7994 lr=6.7E-04 time/iter=0.102s eta=0:51:43
+[19700/50000] loss=0.7991 lr=6.6E-04 time/iter=0.102s eta=0:51:32
+[19800/50000] loss=0.8006 lr=6.6E-04 time/iter=0.102s eta=0:51:22
+[19900/50000] loss=0.7982 lr=6.6E-04 time/iter=0.102s eta=0:51:12
+[20000/50000] loss=0.7992 lr=6.5E-04 time/iter=0.102s eta=0:51:02
+Saving checkpoint to current_runs/lstm_11050779/lstm_checkpoints/checkpoint-20000.pth...
+Checkpoint saved.
+[20100/50000] loss=0.8047 lr=6.5E-04 time/iter=0.102s eta=0:50:52
+[20200/50000] loss=0.7982 lr=6.5E-04 time/iter=0.102s eta=0:50:41
+[20300/50000] loss=0.7996 lr=6.5E-04 time/iter=0.102s eta=0:50:31
+[20400/50000] loss=0.7984 lr=6.4E-04 time/iter=0.102s eta=0:50:21
+[20500/50000] loss=0.8003 lr=6.4E-04 time/iter=0.102s eta=0:50:11
+[20600/50000] loss=0.7992 lr=6.4E-04 time/iter=0.102s eta=0:50:00
+[20700/50000] loss=0.7980 lr=6.3E-04 time/iter=0.102s eta=0:49:50
+[20800/50000] loss=0.7987 lr=6.3E-04 time/iter=0.102s eta=0:49:40
+[20900/50000] loss=0.7989 lr=6.3E-04 time/iter=0.102s eta=0:49:30
+[21000/50000] loss=0.8001 lr=6.2E-04 time/iter=0.102s eta=0:49:19
+[21100/50000] loss=0.7982 lr=6.2E-04 time/iter=0.102s eta=0:49:09
+[21200/50000] loss=0.7995 lr=6.2E-04 time/iter=0.102s eta=0:48:59
+[21300/50000] loss=0.7991 lr=6.2E-04 time/iter=0.102s eta=0:48:49
+[21400/50000] loss=0.7978 lr=6.1E-04 time/iter=0.102s eta=0:48:39
+[21500/50000] loss=0.7988 lr=6.1E-04 time/iter=0.102s eta=0:48:28
+[21600/50000] loss=0.7973 lr=6.1E-04 time/iter=0.102s eta=0:48:18
+[21700/50000] loss=0.7983 lr=6.0E-04 time/iter=0.102s eta=0:48:08
+[21800/50000] loss=0.7989 lr=6.0E-04 time/iter=0.102s eta=0:47:58
+[21900/50000] loss=0.7993 lr=6.0E-04 time/iter=0.102s eta=0:47:47
+[22000/50000] loss=0.7986 lr=5.9E-04 time/iter=0.102s eta=0:47:37
+[22100/50000] loss=0.8051 lr=5.9E-04 time/iter=0.102s eta=0:47:27
+[22200/50000] loss=0.7998 lr=5.9E-04 time/iter=0.102s eta=0:47:17
+[22300/50000] loss=0.7997 lr=5.8E-04 time/iter=0.102s eta=0:47:06
+[22400/50000] loss=0.7987 lr=5.8E-04 time/iter=0.102s eta=0:46:56
+[22500/50000] loss=0.7981 lr=5.8E-04 time/iter=0.102s eta=0:46:46
+[22600/50000] loss=0.7997 lr=5.8E-04 time/iter=0.102s eta=0:46:36
+[22700/50000] loss=0.7985 lr=5.7E-04 time/iter=0.102s eta=0:46:26
+[22800/50000] loss=0.7979 lr=5.7E-04 time/iter=0.102s eta=0:46:15
+[22900/50000] loss=0.8000 lr=5.7E-04 time/iter=0.102s eta=0:46:05
+[23000/50000] loss=0.7980 lr=5.6E-04 time/iter=0.102s eta=0:45:55
+[23100/50000] loss=0.7988 lr=5.6E-04 time/iter=0.102s eta=0:45:45
+[23200/50000] loss=0.7987 lr=5.6E-04 time/iter=0.102s eta=0:45:34
+[23300/50000] loss=0.7987 lr=5.5E-04 time/iter=0.102s eta=0:45:24
+[23400/50000] loss=0.7986 lr=5.5E-04 time/iter=0.102s eta=0:45:14
+[23500/50000] loss=0.7972 lr=5.5E-04 time/iter=0.102s eta=0:45:04
+[23600/50000] loss=0.7994 lr=5.4E-04 time/iter=0.102s eta=0:44:54
+[23700/50000] loss=0.7980 lr=5.4E-04 time/iter=0.102s eta=0:44:43
+[23800/50000] loss=0.8018 lr=5.4E-04 time/iter=0.102s eta=0:44:33
+[23900/50000] loss=0.7984 lr=5.3E-04 time/iter=0.102s eta=0:44:23
+[24000/50000] loss=0.7976 lr=5.3E-04 time/iter=0.102s eta=0:44:13
+[24100/50000] loss=0.7984 lr=5.3E-04 time/iter=0.102s eta=0:44:02
+[24200/50000] loss=0.8008 lr=5.3E-04 time/iter=0.102s eta=0:43:52
+[24300/50000] loss=0.7987 lr=5.2E-04 time/iter=0.102s eta=0:43:42
+[24400/50000] loss=0.7988 lr=5.2E-04 time/iter=0.102s eta=0:43:32
+[24500/50000] loss=0.7985 lr=5.2E-04 time/iter=0.102s eta=0:43:21
+[24600/50000] loss=0.7981 lr=5.1E-04 time/iter=0.102s eta=0:43:11
+[24700/50000] loss=0.7984 lr=5.1E-04 time/iter=0.102s eta=0:43:01
+[24800/50000] loss=0.7997 lr=5.1E-04 time/iter=0.102s eta=0:42:51
+[24900/50000] loss=0.7975 lr=5.0E-04 time/iter=0.102s eta=0:42:41
+[25000/50000] loss=0.7981 lr=5.0E-04 time/iter=0.102s eta=0:42:30
+Saving checkpoint to current_runs/lstm_11050779/lstm_checkpoints/checkpoint-25000.pth...
+Checkpoint saved.
+[25100/50000] loss=0.7988 lr=5.0E-04 time/iter=0.102s eta=0:42:20
+[25200/50000] loss=0.7973 lr=4.9E-04 time/iter=0.102s eta=0:42:10
+[25300/50000] loss=0.7983 lr=4.9E-04 time/iter=0.102s eta=0:42:00
+[25400/50000] loss=0.7988 lr=4.9E-04 time/iter=0.102s eta=0:41:50
+[25500/50000] loss=0.7953 lr=4.8E-04 time/iter=0.102s eta=0:41:39
+[25600/50000] loss=0.7976 lr=4.8E-04 time/iter=0.102s eta=0:41:29
+[25700/50000] loss=0.7985 lr=4.8E-04 time/iter=0.102s eta=0:41:19
+[25800/50000] loss=0.7959 lr=4.7E-04 time/iter=0.102s eta=0:41:09
+[25900/50000] loss=0.7989 lr=4.7E-04 time/iter=0.102s eta=0:40:58
+[26000/50000] loss=0.7997 lr=4.7E-04 time/iter=0.102s eta=0:40:48
+[26100/50000] loss=0.7979 lr=4.7E-04 time/iter=0.102s eta=0:40:38
+[26200/50000] loss=0.7961 lr=4.6E-04 time/iter=0.102s eta=0:40:28
+[26300/50000] loss=0.7965 lr=4.6E-04 time/iter=0.102s eta=0:40:17
+[26400/50000] loss=0.7983 lr=4.6E-04 time/iter=0.102s eta=0:40:07
+[26500/50000] loss=0.7966 lr=4.5E-04 time/iter=0.102s eta=0:39:57
+[26600/50000] loss=0.7976 lr=4.5E-04 time/iter=0.102s eta=0:39:47
+[26700/50000] loss=0.7980 lr=4.5E-04 time/iter=0.102s eta=0:39:37
+[26800/50000] loss=0.8002 lr=4.4E-04 time/iter=0.102s eta=0:39:26
+[26900/50000] loss=0.7989 lr=4.4E-04 time/iter=0.102s eta=0:39:16
+[27000/50000] loss=0.7980 lr=4.4E-04 time/iter=0.102s eta=0:39:06
+[27100/50000] loss=0.7988 lr=4.3E-04 time/iter=0.102s eta=0:38:56
+[27200/50000] loss=0.7991 lr=4.3E-04 time/iter=0.102s eta=0:38:45
+[27300/50000] loss=0.7981 lr=4.3E-04 time/iter=0.102s eta=0:38:35
+[27400/50000] loss=0.7983 lr=4.2E-04 time/iter=0.102s eta=0:38:25
+[27500/50000] loss=0.7976 lr=4.2E-04 time/iter=0.102s eta=0:38:15
+[27600/50000] loss=0.7978 lr=4.2E-04 time/iter=0.102s eta=0:38:05
+[27700/50000] loss=0.7972 lr=4.2E-04 time/iter=0.102s eta=0:37:54
+[27800/50000] loss=0.8030 lr=4.1E-04 time/iter=0.102s eta=0:37:44
+[27900/50000] loss=0.7990 lr=4.1E-04 time/iter=0.102s eta=0:37:34
+[28000/50000] loss=0.7975 lr=4.1E-04 time/iter=0.102s eta=0:37:24
+[28100/50000] loss=0.7990 lr=4.0E-04 time/iter=0.102s eta=0:37:14
+[28200/50000] loss=0.7979 lr=4.0E-04 time/iter=0.102s eta=0:37:03
+[28300/50000] loss=0.7993 lr=4.0E-04 time/iter=0.102s eta=0:36:53
+[28400/50000] loss=0.7986 lr=3.9E-04 time/iter=0.102s eta=0:36:43
+[28500/50000] loss=0.7933 lr=3.9E-04 time/iter=0.102s eta=0:36:33
+[28600/50000] loss=0.7989 lr=3.9E-04 time/iter=0.102s eta=0:36:22
+[28700/50000] loss=0.7975 lr=3.8E-04 time/iter=0.102s eta=0:36:12
+[28800/50000] loss=0.7948 lr=3.8E-04 time/iter=0.102s eta=0:36:02
+[28900/50000] loss=0.7967 lr=3.8E-04 time/iter=0.102s eta=0:35:52
+[29000/50000] loss=0.7984 lr=3.8E-04 time/iter=0.102s eta=0:35:42
+[29100/50000] loss=0.7975 lr=3.7E-04 time/iter=0.102s eta=0:35:31
+[29200/50000] loss=0.7975 lr=3.7E-04 time/iter=0.102s eta=0:35:21
+[29300/50000] loss=0.7962 lr=3.7E-04 time/iter=0.102s eta=0:35:11
+[29400/50000] loss=0.7980 lr=3.6E-04 time/iter=0.102s eta=0:35:01
+[29500/50000] loss=0.7946 lr=3.6E-04 time/iter=0.102s eta=0:34:50
+[29600/50000] loss=0.7987 lr=3.6E-04 time/iter=0.102s eta=0:34:40
+[29700/50000] loss=0.7991 lr=3.5E-04 time/iter=0.102s eta=0:34:30
+[29800/50000] loss=0.8056 lr=3.5E-04 time/iter=0.102s eta=0:34:20
+[29900/50000] loss=0.7995 lr=3.5E-04 time/iter=0.102s eta=0:34:10
+[30000/50000] loss=0.7980 lr=3.5E-04 time/iter=0.102s eta=0:33:59
+Saving checkpoint to current_runs/lstm_11050779/lstm_checkpoints/checkpoint-30000.pth...
+Checkpoint saved.
+[30100/50000] loss=0.7980 lr=3.4E-04 time/iter=0.102s eta=0:33:49
+[30200/50000] loss=0.7967 lr=3.4E-04 time/iter=0.102s eta=0:33:39
+[30300/50000] loss=0.7977 lr=3.4E-04 time/iter=0.102s eta=0:33:29
+[30400/50000] loss=0.7980 lr=3.3E-04 time/iter=0.102s eta=0:33:19
+[30500/50000] loss=0.7983 lr=3.3E-04 time/iter=0.102s eta=0:33:08
+[30600/50000] loss=0.7980 lr=3.3E-04 time/iter=0.102s eta=0:32:58
+[30700/50000] loss=0.7986 lr=3.2E-04 time/iter=0.102s eta=0:32:48
+[30800/50000] loss=0.7985 lr=3.2E-04 time/iter=0.102s eta=0:32:38
+[30900/50000] loss=0.7979 lr=3.2E-04 time/iter=0.102s eta=0:32:28
+[31000/50000] loss=0.7982 lr=3.2E-04 time/iter=0.102s eta=0:32:17
+[31100/50000] loss=0.7982 lr=3.1E-04 time/iter=0.102s eta=0:32:07
+[31200/50000] loss=0.7989 lr=3.1E-04 time/iter=0.102s eta=0:31:57
+[31300/50000] loss=0.7978 lr=3.1E-04 time/iter=0.102s eta=0:31:47
+[31400/50000] loss=0.7988 lr=3.0E-04 time/iter=0.102s eta=0:31:37
+[31500/50000] loss=0.7968 lr=3.0E-04 time/iter=0.102s eta=0:31:26
+[31600/50000] loss=0.7976 lr=3.0E-04 time/iter=0.102s eta=0:31:16
+[31700/50000] loss=0.7981 lr=3.0E-04 time/iter=0.102s eta=0:31:06
+[31800/50000] loss=0.7982 lr=2.9E-04 time/iter=0.102s eta=0:30:56
+[31900/50000] loss=0.7983 lr=2.9E-04 time/iter=0.102s eta=0:30:45
+[32000/50000] loss=0.7987 lr=2.9E-04 time/iter=0.102s eta=0:30:35
+[32100/50000] loss=0.7974 lr=2.8E-04 time/iter=0.102s eta=0:30:25
+[32200/50000] loss=0.7995 lr=2.8E-04 time/iter=0.102s eta=0:30:15
+[32300/50000] loss=0.7977 lr=2.8E-04 time/iter=0.102s eta=0:30:05
+[32400/50000] loss=0.7975 lr=2.8E-04 time/iter=0.102s eta=0:29:54
+[32500/50000] loss=0.7992 lr=2.7E-04 time/iter=0.102s eta=0:29:44
+[32600/50000] loss=0.7988 lr=2.7E-04 time/iter=0.102s eta=0:29:34
+[32700/50000] loss=0.7970 lr=2.7E-04 time/iter=0.102s eta=0:29:24
+[32800/50000] loss=0.7983 lr=2.6E-04 time/iter=0.102s eta=0:29:14
+[32900/50000] loss=0.7976 lr=2.6E-04 time/iter=0.102s eta=0:29:03
+[33000/50000] loss=0.7993 lr=2.6E-04 time/iter=0.102s eta=0:28:53
+[33100/50000] loss=0.7985 lr=2.6E-04 time/iter=0.102s eta=0:28:43
+[33200/50000] loss=0.7961 lr=2.5E-04 time/iter=0.102s eta=0:28:33
+[33300/50000] loss=0.7971 lr=2.5E-04 time/iter=0.102s eta=0:28:23
+[33400/50000] loss=0.7985 lr=2.5E-04 time/iter=0.102s eta=0:28:12
+[33500/50000] loss=0.7966 lr=2.5E-04 time/iter=0.102s eta=0:28:02
+[33600/50000] loss=0.7995 lr=2.4E-04 time/iter=0.102s eta=0:27:52
+[33700/50000] loss=0.7984 lr=2.4E-04 time/iter=0.102s eta=0:27:42
+[33800/50000] loss=0.7978 lr=2.4E-04 time/iter=0.102s eta=0:27:32
+[33900/50000] loss=0.7983 lr=2.3E-04 time/iter=0.102s eta=0:27:21
+[34000/50000] loss=0.7973 lr=2.3E-04 time/iter=0.102s eta=0:27:11
+[34100/50000] loss=0.7982 lr=2.3E-04 time/iter=0.102s eta=0:27:01
+[34200/50000] loss=0.7968 lr=2.3E-04 time/iter=0.102s eta=0:26:51
+[34300/50000] loss=0.7959 lr=2.2E-04 time/iter=0.102s eta=0:26:41
+[34400/50000] loss=0.7978 lr=2.2E-04 time/iter=0.102s eta=0:26:31
+[34500/50000] loss=0.7974 lr=2.2E-04 time/iter=0.102s eta=0:26:21
+[34600/50000] loss=0.7956 lr=2.2E-04 time/iter=0.102s eta=0:26:10
+[34700/50000] loss=0.7985 lr=2.1E-04 time/iter=0.102s eta=0:26:00
+[34800/50000] loss=0.7979 lr=2.1E-04 time/iter=0.102s eta=0:25:50
+[34900/50000] loss=0.7978 lr=2.1E-04 time/iter=0.102s eta=0:25:40
+[35000/50000] loss=0.7973 lr=2.1E-04 time/iter=0.102s eta=0:25:30
+Saving checkpoint to current_runs/lstm_11050779/lstm_checkpoints/checkpoint-35000.pth...
+Checkpoint saved.
+[35100/50000] loss=0.7979 lr=2.0E-04 time/iter=0.102s eta=0:25:20
+[35200/50000] loss=0.7986 lr=2.0E-04 time/iter=0.102s eta=0:25:09
+[35300/50000] loss=0.7979 lr=2.0E-04 time/iter=0.102s eta=0:24:59
+[35400/50000] loss=0.7971 lr=2.0E-04 time/iter=0.102s eta=0:24:49
+[35500/50000] loss=0.7952 lr=1.9E-04 time/iter=0.102s eta=0:24:39
+[35600/50000] loss=0.7996 lr=1.9E-04 time/iter=0.102s eta=0:24:29
+[35700/50000] loss=0.7977 lr=1.9E-04 time/iter=0.102s eta=0:24:18
+[35800/50000] loss=0.7986 lr=1.9E-04 time/iter=0.102s eta=0:24:08
+[35900/50000] loss=0.7965 lr=1.8E-04 time/iter=0.102s eta=0:23:58
+[36000/50000] loss=0.7994 lr=1.8E-04 time/iter=0.102s eta=0:23:48
+[36100/50000] loss=0.7984 lr=1.8E-04 time/iter=0.102s eta=0:23:38
+[36200/50000] loss=0.7981 lr=1.8E-04 time/iter=0.102s eta=0:23:28
+[36300/50000] loss=0.7973 lr=1.7E-04 time/iter=0.102s eta=0:23:17
+[36400/50000] loss=0.7976 lr=1.7E-04 time/iter=0.102s eta=0:23:07
+[36500/50000] loss=0.7942 lr=1.7E-04 time/iter=0.102s eta=0:22:57
+[36600/50000] loss=0.7990 lr=1.7E-04 time/iter=0.102s eta=0:22:47
+[36700/50000] loss=0.7977 lr=1.6E-04 time/iter=0.102s eta=0:22:37
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+slurmstepd: error: *** JOB 11050779 ON gcn24 CANCELLED AT 2025-04-07T19:05:40 ***
+slurmstepd: error: *** STEP 11050779.0 ON gcn24 CANCELLED AT 2025-04-07T19:05:40 ***
+
+JOB STATISTICS
+==============
+Job ID: 11050779
+Cluster: snellius
+User/Group: igardner1/igardner1
+State: CANCELLED (exit code 0)
+Nodes: 1
+Cores per node: 18
+CPU Utilized: 01:02:41
+CPU Efficiency: 5.52% of 18:56:06 core-walltime
+Job Wall-clock time: 01:03:07
+Memory Utilized: 1.81 GB
+Memory Efficiency: 1.50% of 120.00 GB (120.00 GB/node)

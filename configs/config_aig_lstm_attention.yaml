@@ -1,47 +1,39 @@
-# Config file for LSTM node and edge models (WITH Attention) - CORRECTED
+# Config: Node Attention LSTM + Edge Attention LSTM
 data:
   dataset_type: 'aig-directed-multiclass'
-  graph_file: 'dataset/inputs8_outputs8max_nodes128max.pkl' # CHECK PATH
+  graph_file: 'dataset/inputs8_outputs8max_nodes128max.pkl'
   use_bfs: false
   max_graphs: null
 
 model:
   mode: 'directed-multiclass'
-  use_lstm: true                  # Use LSTM
-  use_attention: true             # Use Attention
-  edge_model: 'attention_rnn'     # Use Attention EdgeLSTM (matched with 'attention_rnn' in updated setup_models)
+  use_lstm: true          # LSTM Node
+  use_attention: true     # Node Attention
+  edge_model: 'attention_rnn' # Use Attention Edge Model (maps to EdgeAttentionLSTM)
 
-  GraphAttentionLSTM:             # Parameters for GraphLevelAttentionLSTM
+  GraphAttentionLSTM:     # Used because use_lstm: true, use_attention: true
     embedding_size: 384
     hidden_size: 768
     num_layers: 3
-    edge_feature_len: 3           # <-- Define explicitly here
-    attention_heads: 8
+    edge_feature_len: 3
+    attention_heads: 8      # Node attention heads
     attention_dropout: 0.1
-    output_size: 256              # For EdgeAttentionLSTM input
+    output_size: 256        # MUST match EdgeAttentionLSTM.hidden_size
 
-  EdgeAttentionLSTM:              # Parameters for EdgeAttentionLSTM
+  EdgeAttentionLSTM:      # Used because edge_model: 'attention_rnn' and use_lstm: true
     embedding_size: 128
-    hidden_size: 256              # Matches GraphAttentionLSTM.output_size
+    hidden_size: 256        # MUST match GraphAttentionLSTM.output_size
     num_layers: 4
-    edge_feature_len: 3           # <-- Define explicitly here
-    attention_heads: 4
+    edge_feature_len: 3
+    attention_heads: 4      # Edge attention heads
     attention_dropout: 0.1
-
-  # --- Unused/Ignored Sections ---
-  # GraphLSTM: ...
-  # EdgeLSTM: ...
-  # GraphRNN: ...
-  # EdgeRNN: ...
-  # EdgeMLP: ...
 
 train:
   batch_size: 32
-  lr: 0.0005
-  steps: 50000
+  lr: 0.0001                # Lower LR suggested for attention
+  steps: 75000              # Total training steps
   print_iter: 100
-  checkpoint_iter: 5000
-  checkpoint_dir: 'lstm_attn_checkpoints'
-  log_dir: 'lstm_attn_logs'
-  lr_schedule_milestones: [10000, 20000, 30000, 40000]
-  lr_schedule_gamma: 0.3
+  checkpoint_iter: 7500
+  checkpoint_dir: 'checkpoints/checkpoints_lstm_mhsa' # Specific directory
+  log_file: 'train_results/logs_lstm_mhsa'               # Specific directory
+  # lr_schedule_* removed; code uses CosineAnnealingLR

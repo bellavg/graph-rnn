@@ -1,0 +1,199 @@
+============================================================================================== 
+Warning! Mixing Conda and module environments may lead to corruption of the
+user environment. 
+We do not recommend users mixing those two environments unless absolutely
+necessary. Note that 
+SURF does not provide any support for Conda environment.
+For more information, please refer to our software policy page:
+https://servicedesk.surf.nl/wiki/display/WIKI/Software+policy+Snellius#SoftwarepolicySnellius-UseofAnacondaandMinicondaenvironmentsonSnellius 
+
+Remember that many packages have already been installed on the system and can
+be loaded using 
+the 'module load <package__name>' command. If you are uncertain if a package is
+already available 
+on the system, please use 'module avail' or 'module spider' to search for it.
+============================================================================================== 
+Using config file: configs/config_aig_base.yaml
+Output directory: runs/graphrnn_10996984
+Loaded config:
+data:
+  dataset_type: aig-directed-multiclass
+  graph_file: dataset/inputs8_outputs8max_nodes128max.pkl
+  use_bfs: false
+  max_graphs: null
+model:
+  mode: directed-multiclass
+  edge_model: mlp
+  GraphRNN:
+    embedding_size: 256
+    hidden_size: 512
+    num_layers: 3
+    edge_feature_len: 3
+  EdgeMLP:
+    hidden_size: 512
+    edge_feature_len: 3
+  EdgeRNN:
+    embedding_size: 64
+    hidden_size: 256
+    num_layers: 3
+    edge_feature_len: 3
+train:
+  batch_size: 32
+  lr: 0.001
+  steps: 10000
+  print_iter: 100
+  checkpoint_iter: 1000
+  checkpoint_dir: base_checkpoints
+  log_dir: base_logs
+  lr_schedule_milestones:
+  - 3000
+  - 6000
+  - 9000
+  lr_schedule_gamma: 0.3
+
+INFO: Using Topological Sort mode. Effective input/output size (max_node_count - 1): 127
+Using CrossEntropyLoss for 3 edge classes.
+TensorBoard logs will be saved to: runs/graphrnn_10996984/base_logs
+Starting training loop...
+Loading AIG graphs from dataset/inputs8_outputs8max_nodes128max.pkl...
+Maximum node count in processed dataset: 128
+Dataset ready: 5689 graphs (training split). Ordering: Topological Sort
+[100/10000] loss=0.1014 lr=1.0E-03 time/iter=0.121s eta=0:19:57
+[200/10000] loss=0.0559 lr=1.0E-03 time/iter=0.118s eta=0:19:17
+[300/10000] loss=0.0554 lr=1.0E-03 time/iter=0.117s eta=0:18:57
+[400/10000] loss=0.0546 lr=1.0E-03 time/iter=0.117s eta=0:18:41
+[500/10000] loss=0.0545 lr=1.0E-03 time/iter=0.116s eta=0:18:26
+[600/10000] loss=0.0543 lr=1.0E-03 time/iter=0.116s eta=0:18:13
+[700/10000] loss=0.0542 lr=1.0E-03 time/iter=0.116s eta=0:18:00
+[800/10000] loss=0.0540 lr=1.0E-03 time/iter=0.116s eta=0:17:47
+[900/10000] loss=0.0538 lr=1.0E-03 time/iter=0.116s eta=0:17:34
+[1000/10000] loss=0.0537 lr=1.0E-03 time/iter=0.116s eta=0:17:21
+Saving checkpoint to runs/graphrnn_10996984/base_checkpoints/checkpoint-1000.pth...
+Checkpoint saved.
+[1100/10000] loss=0.0547 lr=1.0E-03 time/iter=0.116s eta=0:17:09
+[1200/10000] loss=0.0538 lr=1.0E-03 time/iter=0.116s eta=0:16:57
+[1300/10000] loss=0.0531 lr=1.0E-03 time/iter=0.115s eta=0:16:44
+[1400/10000] loss=0.0534 lr=1.0E-03 time/iter=0.115s eta=0:16:32
+[1500/10000] loss=0.0520 lr=1.0E-03 time/iter=0.115s eta=0:16:20
+[1600/10000] loss=0.0515 lr=1.0E-03 time/iter=0.115s eta=0:16:09
+[1700/10000] loss=0.0501 lr=1.0E-03 time/iter=0.115s eta=0:15:57
+[1800/10000] loss=0.0492 lr=1.0E-03 time/iter=0.115s eta=0:15:45
+[1900/10000] loss=0.0487 lr=1.0E-03 time/iter=0.115s eta=0:15:33
+[2000/10000] loss=0.0483 lr=1.0E-03 time/iter=0.115s eta=0:15:21
+Saving checkpoint to runs/graphrnn_10996984/base_checkpoints/checkpoint-2000.pth...
+Checkpoint saved.
+[2100/10000] loss=0.0477 lr=1.0E-03 time/iter=0.115s eta=0:15:09
+[2200/10000] loss=0.0468 lr=1.0E-03 time/iter=0.115s eta=0:14:57
+[2300/10000] loss=0.0467 lr=1.0E-03 time/iter=0.115s eta=0:14:46
+[2400/10000] loss=0.0462 lr=1.0E-03 time/iter=0.115s eta=0:14:34
+[2500/10000] loss=0.0462 lr=1.0E-03 time/iter=0.115s eta=0:14:23
+[2600/10000] loss=0.0458 lr=1.0E-03 time/iter=0.115s eta=0:14:11
+[2700/10000] loss=0.0459 lr=1.0E-03 time/iter=0.115s eta=0:13:59
+[2800/10000] loss=0.0456 lr=1.0E-03 time/iter=0.115s eta=0:13:47
+[2900/10000] loss=0.0454 lr=1.0E-03 time/iter=0.115s eta=0:13:36
+[3000/10000] loss=0.0454 lr=3.0E-04 time/iter=0.115s eta=0:13:24
+Saving checkpoint to runs/graphrnn_10996984/base_checkpoints/checkpoint-3000.pth...
+Checkpoint saved.
+[3100/10000] loss=0.0449 lr=3.0E-04 time/iter=0.115s eta=0:13:13
+[3200/10000] loss=0.0449 lr=3.0E-04 time/iter=0.115s eta=0:13:01
+[3300/10000] loss=0.0449 lr=3.0E-04 time/iter=0.115s eta=0:12:50
+[3400/10000] loss=0.0449 lr=3.0E-04 time/iter=0.115s eta=0:12:38
+[3500/10000] loss=0.0448 lr=3.0E-04 time/iter=0.115s eta=0:12:26
+[3600/10000] loss=0.0447 lr=3.0E-04 time/iter=0.115s eta=0:12:15
+[3700/10000] loss=0.0446 lr=3.0E-04 time/iter=0.115s eta=0:12:03
+[3800/10000] loss=0.0442 lr=3.0E-04 time/iter=0.115s eta=0:11:52
+[3900/10000] loss=0.0443 lr=3.0E-04 time/iter=0.115s eta=0:11:40
+[4000/10000] loss=0.0441 lr=3.0E-04 time/iter=0.115s eta=0:11:29
+Saving checkpoint to runs/graphrnn_10996984/base_checkpoints/checkpoint-4000.pth...
+Checkpoint saved.
+[4100/10000] loss=0.0436 lr=3.0E-04 time/iter=0.115s eta=0:11:17
+[4200/10000] loss=0.0437 lr=3.0E-04 time/iter=0.115s eta=0:11:06
+[4300/10000] loss=0.0437 lr=3.0E-04 time/iter=0.115s eta=0:10:54
+[4400/10000] loss=0.0437 lr=3.0E-04 time/iter=0.115s eta=0:10:43
+[4500/10000] loss=0.0434 lr=3.0E-04 time/iter=0.115s eta=0:10:31
+[4600/10000] loss=0.0435 lr=3.0E-04 time/iter=0.115s eta=0:10:20
+[4700/10000] loss=0.0434 lr=3.0E-04 time/iter=0.115s eta=0:10:08
+[4800/10000] loss=0.0435 lr=3.0E-04 time/iter=0.115s eta=0:09:57
+[4900/10000] loss=0.0434 lr=3.0E-04 time/iter=0.115s eta=0:09:45
+[5000/10000] loss=0.0434 lr=3.0E-04 time/iter=0.115s eta=0:09:34
+Saving checkpoint to runs/graphrnn_10996984/base_checkpoints/checkpoint-5000.pth...
+Checkpoint saved.
+[5100/10000] loss=0.0433 lr=3.0E-04 time/iter=0.115s eta=0:09:22
+[5200/10000] loss=0.0432 lr=3.0E-04 time/iter=0.115s eta=0:09:11
+[5300/10000] loss=0.0432 lr=3.0E-04 time/iter=0.115s eta=0:08:59
+[5400/10000] loss=0.0431 lr=3.0E-04 time/iter=0.115s eta=0:08:48
+[5500/10000] loss=0.0432 lr=3.0E-04 time/iter=0.115s eta=0:08:36
+[5600/10000] loss=0.0431 lr=3.0E-04 time/iter=0.115s eta=0:08:25
+[5700/10000] loss=0.0434 lr=3.0E-04 time/iter=0.115s eta=0:08:13
+[5800/10000] loss=0.0430 lr=3.0E-04 time/iter=0.115s eta=0:08:02
+[5900/10000] loss=0.0432 lr=3.0E-04 time/iter=0.115s eta=0:07:50
+[6000/10000] loss=0.0430 lr=9.0E-05 time/iter=0.115s eta=0:07:39
+Saving checkpoint to runs/graphrnn_10996984/base_checkpoints/checkpoint-6000.pth...
+Checkpoint saved.
+[6100/10000] loss=0.0427 lr=9.0E-05 time/iter=0.115s eta=0:07:27
+[6200/10000] loss=0.0428 lr=9.0E-05 time/iter=0.115s eta=0:07:16
+[6300/10000] loss=0.0427 lr=9.0E-05 time/iter=0.115s eta=0:07:04
+[6400/10000] loss=0.0428 lr=9.0E-05 time/iter=0.115s eta=0:06:53
+[6500/10000] loss=0.0429 lr=9.0E-05 time/iter=0.115s eta=0:06:41
+[6600/10000] loss=0.0428 lr=9.0E-05 time/iter=0.115s eta=0:06:30
+[6700/10000] loss=0.0428 lr=9.0E-05 time/iter=0.115s eta=0:06:18
+[6800/10000] loss=0.0428 lr=9.0E-05 time/iter=0.115s eta=0:06:07
+[6900/10000] loss=0.0427 lr=9.0E-05 time/iter=0.115s eta=0:05:55
+[7000/10000] loss=0.0426 lr=9.0E-05 time/iter=0.115s eta=0:05:44
+Saving checkpoint to runs/graphrnn_10996984/base_checkpoints/checkpoint-7000.pth...
+Checkpoint saved.
+[7100/10000] loss=0.0427 lr=9.0E-05 time/iter=0.115s eta=0:05:32
+[7200/10000] loss=0.0427 lr=9.0E-05 time/iter=0.115s eta=0:05:21
+[7300/10000] loss=0.0428 lr=9.0E-05 time/iter=0.115s eta=0:05:09
+[7400/10000] loss=0.0427 lr=9.0E-05 time/iter=0.115s eta=0:04:58
+[7500/10000] loss=0.0427 lr=9.0E-05 time/iter=0.115s eta=0:04:46
+[7600/10000] loss=0.0427 lr=9.0E-05 time/iter=0.115s eta=0:04:35
+[7700/10000] loss=0.0425 lr=9.0E-05 time/iter=0.115s eta=0:04:23
+[7800/10000] loss=0.0426 lr=9.0E-05 time/iter=0.115s eta=0:04:12
+[7900/10000] loss=0.0427 lr=9.0E-05 time/iter=0.115s eta=0:04:00
+[8000/10000] loss=0.0426 lr=9.0E-05 time/iter=0.115s eta=0:03:49
+Saving checkpoint to runs/graphrnn_10996984/base_checkpoints/checkpoint-8000.pth...
+Checkpoint saved.
+[8100/10000] loss=0.0426 lr=9.0E-05 time/iter=0.115s eta=0:03:38
+[8200/10000] loss=0.0426 lr=9.0E-05 time/iter=0.115s eta=0:03:26
+[8300/10000] loss=0.0426 lr=9.0E-05 time/iter=0.115s eta=0:03:15
+[8400/10000] loss=0.0425 lr=9.0E-05 time/iter=0.115s eta=0:03:03
+[8500/10000] loss=0.0425 lr=9.0E-05 time/iter=0.115s eta=0:02:52
+[8600/10000] loss=0.0423 lr=9.0E-05 time/iter=0.115s eta=0:02:40
+[8700/10000] loss=0.0425 lr=9.0E-05 time/iter=0.115s eta=0:02:29
+[8800/10000] loss=0.0425 lr=9.0E-05 time/iter=0.115s eta=0:02:17
+[8900/10000] loss=0.0425 lr=9.0E-05 time/iter=0.115s eta=0:02:06
+[9000/10000] loss=0.0425 lr=2.7E-05 time/iter=0.115s eta=0:01:54
+Saving checkpoint to runs/graphrnn_10996984/base_checkpoints/checkpoint-9000.pth...
+Checkpoint saved.
+[9100/10000] loss=0.0427 lr=2.7E-05 time/iter=0.115s eta=0:01:43
+[9200/10000] loss=0.0425 lr=2.7E-05 time/iter=0.115s eta=0:01:31
+[9300/10000] loss=0.0425 lr=2.7E-05 time/iter=0.115s eta=0:01:20
+[9400/10000] loss=0.0424 lr=2.7E-05 time/iter=0.115s eta=0:01:08
+[9500/10000] loss=0.0424 lr=2.7E-05 time/iter=0.115s eta=0:00:57
+[9600/10000] loss=0.0424 lr=2.7E-05 time/iter=0.115s eta=0:00:45
+[9700/10000] loss=0.0425 lr=2.7E-05 time/iter=0.115s eta=0:00:34
+[9800/10000] loss=0.0425 lr=2.7E-05 time/iter=0.115s eta=0:00:22
+[9900/10000] loss=0.0425 lr=2.7E-05 time/iter=0.115s eta=0:00:11
+[10000/10000] loss=0.0426 lr=2.7E-05 time/iter=0.115s eta=0:00:00
+Saving checkpoint to runs/graphrnn_10996984/base_checkpoints/checkpoint-10000.pth...
+Checkpoint saved.
+Training loop finished.
+Main function finished.
+Job finished at Sun Apr  6 13:39:58 CEST 2025
+Results saved to runs/graphrnn_10996984
+
+JOB STATISTICS
+==============
+Job ID: 10996984
+Cluster: snellius
+User/Group: igardner1/igardner1
+State: RUNNING
+Nodes: 1
+Cores per node: 18
+CPU Utilized: 00:00:00
+CPU Efficiency: 0.00% of 06:02:06 core-walltime
+Job Wall-clock time: 00:20:07
+Memory Utilized: 0.00 MB
+Memory Efficiency: 0.00% of 120.00 GB (120.00 GB/node)
+WARNING: Efficiency statistics can only be obtained after the job has ended as seff tool is based on the accounting database data.

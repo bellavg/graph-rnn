@@ -1,43 +1,35 @@
-# Config file for LSTM node and edge models (No Attention) - CORRECTED
+# Config: LSTM Node + standard RNN Edge
 data:
   dataset_type: 'aig-directed-multiclass'
-  graph_file: 'dataset/inputs8_outputs8max_nodes128max.pkl' # CHECK PATH
+  graph_file: 'dataset/inputs8_outputs8max_nodes128max.pkl'
   use_bfs: false
   max_graphs: null
 
 model:
   mode: 'directed-multiclass'
-  use_lstm: true                  # Use LSTM
-  use_attention: false            # No Attention
-  edge_model: 'rnn'               # Use base EdgeLSTM (matched with 'rnn' in updated setup_models)
+  use_lstm: true          # LSTM Node
+  use_attention: false    # No Node Attention
+  edge_model: 'rnn'       # Use standard EdgeRNN (maps to EdgeLSTM because use_lstm=true)
 
-  GraphLSTM:                      # Parameters for GraphLevelLSTM
+  GraphLSTM:              # Used because use_lstm: true, use_attention: false
     embedding_size: 128
     hidden_size: 256
     num_layers: 4
-    edge_feature_len: 3           # <-- Define explicitly here
-    output_size: 128            # For EdgeLSTM input
+    edge_feature_len: 3
+    output_size: 128      # MUST match EdgeLSTM.hidden_size
 
-  EdgeLSTM:                       # Parameters for EdgeLevelLSTM
+  EdgeLSTM:               # Used because edge_model: 'rnn' and use_lstm: true
     embedding_size: 64
-    hidden_size: 128             # Matches GraphLSTM.output_size
+    hidden_size: 128      # MUST match GraphLSTM.output_size
     num_layers: 4
-    edge_feature_len: 3           # <-- Define explicitly here
-
-  # --- Unused/Ignored Sections ---
-  # GraphRNN: ...
-  # EdgeRNN: ...
-  # GraphAttentionLSTM: ...
-  # EdgeAttentionLSTM: ...
-  # EdgeMLP: ...
+    edge_feature_len: 3
 
 train:
   batch_size: 32
-  lr: 0.001
-  steps: 100000
+  lr: 0.0005              # Initial Learning Rate
+  steps: 75000            # Total training steps
   print_iter: 100
-  checkpoint_iter: 5000
-  checkpoint_dir: 'long_small_lstm_checkpoints'
-  log_dir: 'long_small_lstm_logs'
-  lr_schedule_milestones: [10000, 20000, 30000, 40000]
-  lr_schedule_gamma: 0.3
+  checkpoint_iter: 7500
+  checkpoint_dir: 'checkpoints/checkpoints_lstm_rnn' # Specific directory
+  log_file: 'train_results/logs_lstm_rnn'               # Specific directory
+  # lr_schedule_* removed; code uses CosineAnnealingLR
