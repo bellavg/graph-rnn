@@ -31,6 +31,7 @@ EDGE_TYPES = {
 }
 
 NUM_EDGE_FEATURES = 3
+NUM_NODE_TYPES = 4
 
 def _calculate_levels(g: nx.DiGraph) -> (Dict[int, int], int):
     """
@@ -100,7 +101,6 @@ class AIGDataset(torch.utils.data.Dataset):
                  graph_file: str,
                  training: bool = True,
                  train_split: float = 0.9,
-                 include_node_types: bool = False,
                  max_graphs: Optional[int] = None,
                  max_train_graphs: Optional[int] = None):
         """
@@ -118,7 +118,6 @@ class AIGDataset(torch.utils.data.Dataset):
         """
         # Basic setup
         self.graph_file = graph_file
-        self.include_node_types = include_node_types
         self.m_internal = None  # Will be calculated later
         self.max_train_graphs = max_train_graphs
 
@@ -399,7 +398,7 @@ class AIGDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         """
         Get a specific graph converted to the sequence format required by GraphRNN
-        using Topological Sort ordering. Includes node level information.
+        using Topological Sort ordering. Includes node level and node type information.
         """
         # --- Ensure self.graphs is accessed correctly based on self.start_idx ---
         actual_idx = self.start_idx + idx
@@ -417,7 +416,8 @@ class AIGDataset(torch.utils.data.Dataset):
             return {
                 'x': torch.zeros((0, dummy_m, NUM_EDGE_FEATURES), dtype=torch.float),
                 'len': torch.tensor(0, dtype=torch.long),
-                'levels': torch.zeros(0, dtype=torch.long)
+                'levels': torch.zeros(0, dtype=torch.long),
+                'node_types': torch.zeros(0, dtype=torch.long) # Add dummy node_types
             }
 
         try:
@@ -429,7 +429,8 @@ class AIGDataset(torch.utils.data.Dataset):
             return {
                 'x': torch.zeros((0, dummy_m, NUM_EDGE_FEATURES), dtype=torch.float),
                 'len': torch.tensor(0, dtype=torch.long),
-                'levels': torch.zeros(0, dtype=torch.long)
+                'levels': torch.zeros(0, dtype=torch.long),
+                'node_types': torch.zeros(0, dtype=torch.long) # Add dummy node_types
             }
 
         if len(node_ordering) != n:
@@ -439,11 +440,12 @@ class AIGDataset(torch.utils.data.Dataset):
             return {
                 'x': torch.zeros((0, dummy_m, NUM_EDGE_FEATURES), dtype=torch.float),
                 'len': torch.tensor(0, dtype=torch.long),
-                'levels': torch.zeros(0, dtype=torch.long)
+                'levels': torch.zeros(0, dtype=torch.long),
+                'node_types': torch.zeros(0, dtype=torch.long) # Add dummy node_types
             }
         node_to_idx = {node_id: i for i, node_id in enumerate(node_ordering)}
 
-        # Create Adjacency Tensor
+        # Create Adjacency Tensor (code remains the same)
         adj_tensor = np.zeros((n, n, NUM_EDGE_FEATURES), dtype=np.float32)
         for u, v, data in g.edges(data=True):
             try:
@@ -456,7 +458,7 @@ class AIGDataset(torch.utils.data.Dataset):
             else:
                 adj_tensor[target_idx, source_idx, 0] = 1.0
 
-        # Create Sequence
+        # Create Sequence (code remains the same)
         sequence = []
         if effective_m is None: raise ValueError("self.m_internal is None.")
 
@@ -474,14 +476,14 @@ class AIGDataset(torch.utils.data.Dataset):
             )[::-1, :]  # Reverse order
             sequence.append(padded_connections)
 
-        # Convert sequence to tensor
+        # Convert sequence to tensor (code remains the same)
         if sequence:
             sequence_array = np.stack(sequence, axis=0)
             seq_tensor = torch.tensor(sequence_array, dtype=torch.float32)
         else:
             seq_tensor = torch.zeros((0, effective_m, NUM_EDGE_FEATURES), dtype=torch.float32)
 
-        # Pad sequence tensor to max_node_count - 1 length
+        # Pad sequence tensor to max_node_count - 1 length (code remains the same)
         seq_len = seq_tensor.shape[0]
         target_padded_len = self.max_node_count - 1
         total_pad_len = target_padded_len - seq_len
@@ -491,7 +493,7 @@ class AIGDataset(torch.utils.data.Dataset):
             seq_tensor, (0, 0, 0, 0, 0, total_pad_len)
         )
 
-        # Prepare Levels Tensor
+        # Prepare Levels Tensor (code remains the same)
         node_to_level = g.graph.get('levels', {})  # Use default {}
         levels_ordered = [node_to_level.get(node_id, 0) for node_id in node_ordering]
         if n > 1:
@@ -504,14 +506,30 @@ class AIGDataset(torch.utils.data.Dataset):
         else:
             padded_levels_tensor = torch.zeros(0, dtype=torch.long)
 
+        # --- NEW: Prepare Node Types Tensor ---
+        # Get the stored integer 'type' attribute for each node in the topological order
+        node_types_ordered = [g.nodes[node_id].get('type', -1) for node_id in node_ordering] # Default to -1 if 'type' is missing
+
+        if n > 1:
+            # Slice to match the sequence length (excluding the first node)
+            node_types_for_sequence = node_types_ordered[1:]
+            node_types_array = np.array(node_types_for_sequence, dtype=np.int64)
+
+            # Pad to the target length (max_node_count - 1)
+            node_type_pad_len = target_padded_len - len(node_types_array)
+            if node_type_pad_len < 0: node_type_pad_len = 0
+            padded_node_types_array = np.pad(node_types_array, (0, node_type_pad_len), 'constant', constant_values=-1) # Pad with -1 (or another indicator)
+            padded_node_types_tensor = torch.tensor(padded_node_types_array, dtype=torch.long)
+        else:
+            padded_node_types_tensor = torch.zeros(0, dtype=torch.long)
+        # --- END NEW ---
+
         # Prepare result dictionary
         result = {
             'x': padded_seq_tensor,
             'len': torch.tensor(seq_len, dtype=torch.long),
-            'levels': padded_levels_tensor
+            'levels': padded_levels_tensor,
+            'node_types': padded_node_types_tensor # Add the node types tensor
         }
-
-        # Conditionally include node types (if requested)
-
 
         return result

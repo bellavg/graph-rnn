@@ -1,18 +1,55 @@
 import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
-import math # Needed for positional encoding if used, or sqrt in attention
-
-import torch
-import torch.nn as nn
-from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 import math
+from aig_dataset import NUM_NODE_TYPES
+import torch.nn.functional as F # <--- Added for NodeTypePredictor
+
+
+class NodeTypePredictor(nn.Module):
+    """
+    Predicts node types based on the hidden state from a node-level model.
+    """
+    def __init__(self, hidden_size: int, num_node_types: int = NUM_NODE_TYPES):
+        """
+        Args:
+            node_hidden_size: The dimension of the hidden state output by the node-level model.
+            num_node_types: The number of distinct node types to predict.
+        """
+        super().__init__()
+        # Simple linear layer for prediction
+        self.predictor = nn.Linear(hidden_size, num_node_types)
+        self.num_node_types = num_node_types
+        print(f"Initialized NodeTypePredictor: node_hidden_size={hidden_size}, num_node_types={num_node_types}")
+
+    def forward(self, node_hidden_state: torch.Tensor) -> torch.Tensor:
+        """
+        Predicts node type logits.
+
+        Args:
+            node_hidden_state: Tensor output from the node-level model.
+                              Shape: [batch_size, seq_len, node_hidden_size]
+
+        Returns:
+            Tensor: Logits for each node type.
+                    Shape: [batch_size, seq_len, num_node_types]
+        """
+        logits = self.predictor(node_hidden_state)
+        return logits
+
+    def predict_types(self, node_hidden_state: torch.Tensor) -> torch.Tensor:
+        """ Predicts the most likely node type index. """
+        logits = self.forward(node_hidden_state)
+        probabilities = F.softmax(logits, dim=-1)
+        predicted_indices = torch.argmax(probabilities, dim=-1)
+        return predicted_indices
+
 
 # --- Renamed GraphLevelAttentionRNN ---
 class GraphLevelAttentionRNN(nn.Module):
     def __init__(self, input_size, embedding_size, hidden_size, num_layers,
                  output_size=None, edge_feature_len=3,
-                 predict_node_types=False, num_node_types=None, # Kept for flexibility
+                 # Kept for flexibility
                  use_conditioning=False, tt_size=None, # Kept for flexibility
                  max_level=None,
                  attention_heads=4, # Default 4 heads
@@ -24,7 +61,7 @@ class GraphLevelAttentionRNN(nn.Module):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.edge_feature_len = edge_feature_len
-        self.predict_node_types = predict_node_types
+
         self.use_conditioning = use_conditioning
         self.tt_size = tt_size
         self.max_level = max_level
@@ -57,11 +94,6 @@ class GraphLevelAttentionRNN(nn.Module):
         if output_size:
             self.linear_out1 = nn.Linear(hidden_size, embedding_size)
             self.linear_out2 = nn.Linear(embedding_size, output_size)
-
-        self.node_type_predictor = None
-        if self.predict_node_types:
-            if num_node_types is None: raise ValueError("num_node_types must be specified")
-            self.node_type_predictor = nn.Linear(hidden_size, num_node_types)
 
         self.hidden = None
 
@@ -150,21 +182,13 @@ class GraphLevelAttentionRNN(nn.Module):
                 gru_output, _ = pad_packed_sequence(gru_output_packed, batch_first=True, total_length=target_padded_length)
              except RuntimeError as e: print(f"Error unpacking sequence: {e}")
 
-        # 10. Node type prediction (optional)
-        node_type_logits = None
-        if self.predict_node_types and self.node_type_predictor is not None:
-            node_type_logits = self.node_type_predictor(gru_output)
-
         # 11. Final output projection (optional)
         final_output = gru_output
         if self.linear_out1:
             final_output = self.relu(self.linear_out1(final_output))
             final_output = self.linear_out2(final_output)
 
-        if self.predict_node_types:
-            return final_output, node_type_logits
-        else:
-            return final_output
+        return final_output
 
 
 class EdgeLevelAttentionRNN(nn.Module):
@@ -328,7 +352,7 @@ class EdgeLevelAttentionRNN(nn.Module):
 class GraphLevelRNN(nn.Module):
     def __init__(self, input_size, embedding_size, hidden_size, num_layers,
                  output_size=None, edge_feature_len=1,
-                 predict_node_types=False, num_node_types=None, # Kept for potential future use
+                 # Kept for potential future use
                  use_conditioning=False, tt_size=None, # Kept for potential future use
                  max_level=None): # For level embedding
         super().__init__()
@@ -339,7 +363,7 @@ class GraphLevelRNN(nn.Module):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.edge_feature_len = edge_feature_len
-        self.predict_node_types = predict_node_types # Store these flags
+        # Store these flags
         self.use_conditioning = use_conditioning
         self.tt_size = tt_size
         self.max_level = max_level
@@ -365,12 +389,6 @@ class GraphLevelRNN(nn.Module):
         if output_size:
             self.linear_out1 = nn.Linear(hidden_size, embedding_size)
             self.linear_out2 = nn.Linear(embedding_size, output_size)
-
-        self.node_type_predictor = None
-        if self.predict_node_types:
-            if num_node_types is None:
-                raise ValueError("num_node_types must be specified if predict_node_types is True")
-            self.node_type_predictor = nn.Linear(hidden_size, num_node_types)
 
         self.hidden = None
 
@@ -418,19 +436,14 @@ class GraphLevelRNN(nn.Module):
              except RuntimeError as e: print(f"Error unpacking sequence in GraphLevelRNN: {e}")
 
 
-        node_type_logits = None
-        if self.predict_node_types and self.node_type_predictor is not None:
-            node_type_logits = self.node_type_predictor(gru_output)
 
         final_output = gru_output
         if self.linear_out1:
             final_output = self.relu(self.linear_out1(final_output))
             final_output = self.linear_out2(final_output)
 
-        if self.predict_node_types:
-            return final_output, node_type_logits
-        else:
-            return final_output
+
+        return final_output
 
 
 
@@ -438,7 +451,7 @@ class GraphLevelRNN(nn.Module):
 # (Include their definitions from your src/model.py or the previous response here)
 class EdgeLevelMLP(nn.Module):
     # --- MODIFIED __init__ ---
-    def __init__(self, input_size, hidden_size, output_size, edge_feature_len=1,
+    def __init__(self, input_size, hidden_size, output_size, edge_feature_len=3,
                  use_conditioning=False, tt_size=None): # NEW args
         super().__init__()
         self.edge_feature_len = edge_feature_len
@@ -563,8 +576,7 @@ class EdgeLevelRNN(nn.Module):
 class GraphLevelLSTM(nn.Module):
     """ LSTM version of GraphLevelRNN """
     def __init__(self, input_size, embedding_size, hidden_size, num_layers,
-                 output_size=None, edge_feature_len=1,
-                 predict_node_types=False, num_node_types=None,
+                 output_size=None, edge_feature_len=3,
                  use_conditioning=False, tt_size=None,
                  max_level=None):
         super().__init__()
@@ -573,7 +585,6 @@ class GraphLevelLSTM(nn.Module):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.edge_feature_len = edge_feature_len
-        self.predict_node_types = predict_node_types
         self.use_conditioning = use_conditioning
         self.tt_size = tt_size
         self.max_level = max_level
@@ -593,18 +604,11 @@ class GraphLevelLSTM(nn.Module):
         self.lstm = nn.LSTM(input_size=embedding_size, hidden_size=hidden_size,
                             num_layers=num_layers, batch_first=True)
         # --- END LSTM ---
-
         self.linear_out1 = None
         self.linear_out2 = None
         if output_size:
             self.linear_out1 = nn.Linear(hidden_size, embedding_size)
             self.linear_out2 = nn.Linear(embedding_size, output_size)
-
-        self.node_type_predictor = None
-        if self.predict_node_types:
-            if num_node_types is None:
-                raise ValueError("num_node_types must be specified if predict_node_types is True")
-            self.node_type_predictor = nn.Linear(hidden_size, num_node_types)
 
         self.hidden = None # LSTM hidden is a tuple (h_n, c_n)
 
@@ -653,9 +657,7 @@ class GraphLevelLSTM(nn.Module):
                 lstm_output, _ = pad_packed_sequence(lstm_output_packed, batch_first=True, total_length=target_padded_length)
              except RuntimeError as e: print(f"Error unpacking sequence in GraphLevelLSTM: {e}")
 
-        node_type_logits = None
-        if self.predict_node_types and self.node_type_predictor is not None:
-            node_type_logits = self.node_type_predictor(lstm_output)
+
 
         final_output = lstm_output
         if self.linear_out1:
@@ -665,19 +667,16 @@ class GraphLevelLSTM(nn.Module):
             if self.linear_out2:
                  final_output = self.linear_out2(final_output)
 
-        if self.predict_node_types:
-            return final_output, node_type_logits
-        else:
+
             # Return only the output sequence (used as input 'h' to edge models)
             # LSTM's hidden state (h_n, c_n) is stored in self.hidden
-            return final_output
+        return final_output
 
 
 class GraphLevelAttentionLSTM(nn.Module):
     """ LSTM version of GraphLevelAttentionRNN """
     def __init__(self, input_size, embedding_size, hidden_size, num_layers,
                  output_size=None, edge_feature_len=3,
-                 predict_node_types=False, num_node_types=None,
                  use_conditioning=False, tt_size=None,
                  max_level=None,
                  attention_heads=4,
@@ -688,7 +687,7 @@ class GraphLevelAttentionLSTM(nn.Module):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.edge_feature_len = edge_feature_len
-        self.predict_node_types = predict_node_types
+
         self.use_conditioning = use_conditioning
         self.tt_size = tt_size
         self.max_level = max_level
@@ -725,11 +724,6 @@ class GraphLevelAttentionLSTM(nn.Module):
         if output_size:
             self.linear_out1 = nn.Linear(hidden_size, embedding_size)
             self.linear_out2 = nn.Linear(embedding_size, output_size)
-
-        self.node_type_predictor = None
-        if self.predict_node_types:
-            if num_node_types is None: raise ValueError("num_node_types must be specified")
-            self.node_type_predictor = nn.Linear(hidden_size, num_node_types)
 
         self.hidden = None # LSTM hidden is a tuple (h_n, c_n)
 
@@ -795,9 +789,6 @@ class GraphLevelAttentionLSTM(nn.Module):
                 lstm_output, _ = pad_packed_sequence(lstm_output_packed, batch_first=True, total_length=target_padded_length)
              except RuntimeError as e: print(f"Error unpacking sequence: {e}")
 
-        node_type_logits = None
-        if self.predict_node_types and self.node_type_predictor is not None:
-            node_type_logits = self.node_type_predictor(lstm_output)
 
         final_output = lstm_output
         if self.linear_out1:
@@ -805,10 +796,7 @@ class GraphLevelAttentionLSTM(nn.Module):
             if self.linear_out2:
                 final_output = self.linear_out2(final_output)
 
-        if self.predict_node_types:
-            return final_output, node_type_logits
-        else:
-            return final_output
+        return final_output
 
 
 class EdgeLevelLSTM(nn.Module):
