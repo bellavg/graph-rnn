@@ -1,7 +1,7 @@
 # Config: Node Attention GRU + standard RNN Edge
 data:
   dataset_type: 'aig-directed-multiclass'
-  graph_file: 'dataset/inputs8_outputs8max_nodes128max.pkl'
+  graph_file: 'dataset/data.pkl'
   use_bfs: false
   max_graphs: null
 

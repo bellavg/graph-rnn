@@ -2,7 +2,7 @@
 #SBATCH --job-name=lstm_mhsa
 #SBATCH --partition=gpu_a100     # Specify the appropriate partition here
 #SBATCH --gpus=1
-#SBATCH --time=06:00:00
+#SBATCH --time=12:00:00
 #SBATCH --output=slurm_logs/lstm_mhsa_%j.out
 
 

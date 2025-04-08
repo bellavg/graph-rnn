@@ -2,7 +2,7 @@
 #SBATCH --job-name=mlp
 #SBATCH --partition=gpu_a100     # Specify the appropriate partition here
 #SBATCH --gpus=1
-#SBATCH --time=06:00:00
+#SBATCH --time=12:00:00
 #SBATCH --output=slurm_logs/mlp_%j.out
 
 
