@@ -21,7 +21,7 @@ source activate aig-rnn  # Changed from 'source activate'
 # Set output directory with job ID
 
 # Config file to use (provide as parameter or default)
-CONFIG_FILE=${1:-"./configs/config_aig_attention.yaml"}
+CONFIG_FILE=${1:-"./configs/config_aig_attention2.yaml"}
 
 # Run the main script
 echo "Using config file: $CONFIG_FILE"
