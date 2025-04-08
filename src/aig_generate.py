@@ -165,6 +165,14 @@ def rnn_edge_gen_aig(edge_rnn, h, num_edges_to_sample, effective_m,
                     logger.debug(f"  k={k} (from node {source_node_log_idx}): Probs=[N:{probs[0]:.3f}, R:{probs[1]:.3f}, I:{probs[2]:.3f}]")
                 # --- END LOGGING ---
 
+                # --- DIAGNOSTIC LOGGING ---
+                if debug and current_node_idx_for_log is not None and current_node_idx_for_log <= 2:
+                    source_node_log_idx = (current_node_idx_for_log - 1 - k)
+                    logger.debug(
+                        f"  Edge Logits (Node {current_node_idx_for_log}, Edge k={k}, From={source_node_log_idx}): {logits.squeeze().cpu().numpy()}")
+                    logger.debug(f"  Scaled Logits: {scaled_logits.squeeze().cpu().numpy()}")
+                # --- END DIAGNOSTIC --
+
                 dist = torch.distributions.Categorical(logits=scaled_logits)
                 sampled_type_idx = dist.sample()
 
@@ -176,6 +184,17 @@ def rnn_edge_gen_aig(edge_rnn, h, num_edges_to_sample, effective_m,
                 x.zero_() # Prepare next input x
                 x[0, 0, sampled_type_idx.item()] = 1.0
                 # Store sampled one-hot vector: shape [NUM_EDGE_FEATURES]
+                # --- DIAGNOSTIC: Force first edge (k=0) to be non-NONE ---
+                if k == 0 and sampled_type_idx.item() == EDGE_TYPES["NONE"] and num_edges_to_sample > 0:
+                    logger.debug(
+                        f"  DIAGNOSTIC: Forcing first edge (k=0) from NONE to REGULAR for node {current_node_idx_for_log}")
+                    # Choose REGULAR or INVERTED, e.g., REGULAR
+                    sampled_type_idx = torch.tensor([EDGE_TYPES["REGULAR"]], device=device)
+                    x.zero_()  # Update x for the next iteration based on the forced type
+                    x[0, 0, sampled_type_idx.item()] = 1.0
+                # --- END DIAGNOSTIC ---
+
+                # Store sampled one-hot vector (original line)
                 sampled_edges.append(x.clone().squeeze(0).squeeze(0).cpu().numpy())
 
             except Exception as e_inner:
@@ -248,6 +267,15 @@ def mlp_edge_gen_aig(edge_mlp, h, num_edges_to_sample, effective_m, temperature=
 
         relevant_logits = logits_for_sampling[:num_edges_to_sample, :]
 
+        # --- DIAGNOSTIC LOGGING ---
+        if debug and current_node_idx_for_log is not None and current_node_idx_for_log <= 2:
+            logger.debug(f"  MLP Edge Logits (Node {current_node_idx_for_log}, Shape={relevant_logits.shape}):")
+            # Log logits for first few potential predecessors
+            for k_log in range(min(num_edges_to_sample, 5)):
+                source_node_log_idx = (current_node_idx_for_log - 1 - k_log)
+                logger.debug(f"    k={k_log} (From={source_node_log_idx}): {relevant_logits[k_log].cpu().numpy()}")
+        # --- END DIAGNOSTIC ---
+
         if torch.isnan(relevant_logits).any() or torch.isinf(relevant_logits).any():
             logger.warning(f"NaN or Inf values detected in MLP logits. Using default edges.")
             adj_vec_sampled[0, 0, 0, EDGE_TYPES["REGULAR"]] = 1.0
@@ -270,6 +298,13 @@ def mlp_edge_gen_aig(edge_mlp, h, num_edges_to_sample, effective_m, temperature=
                 adj_vec_sampled[0, 0, 0, EDGE_TYPES["NONE"]] = 0.0
                 adj_vec_sampled[0, 0, 0, EDGE_TYPES["REGULAR"]] = 1.0
                 logger.debug("MLP: Forced first edge to REGULAR to avoid all-NONE.")
+                # --- DIAGNOSTIC: Ensure first edge (index 0) is not NONE if edges were sampled ---
+            if num_edges_to_sample > 0 and adj_vec_sampled[0, 0, 0, EDGE_TYPES["NONE"]] == 1.0:
+                logger.debug(
+                    f"  DIAGNOSTIC: Forcing first edge (idx 0) from NONE to REGULAR for node {current_node_idx_for_log}")
+                adj_vec_sampled[0, 0, 0, EDGE_TYPES["NONE"]] = 0.0
+                adj_vec_sampled[0, 0, 0, EDGE_TYPES["REGULAR"]] = 1.0
+                # --- END DIAGNOSTIC ---
 
         except Exception as e_sample:
             logger.error(f"Error during MLP sampling: {e_sample}. Using default edges.")
@@ -332,6 +367,8 @@ def generate_aig(num_nodes_target, node_model, edge_model, effective_m, max_leve
             for i in range(1, gen_limit):
                 current_node_idx = i # Generating edges FOR node i (connecting FROM nodes 0 to i-1)
 
+
+
                 # --- Node Level Hidden State ---
                 level_for_input = None
                 if uses_level_embedding:
@@ -348,9 +385,30 @@ def generate_aig(num_nodes_target, node_model, edge_model, effective_m, max_leve
                     level_clamped = min(current_node_level, max_level_model)
                     level_for_input = torch.tensor([[level_clamped]], dtype=torch.long, device=device)
 
+                    # --- DIAGNOSTIC LOGGING ---
+                    if i <= 2 and debug:  # Log only for first couple of steps if debug enabled
+                        logger.debug(f"\n--- Generate Step i={i} (Node {current_node_idx}) ---")
+                        logger.debug(f"  Node Input (adj_vec_current shape {adj_vec_current.shape}):")
+                        # Log a summary or the argmax to see edge types
+                        if adj_vec_current.numel() > 0:
+                            input_types = torch.argmax(adj_vec_current.squeeze(), dim=-1).cpu().numpy()
+                            logger.debug(f"    Input types (argmax): {input_types}")
+                        else:
+                            logger.debug("    Input tensor empty")
+                        if level_for_input is not None:
+                            logger.debug(f"  Level Input: {level_for_input.item()}")
+                    # --- END DIAGNOSTIC ---
+
                 # --- Node model forward pass ---
                 node_output = node_model(adj_vec_current, levels=level_for_input)
                 h_node = node_output[0] if isinstance(node_output, tuple) else node_output
+
+                # --- DIAGNOSTIC LOGGING ---
+                if i <= 2 and debug:
+                    logger.debug(f"  Node Output (h_node shape {h_node.shape}):")
+                    # Log some stats of h_node if needed (e.g., mean, std)
+                    logger.debug(f"    h_node mean: {h_node.mean().item():.4f}, std: {h_node.std().item():.4f}")
+                # --- END DIAGNOSTIC ---
 
                 # --- Edge Sampling ---
                 num_edges_to_sample = min(current_node_idx, effective_m)
