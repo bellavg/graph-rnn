@@ -4,7 +4,7 @@
 #SBATCH --gpus=1
 #SBATCH --time=04:00:00       # Adjust time as needed
 #SBATCH --output=slurm_logs/eval_all_%j.out
-#SBATCH --error=slurm_logs/eval_all_%j.err
+
 
 # --- User Configuration ---
 
