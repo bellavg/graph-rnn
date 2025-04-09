@@ -17,6 +17,7 @@ import time
 import traceback
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from data_utils import get_max_node_count_from_pkl, get_max_level_from_pkl
 import importlib.util
 import logging
 from aig_evaluate import (calculate_paper_validity,
@@ -272,6 +273,8 @@ def main():
     parser.add_argument('--gpu', type=int, default=0, help='GPU ID to use (-1 for CPU)')
     parser.add_argument('--force_max_nodes_train', type=int, default=None, help='Override max_node_count_train if not in config')
     parser.add_argument('--force_max_level_train', type=int, default=None, help='Override max_level_train if not in config')
+    parser.add_argument('--train_data_file', type=str, default="dataset/final_data.pkl",
+                        help='Path to the original training data pkl file (e.g., final_data.pkl) to determine max nodes/level if not in config/forced')
     # --- Visualization ---
     parser.add_argument('--save_plots', action='store_true', help='Save visualizations of the best valid generated graphs')
     parser.add_argument('--num_plots', type=int, default=5, help='Maximum number of best plots to save per model')

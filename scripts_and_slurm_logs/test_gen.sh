@@ -79,12 +79,14 @@ python -u "$PYTHON_SCRIPT" \
     --plot_dir "$PLOT_DIR" \
     --num_plots $NUM_PLOTS \
     $SAVE_PLOTS_FLAG \
+    --force_max_nodes_train 89 \
+    --force_max_level_train 18
+    # the forced valued for final_data.pkl
     # $DEBUG_FLAG # Uncomment to enable debug output from the python script
     # --plot_sort_by $SORT_PLOTS_BY     # Uncomment and set if needed
     # --patience $PATIENCE              # Uncomment and set if needed
     # --max_gen_steps $MAX_GEN_STEPS    # Uncomment and set if needed
-    # --force_max_nodes_train $FORCE_MAX_NODES # Uncomment if needed
-    # --force_max_level_train $FORCE_MAX_LEVEL # Uncomment if needed
+      # Uncomment if needed
 
 echo "--------------------------------------"
 echo "Evaluation finished at $(date)"
