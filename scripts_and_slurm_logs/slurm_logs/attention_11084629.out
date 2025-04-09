@@ -1,0 +1,1058 @@
+============================================================================================== 
+Warning! Mixing Conda and module environments may lead to corruption of the
+user environment. 
+We do not recommend users mixing those two environments unless absolutely
+necessary. Note that 
+SURF does not provide any support for Conda environment.
+For more information, please refer to our software policy page:
+https://servicedesk.surf.nl/wiki/display/WIKI/Software+policy+Snellius#SoftwarepolicySnellius-UseofAnacondaandMinicondaenvironmentsonSnellius 
+
+Remember that many packages have already been installed on the system and can
+be loaded using 
+the 'module load <package__name>' command. If you are uncertain if a package is
+already available 
+on the system, please use 'module avail' or 'module spider' to search for it.
+============================================================================================== 
+Using config file: ./configs/config_aig_attention.yaml
+Loaded config:
+data:
+  dataset_type: aig-directed-multiclass
+  graph_file: dataset/final_data.pkl
+  use_bfs: false
+  max_graphs: null
+model:
+  mode: directed-multiclass
+  use_lstm: false
+  use_attention: true
+  edge_model: rnn
+  GraphAttentionRNN:
+    embedding_size: 384
+    hidden_size: 768
+    num_layers: 4
+    edge_feature_len: 3
+    attention_heads: 8
+    attention_dropout: 0.1
+    output_size: 256
+  EdgeRNN:
+    embedding_size: 128
+    hidden_size: 256
+    num_layers: 3
+    edge_feature_len: 3
+train:
+  batch_size: 64
+  lr: 0.001
+  steps: 75000
+  print_iter: 100
+  checkpoint_iter: 5000
+  checkpoint_dir: checkpoints/checkpoints_gru_mhsa
+  log_file: train_results/logs_gru_mhsa
+
+Computing maximum node count from dataset...
+Maximum node count: 89
+Computing maximum level from dataset...
+Calculated max level 18 from 37000 valid graphs
+Maximum level: 18
+Loading AIG graphs from dataset/final_data.pkl...
+Limited to 30000 graphs for processing.
+Preprocessing graphs...
+Graph preprocessing complete. 30000 graphs processed, 0 skipped.
+Maximum node count in processed dataset: 89
+INFO: Topological Sort mode. Effective input size (m_internal): 88
+Calculating node levels...
+Maximum node level across dataset: 18
+Calculating edge type counts for class weighting...
+Calculating weights based on 27000 training graphs...
+Total edge slots considered for weights: 98341408
+Raw edge counts: {0: 96753923, 1: 959297, 2: 628188}
+Calculated edge weights (Inverse Frequency): [0.011724252253770828, 1.1824986934661865, 1.8057770729064941]
+Dataset ready: 27000 graphs (training split).
+Total available graphs: 30000
+Training graphs: 27000 (limited by split ratio)
+Testing graphs: 3000
+Ordering: Topological Sort
+Dataset initialized with 27000 training graphs
+Final statistics - Max node count: 89, Max level: 18
+INFO: Using Topological Sort mode. Effective input/output size (max_nodes-1): 88
+INFO: GraphLevelAttentionRNN using level embedding up to level 18
+INFO: Using GraphLevelAttentionRNN for node level.
+Selected EdgeLevelRNN model.
+Setting up CrossEntropyLoss for 3 edge classes.
+Applying edge class weights: [0.011724252253770828, 1.1824986934661865, 1.8057770729064941]
+Logger initialized. Logging to train_results/logs_gru_mhsa
+Logger initialized. Writing to: train_results/logs_gru_mhsa
+[100/75000] loss=0.9054 lr=1.0E-03 time/iter=0.209s eta=4:21:16
+[200/75000] loss=0.8904 lr=1.0E-03 time/iter=0.206s eta=4:16:55
+[300/75000] loss=0.8931 lr=1.0E-03 time/iter=0.205s eta=4:15:37
+[400/75000] loss=0.8929 lr=1.0E-03 time/iter=0.205s eta=4:14:39
+Epoch 1 complete. Average loss: 0.8933
+[500/75000] loss=0.9098 lr=1.0E-03 time/iter=0.205s eta=4:14:08
+[600/75000] loss=0.9059 lr=1.0E-03 time/iter=0.204s eta=4:13:19
+[700/75000] loss=0.8985 lr=1.0E-03 time/iter=0.204s eta=4:13:04
+[800/75000] loss=0.8969 lr=1.0E-03 time/iter=0.204s eta=4:12:31
+Epoch 2 complete. Average loss: 0.8949
+[900/75000] loss=0.8950 lr=1.0E-03 time/iter=0.204s eta=4:12:03
+[1000/75000] loss=0.9008 lr=1.0E-03 time/iter=0.204s eta=4:11:28
+[1100/75000] loss=0.9037 lr=1.0E-03 time/iter=0.204s eta=4:11:06
+[1200/75000] loss=0.9068 lr=1.0E-03 time/iter=0.204s eta=4:10:47
+Epoch 3 complete. Average loss: 0.9030
+[1300/75000] loss=0.9846 lr=1.0E-03 time/iter=0.204s eta=4:10:31
+[1400/75000] loss=0.9151 lr=1.0E-03 time/iter=0.204s eta=4:10:06
+[1500/75000] loss=0.9088 lr=1.0E-03 time/iter=0.204s eta=4:09:42
+[1600/75000] loss=0.9037 lr=1.0E-03 time/iter=0.204s eta=4:09:15
+Epoch 4 complete. Average loss: 0.9017
+[1700/75000] loss=0.9106 lr=1.0E-03 time/iter=0.204s eta=4:08:56
+[1800/75000] loss=0.9093 lr=1.0E-03 time/iter=0.204s eta=4:08:35
+[1900/75000] loss=0.9603 lr=1.0E-03 time/iter=0.204s eta=4:08:18
+[2000/75000] loss=0.9388 lr=1.0E-03 time/iter=0.204s eta=4:08:00
+[2100/75000] loss=0.9199 lr=1.0E-03 time/iter=0.204s eta=4:07:36
+Epoch 5 complete. Average loss: 0.9183
+[2200/75000] loss=0.8584 lr=1.0E-03 time/iter=0.204s eta=4:07:12
+[2300/75000] loss=0.8626 lr=1.0E-03 time/iter=0.204s eta=4:06:54
+[2400/75000] loss=0.8623 lr=1.0E-03 time/iter=0.204s eta=4:06:27
+[2500/75000] loss=0.8624 lr=1.0E-03 time/iter=0.204s eta=4:06:03
+Epoch 6 complete. Average loss: 0.8625
+[2600/75000] loss=0.8618 lr=1.0E-03 time/iter=0.204s eta=4:05:43
+[2700/75000] loss=0.8679 lr=1.0E-03 time/iter=0.204s eta=4:05:21
+[2800/75000] loss=0.8672 lr=1.0E-03 time/iter=0.204s eta=4:04:58
+[2900/75000] loss=0.8719 lr=1.0E-03 time/iter=0.204s eta=4:04:36
+Epoch 7 complete. Average loss: 0.8771
+[3000/75000] loss=0.9027 lr=1.0E-03 time/iter=0.204s eta=4:04:14
+[3100/75000] loss=0.9004 lr=1.0E-03 time/iter=0.204s eta=4:03:54
+[3200/75000] loss=0.8867 lr=1.0E-03 time/iter=0.204s eta=4:03:31
+[3300/75000] loss=0.8837 lr=1.0E-03 time/iter=0.204s eta=4:03:11
+Epoch 8 complete. Average loss: 0.8827
+[3400/75000] loss=0.9023 lr=9.9E-04 time/iter=0.203s eta=4:02:47
+[3500/75000] loss=0.9004 lr=9.9E-04 time/iter=0.203s eta=4:02:23
+[3600/75000] loss=0.8855 lr=9.9E-04 time/iter=0.203s eta=4:02:04
+[3700/75000] loss=0.8804 lr=9.9E-04 time/iter=0.203s eta=4:01:43
+Epoch 9 complete. Average loss: 0.8762
+[3800/75000] loss=0.8545 lr=9.9E-04 time/iter=0.203s eta=4:01:21
+[3900/75000] loss=0.8695 lr=9.9E-04 time/iter=0.203s eta=4:01:01
+[4000/75000] loss=0.8726 lr=9.9E-04 time/iter=0.203s eta=4:00:38
+[4100/75000] loss=0.8724 lr=9.9E-04 time/iter=0.203s eta=4:00:14
+[4200/75000] loss=0.8743 lr=9.9E-04 time/iter=0.203s eta=3:59:56
+Epoch 10 complete. Average loss: 0.8739
+[4300/75000] loss=0.8884 lr=9.9E-04 time/iter=0.203s eta=3:59:35
+[4400/75000] loss=0.8855 lr=9.9E-04 time/iter=0.203s eta=3:59:15
+[4500/75000] loss=0.8784 lr=9.9E-04 time/iter=0.203s eta=3:58:54
+[4600/75000] loss=0.8711 lr=9.9E-04 time/iter=0.203s eta=3:58:33
+Epoch 11 complete. Average loss: 0.8686
+[4700/75000] loss=0.8597 lr=9.9E-04 time/iter=0.203s eta=3:58:10
+[4800/75000] loss=0.8640 lr=9.9E-04 time/iter=0.203s eta=3:57:46
+[4900/75000] loss=0.8686 lr=9.9E-04 time/iter=0.203s eta=3:57:27
+[5000/75000] loss=0.8740 lr=9.9E-04 time/iter=0.203s eta=3:57:05
+Saving checkpoint to ./runs/checkpoints/checkpoints_gru_mhsa/checkpoint-5000.pth...
+Checkpoint saved.
+Epoch 12 complete. Average loss: 0.8744
+[5100/75000] loss=0.9059 lr=9.9E-04 time/iter=0.203s eta=3:56:51
+[5200/75000] loss=0.9019 lr=9.9E-04 time/iter=0.203s eta=3:56:31
+[5300/75000] loss=0.9061 lr=9.9E-04 time/iter=0.203s eta=3:56:11
+[5400/75000] loss=0.8985 lr=9.9E-04 time/iter=0.203s eta=3:55:51
+Epoch 13 complete. Average loss: 0.8955
+[5500/75000] loss=0.9007 lr=9.9E-04 time/iter=0.203s eta=3:55:29
+[5600/75000] loss=0.9047 lr=9.9E-04 time/iter=0.203s eta=3:55:08
+[5700/75000] loss=0.8942 lr=9.9E-04 time/iter=0.203s eta=3:54:47
+[5800/75000] loss=0.8930 lr=9.9E-04 time/iter=0.203s eta=3:54:24
+[5900/75000] loss=0.8882 lr=9.8E-04 time/iter=0.203s eta=3:54:06
+Epoch 14 complete. Average loss: 0.8874
+[6000/75000] loss=0.8806 lr=9.8E-04 time/iter=0.203s eta=3:53:45
+[6100/75000] loss=0.8708 lr=9.8E-04 time/iter=0.203s eta=3:53:24
+[6200/75000] loss=0.8636 lr=9.8E-04 time/iter=0.203s eta=3:53:04
+[6300/75000] loss=0.8652 lr=9.8E-04 time/iter=0.203s eta=3:52:45
+Epoch 15 complete. Average loss: 0.8645
+[6400/75000] loss=0.8811 lr=9.8E-04 time/iter=0.203s eta=3:52:24
+[6500/75000] loss=0.8819 lr=9.8E-04 time/iter=0.203s eta=3:52:04
+[6600/75000] loss=0.8800 lr=9.8E-04 time/iter=0.203s eta=3:51:43
+[6700/75000] loss=0.8818 lr=9.8E-04 time/iter=0.203s eta=3:51:24
+Epoch 16 complete. Average loss: 0.8793
+[6800/75000] loss=0.8559 lr=9.8E-04 time/iter=0.203s eta=3:51:05
+[6900/75000] loss=0.8606 lr=9.8E-04 time/iter=0.203s eta=3:50:45
+[7000/75000] loss=0.8612 lr=9.8E-04 time/iter=0.203s eta=3:50:24
+[7100/75000] loss=0.8668 lr=9.8E-04 time/iter=0.203s eta=3:50:05
+Epoch 17 complete. Average loss: 0.8652
+[7200/75000] loss=0.8638 lr=9.8E-04 time/iter=0.203s eta=3:49:44
+[7300/75000] loss=0.8647 lr=9.8E-04 time/iter=0.203s eta=3:49:26
+[7400/75000] loss=0.8641 lr=9.8E-04 time/iter=0.203s eta=3:49:05
+[7500/75000] loss=0.8678 lr=9.8E-04 time/iter=0.203s eta=3:48:44
+Epoch 18 complete. Average loss: 0.8667
+[7600/75000] loss=0.8564 lr=9.7E-04 time/iter=0.203s eta=3:48:23
+[7700/75000] loss=0.8684 lr=9.7E-04 time/iter=0.203s eta=3:48:03
+[7800/75000] loss=0.8794 lr=9.7E-04 time/iter=0.203s eta=3:47:41
+[7900/75000] loss=0.8724 lr=9.7E-04 time/iter=0.203s eta=3:47:21
+[8000/75000] loss=0.8684 lr=9.7E-04 time/iter=0.203s eta=3:47:02
+Epoch 19 complete. Average loss: 0.8680
+[8100/75000] loss=0.8688 lr=9.7E-04 time/iter=0.203s eta=3:46:42
+[8200/75000] loss=0.8672 lr=9.7E-04 time/iter=0.203s eta=3:46:22
+[8300/75000] loss=0.8646 lr=9.7E-04 time/iter=0.203s eta=3:46:02
+[8400/75000] loss=0.8728 lr=9.7E-04 time/iter=0.203s eta=3:45:41
+Epoch 20 complete. Average loss: 0.8726
+[8500/75000] loss=0.8668 lr=9.7E-04 time/iter=0.203s eta=3:45:22
+[8600/75000] loss=0.8890 lr=9.7E-04 time/iter=0.203s eta=3:45:00
+[8700/75000] loss=0.8857 lr=9.7E-04 time/iter=0.203s eta=3:44:41
+[8800/75000] loss=0.8778 lr=9.7E-04 time/iter=0.203s eta=3:44:21
+Epoch 21 complete. Average loss: 0.8774
+[8900/75000] loss=0.9048 lr=9.7E-04 time/iter=0.203s eta=3:44:01
+[9000/75000] loss=0.8888 lr=9.6E-04 time/iter=0.203s eta=3:43:40
+[9100/75000] loss=0.8871 lr=9.6E-04 time/iter=0.203s eta=3:43:19
+[9200/75000] loss=0.8877 lr=9.6E-04 time/iter=0.203s eta=3:43:00
+Epoch 22 complete. Average loss: 0.8900
+[9300/75000] loss=0.8886 lr=9.6E-04 time/iter=0.203s eta=3:42:40
+[9400/75000] loss=0.8749 lr=9.6E-04 time/iter=0.203s eta=3:42:20
+[9500/75000] loss=0.8880 lr=9.6E-04 time/iter=0.203s eta=3:42:00
+[9600/75000] loss=0.8869 lr=9.6E-04 time/iter=0.203s eta=3:41:39
+[9700/75000] loss=0.8796 lr=9.6E-04 time/iter=0.203s eta=3:41:19
+Epoch 23 complete. Average loss: 0.8793
+[9800/75000] loss=0.8640 lr=9.6E-04 time/iter=0.203s eta=3:40:59
+[9900/75000] loss=0.8714 lr=9.6E-04 time/iter=0.203s eta=3:40:38
+[10000/75000] loss=0.8648 lr=9.6E-04 time/iter=0.203s eta=3:40:18
+Saving checkpoint to ./runs/checkpoints/checkpoints_gru_mhsa/checkpoint-10000.pth...
+Checkpoint saved.
+[10100/75000] loss=0.8625 lr=9.6E-04 time/iter=0.203s eta=3:39:59
+Epoch 24 complete. Average loss: 0.8625
+[10200/75000] loss=0.8979 lr=9.6E-04 time/iter=0.203s eta=3:39:39
+[10300/75000] loss=0.9041 lr=9.5E-04 time/iter=0.203s eta=3:39:18
+[10400/75000] loss=0.9025 lr=9.5E-04 time/iter=0.203s eta=3:38:58
+[10500/75000] loss=0.9605 lr=9.5E-04 time/iter=0.203s eta=3:38:37
+Epoch 25 complete. Average loss: 0.9585
+[10600/75000] loss=0.9291 lr=9.5E-04 time/iter=0.203s eta=3:38:17
+[10700/75000] loss=0.9288 lr=9.5E-04 time/iter=0.203s eta=3:37:57
+[10800/75000] loss=0.9285 lr=9.5E-04 time/iter=0.203s eta=3:37:36
+[10900/75000] loss=0.9287 lr=9.5E-04 time/iter=0.203s eta=3:37:17
+Epoch 26 complete. Average loss: 0.9284
+[11000/75000] loss=0.9297 lr=9.5E-04 time/iter=0.203s eta=3:36:56
+[11100/75000] loss=0.9280 lr=9.5E-04 time/iter=0.203s eta=3:36:34
+[11200/75000] loss=0.9284 lr=9.5E-04 time/iter=0.203s eta=3:36:14
+[11300/75000] loss=0.9285 lr=9.5E-04 time/iter=0.203s eta=3:35:54
+Epoch 27 complete. Average loss: 0.9285
+[11400/75000] loss=0.9273 lr=9.4E-04 time/iter=0.203s eta=3:35:34
+[11500/75000] loss=0.9283 lr=9.4E-04 time/iter=0.203s eta=3:35:13
+[11600/75000] loss=0.9280 lr=9.4E-04 time/iter=0.203s eta=3:34:53
+[11700/75000] loss=0.9283 lr=9.4E-04 time/iter=0.203s eta=3:34:33
+[11800/75000] loss=0.9285 lr=9.4E-04 time/iter=0.203s eta=3:34:12
+Epoch 28 complete. Average loss: 0.9284
+[11900/75000] loss=0.9273 lr=9.4E-04 time/iter=0.203s eta=3:33:51
+[12000/75000] loss=0.9273 lr=9.4E-04 time/iter=0.203s eta=3:33:30
+[12100/75000] loss=0.9279 lr=9.4E-04 time/iter=0.203s eta=3:33:10
+[12200/75000] loss=0.9282 lr=9.4E-04 time/iter=0.203s eta=3:32:50
+Epoch 29 complete. Average loss: 0.9282
+[12300/75000] loss=0.9299 lr=9.4E-04 time/iter=0.203s eta=3:32:30
+[12400/75000] loss=0.9281 lr=9.3E-04 time/iter=0.203s eta=3:32:09
+[12500/75000] loss=0.9283 lr=9.3E-04 time/iter=0.203s eta=3:31:49
+[12600/75000] loss=0.9281 lr=9.3E-04 time/iter=0.203s eta=3:31:29
+Epoch 30 complete. Average loss: 0.9284
+[12700/75000] loss=0.9296 lr=9.3E-04 time/iter=0.203s eta=3:31:08
+[12800/75000] loss=0.9288 lr=9.3E-04 time/iter=0.203s eta=3:30:48
+[12900/75000] loss=0.9283 lr=9.3E-04 time/iter=0.203s eta=3:30:27
+[13000/75000] loss=0.9284 lr=9.3E-04 time/iter=0.203s eta=3:30:07
+Epoch 31 complete. Average loss: 0.9285
+[13100/75000] loss=0.9279 lr=9.3E-04 time/iter=0.203s eta=3:29:47
+[13200/75000] loss=0.9283 lr=9.3E-04 time/iter=0.203s eta=3:29:26
+[13300/75000] loss=0.9286 lr=9.2E-04 time/iter=0.203s eta=3:29:06
+[13400/75000] loss=0.9286 lr=9.2E-04 time/iter=0.203s eta=3:28:46
+[13500/75000] loss=0.9283 lr=9.2E-04 time/iter=0.203s eta=3:28:25
+Epoch 32 complete. Average loss: 0.9284
+[13600/75000] loss=0.9276 lr=9.2E-04 time/iter=0.203s eta=3:28:05
+[13700/75000] loss=0.9280 lr=9.2E-04 time/iter=0.203s eta=3:27:45
+[13800/75000] loss=0.9276 lr=9.2E-04 time/iter=0.203s eta=3:27:24
+[13900/75000] loss=0.9280 lr=9.2E-04 time/iter=0.203s eta=3:27:04
+Epoch 33 complete. Average loss: 0.9281
+[14000/75000] loss=0.9282 lr=9.2E-04 time/iter=0.203s eta=3:26:43
+[14100/75000] loss=0.9281 lr=9.2E-04 time/iter=0.203s eta=3:26:23
+[14200/75000] loss=0.9281 lr=9.1E-04 time/iter=0.203s eta=3:26:02
+[14300/75000] loss=0.9282 lr=9.1E-04 time/iter=0.203s eta=3:25:42
+Epoch 34 complete. Average loss: 0.9282
+[14400/75000] loss=0.9293 lr=9.1E-04 time/iter=0.203s eta=3:25:22
+[14500/75000] loss=0.9290 lr=9.1E-04 time/iter=0.203s eta=3:25:02
+[14600/75000] loss=0.9291 lr=9.1E-04 time/iter=0.203s eta=3:24:42
+[14700/75000] loss=0.9288 lr=9.1E-04 time/iter=0.203s eta=3:24:21
+Epoch 35 complete. Average loss: 0.9286
+[14800/75000] loss=0.9296 lr=9.1E-04 time/iter=0.203s eta=3:24:00
+[14900/75000] loss=0.9292 lr=9.1E-04 time/iter=0.203s eta=3:23:40
+[15000/75000] loss=0.9288 lr=9.0E-04 time/iter=0.203s eta=3:23:20
+Saving checkpoint to ./runs/checkpoints/checkpoints_gru_mhsa/checkpoint-15000.pth...
+Checkpoint saved.
+[15100/75000] loss=0.9285 lr=9.0E-04 time/iter=0.203s eta=3:22:59
+Epoch 36 complete. Average loss: 0.9284
+[15200/75000] loss=0.9296 lr=9.0E-04 time/iter=0.203s eta=3:22:39
+[15300/75000] loss=0.9290 lr=9.0E-04 time/iter=0.203s eta=3:22:18
+[15400/75000] loss=0.9288 lr=9.0E-04 time/iter=0.203s eta=3:21:58
+[15500/75000] loss=0.9289 lr=9.0E-04 time/iter=0.203s eta=3:21:38
+[15600/75000] loss=0.9287 lr=9.0E-04 time/iter=0.203s eta=3:21:17
+Epoch 37 complete. Average loss: 0.9287
+[15700/75000] loss=0.9283 lr=9.0E-04 time/iter=0.203s eta=3:20:56
+[15800/75000] loss=0.9286 lr=8.9E-04 time/iter=0.203s eta=3:20:35
+[15900/75000] loss=0.9287 lr=8.9E-04 time/iter=0.203s eta=3:20:16
+[16000/75000] loss=0.9286 lr=8.9E-04 time/iter=0.203s eta=3:19:55
+Epoch 38 complete. Average loss: 0.9285
+[16100/75000] loss=0.9284 lr=8.9E-04 time/iter=0.203s eta=3:19:34
+[16200/75000] loss=0.9280 lr=8.9E-04 time/iter=0.203s eta=3:19:13
+[16300/75000] loss=0.9281 lr=8.9E-04 time/iter=0.203s eta=3:18:53
+[16400/75000] loss=0.9283 lr=8.9E-04 time/iter=0.203s eta=3:18:32
+Epoch 39 complete. Average loss: 0.9284
+[16500/75000] loss=0.9296 lr=8.9E-04 time/iter=0.203s eta=3:18:12
+[16600/75000] loss=0.9290 lr=8.8E-04 time/iter=0.203s eta=3:17:51
+[16700/75000] loss=0.9286 lr=8.8E-04 time/iter=0.203s eta=3:17:30
+[16800/75000] loss=0.9283 lr=8.8E-04 time/iter=0.203s eta=3:17:10
+Epoch 40 complete. Average loss: 0.9285
+[16900/75000] loss=0.9295 lr=8.8E-04 time/iter=0.203s eta=3:16:50
+[17000/75000] loss=0.9276 lr=8.8E-04 time/iter=0.203s eta=3:16:28
+[17100/75000] loss=0.9278 lr=8.8E-04 time/iter=0.203s eta=3:16:08
+[17200/75000] loss=0.9279 lr=8.8E-04 time/iter=0.203s eta=3:15:47
+[17300/75000] loss=0.9283 lr=8.7E-04 time/iter=0.203s eta=3:15:27
+Epoch 41 complete. Average loss: 0.9283
+[17400/75000] loss=0.9276 lr=8.7E-04 time/iter=0.203s eta=3:15:06
+[17500/75000] loss=0.9283 lr=8.7E-04 time/iter=0.203s eta=3:14:46
+[17600/75000] loss=0.9283 lr=8.7E-04 time/iter=0.203s eta=3:14:25
+[17700/75000] loss=0.9283 lr=8.7E-04 time/iter=0.203s eta=3:14:04
+Epoch 42 complete. Average loss: 0.9282
+[17800/75000] loss=0.9286 lr=8.7E-04 time/iter=0.203s eta=3:13:43
+[17900/75000] loss=0.9286 lr=8.7E-04 time/iter=0.203s eta=3:13:23
+[18000/75000] loss=0.9286 lr=8.6E-04 time/iter=0.203s eta=3:13:02
+[18100/75000] loss=0.9286 lr=8.6E-04 time/iter=0.203s eta=3:12:41
+Epoch 43 complete. Average loss: 0.9285
+[18200/75000] loss=0.9285 lr=8.6E-04 time/iter=0.203s eta=3:12:21
+[18300/75000] loss=0.9281 lr=8.6E-04 time/iter=0.203s eta=3:12:00
+[18400/75000] loss=0.9283 lr=8.6E-04 time/iter=0.203s eta=3:11:39
+[18500/75000] loss=0.9284 lr=8.6E-04 time/iter=0.203s eta=3:11:18
+Epoch 44 complete. Average loss: 0.9282
+[18600/75000] loss=0.9279 lr=8.6E-04 time/iter=0.203s eta=3:10:58
+[18700/75000] loss=0.9281 lr=8.5E-04 time/iter=0.203s eta=3:10:37
+[18800/75000] loss=0.9279 lr=8.5E-04 time/iter=0.203s eta=3:10:16
+[18900/75000] loss=0.9283 lr=8.5E-04 time/iter=0.203s eta=3:09:55
+Epoch 45 complete. Average loss: 0.9283
+[19000/75000] loss=0.9321 lr=8.5E-04 time/iter=0.203s eta=3:09:35
+[19100/75000] loss=0.9281 lr=8.5E-04 time/iter=0.203s eta=3:09:13
+[19200/75000] loss=0.9285 lr=8.5E-04 time/iter=0.203s eta=3:08:53
+[19300/75000] loss=0.9283 lr=8.5E-04 time/iter=0.203s eta=3:08:33
+[19400/75000] loss=0.9284 lr=8.4E-04 time/iter=0.203s eta=3:08:12
+Epoch 46 complete. Average loss: 0.9283
+[19500/75000] loss=0.9283 lr=8.4E-04 time/iter=0.203s eta=3:07:52
+[19600/75000] loss=0.9284 lr=8.4E-04 time/iter=0.203s eta=3:07:31
+[19700/75000] loss=0.9286 lr=8.4E-04 time/iter=0.203s eta=3:07:10
+[19800/75000] loss=0.9286 lr=8.4E-04 time/iter=0.203s eta=3:06:50
+Epoch 47 complete. Average loss: 0.9285
+[19900/75000] loss=0.9280 lr=8.4E-04 time/iter=0.203s eta=3:06:29
+[20000/75000] loss=0.9286 lr=8.3E-04 time/iter=0.203s eta=3:06:07
+Saving checkpoint to ./runs/checkpoints/checkpoints_gru_mhsa/checkpoint-20000.pth...
+Checkpoint saved.
+[20100/75000] loss=0.9284 lr=8.3E-04 time/iter=0.203s eta=3:05:47
+[20200/75000] loss=0.9285 lr=8.3E-04 time/iter=0.203s eta=3:05:27
+Epoch 48 complete. Average loss: 0.9285
+[20300/75000] loss=0.9278 lr=8.3E-04 time/iter=0.203s eta=3:05:07
+[20400/75000] loss=0.9284 lr=8.3E-04 time/iter=0.203s eta=3:04:46
+[20500/75000] loss=0.9284 lr=8.3E-04 time/iter=0.203s eta=3:04:25
+[20600/75000] loss=0.9282 lr=8.3E-04 time/iter=0.203s eta=3:04:05
+Epoch 49 complete. Average loss: 0.9283
+[20700/75000] loss=0.9272 lr=8.2E-04 time/iter=0.203s eta=3:03:44
+[20800/75000] loss=0.9283 lr=8.2E-04 time/iter=0.203s eta=3:03:23
+[20900/75000] loss=0.9282 lr=8.2E-04 time/iter=0.203s eta=3:03:03
+[21000/75000] loss=0.9281 lr=8.2E-04 time/iter=0.203s eta=3:02:42
+[21100/75000] loss=0.9279 lr=8.2E-04 time/iter=0.203s eta=3:02:22
+Epoch 50 complete. Average loss: 0.9279
+[21200/75000] loss=0.9293 lr=8.2E-04 time/iter=0.203s eta=3:02:02
+[21300/75000] loss=0.9292 lr=8.1E-04 time/iter=0.203s eta=3:01:41
+[21400/75000] loss=0.9286 lr=8.1E-04 time/iter=0.203s eta=3:01:20
+[21500/75000] loss=0.9285 lr=8.1E-04 time/iter=0.203s eta=3:00:59
+Epoch 51 complete. Average loss: 0.9285
+[21600/75000] loss=0.9296 lr=8.1E-04 time/iter=0.203s eta=3:00:39
+[21700/75000] loss=0.9287 lr=8.1E-04 time/iter=0.203s eta=3:00:18
+[21800/75000] loss=0.9282 lr=8.1E-04 time/iter=0.203s eta=2:59:58
+[21900/75000] loss=0.9281 lr=8.0E-04 time/iter=0.203s eta=2:59:37
+Epoch 52 complete. Average loss: 0.9281
+[22000/75000] loss=0.9290 lr=8.0E-04 time/iter=0.203s eta=2:59:16
+[22100/75000] loss=0.9287 lr=8.0E-04 time/iter=0.203s eta=2:58:56
+[22200/75000] loss=0.9286 lr=8.0E-04 time/iter=0.203s eta=2:58:35
+[22300/75000] loss=0.9286 lr=8.0E-04 time/iter=0.203s eta=2:58:15
+Epoch 53 complete. Average loss: 0.9285
+[22400/75000] loss=0.9292 lr=8.0E-04 time/iter=0.203s eta=2:57:54
+[22500/75000] loss=0.9283 lr=7.9E-04 time/iter=0.203s eta=2:57:33
+[22600/75000] loss=0.9280 lr=7.9E-04 time/iter=0.203s eta=2:57:13
+[22700/75000] loss=0.9282 lr=7.9E-04 time/iter=0.203s eta=2:56:52
+Epoch 54 complete. Average loss: 0.9281
+[22800/75000] loss=0.9297 lr=7.9E-04 time/iter=0.203s eta=2:56:32
+[22900/75000] loss=0.9286 lr=7.9E-04 time/iter=0.203s eta=2:56:11
+[23000/75000] loss=0.9282 lr=7.9E-04 time/iter=0.203s eta=2:55:50
+[23100/75000] loss=0.9280 lr=7.8E-04 time/iter=0.203s eta=2:55:30
+[23200/75000] loss=0.9280 lr=7.8E-04 time/iter=0.203s eta=2:55:09
+Epoch 55 complete. Average loss: 0.9280
+[23300/75000] loss=0.9283 lr=7.8E-04 time/iter=0.203s eta=2:54:48
+[23400/75000] loss=0.9280 lr=7.8E-04 time/iter=0.203s eta=2:54:28
+[23500/75000] loss=0.9281 lr=7.8E-04 time/iter=0.203s eta=2:54:07
+[23600/75000] loss=0.9281 lr=7.7E-04 time/iter=0.203s eta=2:53:47
+Epoch 56 complete. Average loss: 0.9281
+[23700/75000] loss=0.9288 lr=7.7E-04 time/iter=0.203s eta=2:53:26
+[23800/75000] loss=0.9288 lr=7.7E-04 time/iter=0.203s eta=2:53:06
+[23900/75000] loss=0.9283 lr=7.7E-04 time/iter=0.203s eta=2:52:45
+[24000/75000] loss=0.9284 lr=7.7E-04 time/iter=0.203s eta=2:52:24
+Epoch 57 complete. Average loss: 0.9282
+[24100/75000] loss=0.9283 lr=7.7E-04 time/iter=0.203s eta=2:52:04
+[24200/75000] loss=0.9284 lr=7.6E-04 time/iter=0.203s eta=2:51:43
+[24300/75000] loss=0.9286 lr=7.6E-04 time/iter=0.203s eta=2:51:23
+[24400/75000] loss=0.9284 lr=7.6E-04 time/iter=0.203s eta=2:51:02
+Epoch 58 complete. Average loss: 0.9285
+[24500/75000] loss=0.9273 lr=7.6E-04 time/iter=0.203s eta=2:50:41
+[24600/75000] loss=0.9286 lr=7.6E-04 time/iter=0.203s eta=2:50:21
+[24700/75000] loss=0.9282 lr=7.6E-04 time/iter=0.203s eta=2:50:00
+[24800/75000] loss=0.9279 lr=7.5E-04 time/iter=0.203s eta=2:49:40
+Epoch 59 complete. Average loss: 0.9281
+[24900/75000] loss=0.9193 lr=7.5E-04 time/iter=0.203s eta=2:49:19
+[25000/75000] loss=0.9289 lr=7.5E-04 time/iter=0.203s eta=2:48:58
+Saving checkpoint to ./runs/checkpoints/checkpoints_gru_mhsa/checkpoint-25000.pth...
+Checkpoint saved.
+[25100/75000] loss=0.9282 lr=7.5E-04 time/iter=0.203s eta=2:48:38
+[25200/75000] loss=0.9280 lr=7.5E-04 time/iter=0.203s eta=2:48:18
+[25300/75000] loss=0.9281 lr=7.4E-04 time/iter=0.203s eta=2:47:57
+Epoch 60 complete. Average loss: 0.9282
+[25400/75000] loss=0.9274 lr=7.4E-04 time/iter=0.203s eta=2:47:36
+[25500/75000] loss=0.9280 lr=7.4E-04 time/iter=0.203s eta=2:47:15
+[25600/75000] loss=0.9283 lr=7.4E-04 time/iter=0.203s eta=2:46:55
+[25700/75000] loss=0.9282 lr=7.4E-04 time/iter=0.203s eta=2:46:34
+Epoch 61 complete. Average loss: 0.9283
+[25800/75000] loss=0.9287 lr=7.4E-04 time/iter=0.203s eta=2:46:14
+[25900/75000] loss=0.9287 lr=7.3E-04 time/iter=0.203s eta=2:45:53
+[26000/75000] loss=0.9283 lr=7.3E-04 time/iter=0.203s eta=2:45:33
+[26100/75000] loss=0.9281 lr=7.3E-04 time/iter=0.203s eta=2:45:12
+Epoch 62 complete. Average loss: 0.9282
+[26200/75000] loss=0.9288 lr=7.3E-04 time/iter=0.203s eta=2:44:52
+[26300/75000] loss=0.9280 lr=7.3E-04 time/iter=0.203s eta=2:44:31
+[26400/75000] loss=0.9278 lr=7.2E-04 time/iter=0.203s eta=2:44:10
+[26500/75000] loss=0.9279 lr=7.2E-04 time/iter=0.203s eta=2:43:50
+Epoch 63 complete. Average loss: 0.9281
+[26600/75000] loss=0.9295 lr=7.2E-04 time/iter=0.203s eta=2:43:29
+[26700/75000] loss=0.9282 lr=7.2E-04 time/iter=0.203s eta=2:43:09
+[26800/75000] loss=0.9285 lr=7.2E-04 time/iter=0.203s eta=2:42:48
+[26900/75000] loss=0.9283 lr=7.1E-04 time/iter=0.203s eta=2:42:27
+[27000/75000] loss=0.9284 lr=7.1E-04 time/iter=0.203s eta=2:42:07
+Epoch 64 complete. Average loss: 0.9284
+[27100/75000] loss=0.9288 lr=7.1E-04 time/iter=0.203s eta=2:41:46
+[27200/75000] loss=0.9276 lr=7.1E-04 time/iter=0.203s eta=2:41:25
+[27300/75000] loss=0.9279 lr=7.1E-04 time/iter=0.203s eta=2:41:05
+[27400/75000] loss=0.9281 lr=7.1E-04 time/iter=0.203s eta=2:40:44
+Epoch 65 complete. Average loss: 0.9281
+[27500/75000] loss=0.9278 lr=7.0E-04 time/iter=0.203s eta=2:40:23
+[27600/75000] loss=0.9280 lr=7.0E-04 time/iter=0.203s eta=2:40:03
+[27700/75000] loss=0.9279 lr=7.0E-04 time/iter=0.203s eta=2:39:42
+[27800/75000] loss=0.9280 lr=7.0E-04 time/iter=0.203s eta=2:39:21
+Epoch 66 complete. Average loss: 0.9281
+[27900/75000] loss=0.9282 lr=7.0E-04 time/iter=0.203s eta=2:39:01
+[28000/75000] loss=0.9280 lr=6.9E-04 time/iter=0.203s eta=2:38:40
+[28100/75000] loss=0.9283 lr=6.9E-04 time/iter=0.203s eta=2:38:20
+[28200/75000] loss=0.9281 lr=6.9E-04 time/iter=0.203s eta=2:37:59
+Epoch 67 complete. Average loss: 0.9281
+[28300/75000] loss=0.9279 lr=6.9E-04 time/iter=0.203s eta=2:37:38
+[28400/75000] loss=0.9283 lr=6.9E-04 time/iter=0.203s eta=2:37:18
+[28500/75000] loss=0.9282 lr=6.8E-04 time/iter=0.203s eta=2:36:57
+[28600/75000] loss=0.9281 lr=6.8E-04 time/iter=0.203s eta=2:36:36
+Epoch 68 complete. Average loss: 0.9280
+[28700/75000] loss=0.9274 lr=6.8E-04 time/iter=0.203s eta=2:36:16
+[28800/75000] loss=0.9286 lr=6.8E-04 time/iter=0.202s eta=2:35:55
+[28900/75000] loss=0.9280 lr=6.8E-04 time/iter=0.202s eta=2:35:34
+[29000/75000] loss=0.9278 lr=6.7E-04 time/iter=0.202s eta=2:35:14
+[29100/75000] loss=0.9279 lr=6.7E-04 time/iter=0.202s eta=2:34:53
+Epoch 69 complete. Average loss: 0.9280
+[29200/75000] loss=0.9284 lr=6.7E-04 time/iter=0.202s eta=2:34:32
+[29300/75000] loss=0.9284 lr=6.7E-04 time/iter=0.202s eta=2:34:12
+[29400/75000] loss=0.9280 lr=6.7E-04 time/iter=0.202s eta=2:33:51
+[29500/75000] loss=0.9282 lr=6.6E-04 time/iter=0.202s eta=2:33:31
+Epoch 70 complete. Average loss: 0.9283
+[29600/75000] loss=0.9273 lr=6.6E-04 time/iter=0.202s eta=2:33:10
+[29700/75000] loss=0.9276 lr=6.6E-04 time/iter=0.202s eta=2:32:49
+[29800/75000] loss=0.9278 lr=6.6E-04 time/iter=0.202s eta=2:32:29
+[29900/75000] loss=0.9282 lr=6.6E-04 time/iter=0.202s eta=2:32:09
+Epoch 71 complete. Average loss: 0.9280
+[30000/75000] loss=0.9272 lr=6.5E-04 time/iter=0.202s eta=2:31:48
+Saving checkpoint to ./runs/checkpoints/checkpoints_gru_mhsa/checkpoint-30000.pth...
+Checkpoint saved.
+[30100/75000] loss=0.9283 lr=6.5E-04 time/iter=0.202s eta=2:31:28
+[30200/75000] loss=0.9278 lr=6.5E-04 time/iter=0.202s eta=2:31:07
+[30300/75000] loss=0.9280 lr=6.5E-04 time/iter=0.202s eta=2:30:46
+Epoch 72 complete. Average loss: 0.9281
+[30400/75000] loss=0.9279 lr=6.5E-04 time/iter=0.202s eta=2:30:26
+[30500/75000] loss=0.9271 lr=6.4E-04 time/iter=0.202s eta=2:30:05
+[30600/75000] loss=0.9273 lr=6.4E-04 time/iter=0.202s eta=2:29:45
+[30700/75000] loss=0.9277 lr=6.4E-04 time/iter=0.202s eta=2:29:24
+[30800/75000] loss=0.9281 lr=6.4E-04 time/iter=0.202s eta=2:29:04
+Epoch 73 complete. Average loss: 0.9281
+[30900/75000] loss=0.9282 lr=6.4E-04 time/iter=0.202s eta=2:28:43
+[31000/75000] loss=0.9283 lr=6.3E-04 time/iter=0.202s eta=2:28:23
+[31100/75000] loss=0.9286 lr=6.3E-04 time/iter=0.202s eta=2:28:03
+[31200/75000] loss=0.9286 lr=6.3E-04 time/iter=0.202s eta=2:27:42
+Epoch 74 complete. Average loss: 0.9285
+[31300/75000] loss=0.9284 lr=6.3E-04 time/iter=0.202s eta=2:27:21
+[31400/75000] loss=0.9284 lr=6.3E-04 time/iter=0.202s eta=2:27:01
+[31500/75000] loss=0.9287 lr=6.2E-04 time/iter=0.202s eta=2:26:40
+[31600/75000] loss=0.9287 lr=6.2E-04 time/iter=0.202s eta=2:26:20
+Epoch 75 complete. Average loss: 0.9286
+[31700/75000] loss=0.9270 lr=6.2E-04 time/iter=0.202s eta=2:25:59
+[31800/75000] loss=0.9279 lr=6.2E-04 time/iter=0.202s eta=2:25:39
+[31900/75000] loss=0.9281 lr=6.2E-04 time/iter=0.202s eta=2:25:18
+[32000/75000] loss=0.9280 lr=6.1E-04 time/iter=0.202s eta=2:24:58
+Epoch 76 complete. Average loss: 0.9281
+[32100/75000] loss=0.9276 lr=6.1E-04 time/iter=0.202s eta=2:24:37
+[32200/75000] loss=0.9280 lr=6.1E-04 time/iter=0.202s eta=2:24:17
+[32300/75000] loss=0.9278 lr=6.1E-04 time/iter=0.202s eta=2:23:56
+[32400/75000] loss=0.9282 lr=6.1E-04 time/iter=0.202s eta=2:23:36
+Epoch 77 complete. Average loss: 0.9283
+[32500/75000] loss=0.9289 lr=6.0E-04 time/iter=0.202s eta=2:23:15
+[32600/75000] loss=0.9281 lr=6.0E-04 time/iter=0.202s eta=2:22:55
+[32700/75000] loss=0.9282 lr=6.0E-04 time/iter=0.202s eta=2:22:34
+[32800/75000] loss=0.9284 lr=6.0E-04 time/iter=0.202s eta=2:22:14
+[32900/75000] loss=0.9282 lr=6.0E-04 time/iter=0.202s eta=2:21:53
+Epoch 78 complete. Average loss: 0.9282
+[33000/75000] loss=0.9270 lr=5.9E-04 time/iter=0.202s eta=2:21:33
+[33100/75000] loss=0.9278 lr=5.9E-04 time/iter=0.202s eta=2:21:12
+[33200/75000] loss=0.9281 lr=5.9E-04 time/iter=0.202s eta=2:20:52
+[33300/75000] loss=0.9280 lr=5.9E-04 time/iter=0.202s eta=2:20:31
+Epoch 79 complete. Average loss: 0.9282
+[33400/75000] loss=0.9281 lr=5.9E-04 time/iter=0.202s eta=2:20:11
+[33500/75000] loss=0.9280 lr=5.8E-04 time/iter=0.202s eta=2:19:50
+[33600/75000] loss=0.9278 lr=5.8E-04 time/iter=0.202s eta=2:19:30
+[33700/75000] loss=0.9280 lr=5.8E-04 time/iter=0.202s eta=2:19:09
+Epoch 80 complete. Average loss: 0.9279
+[33800/75000] loss=0.9269 lr=5.8E-04 time/iter=0.202s eta=2:18:49
+[33900/75000] loss=0.9277 lr=5.8E-04 time/iter=0.202s eta=2:18:29
+[34000/75000] loss=0.9277 lr=5.7E-04 time/iter=0.202s eta=2:18:08
+[34100/75000] loss=0.9279 lr=5.7E-04 time/iter=0.202s eta=2:17:48
+Epoch 81 complete. Average loss: 0.9279
+[34200/75000] loss=0.9266 lr=5.7E-04 time/iter=0.202s eta=2:17:27
+[34300/75000] loss=0.9278 lr=5.7E-04 time/iter=0.202s eta=2:17:07
+[34400/75000] loss=0.9286 lr=5.6E-04 time/iter=0.202s eta=2:16:46
+[34500/75000] loss=0.9285 lr=5.6E-04 time/iter=0.202s eta=2:16:26
+[34600/75000] loss=0.9283 lr=5.6E-04 time/iter=0.202s eta=2:16:05
+Epoch 82 complete. Average loss: 0.9284
+[34700/75000] loss=0.9283 lr=5.6E-04 time/iter=0.202s eta=2:15:45
+[34800/75000] loss=0.9280 lr=5.6E-04 time/iter=0.202s eta=2:15:24
+[34900/75000] loss=0.9283 lr=5.5E-04 time/iter=0.202s eta=2:15:04
+[35000/75000] loss=0.9280 lr=5.5E-04 time/iter=0.202s eta=2:14:44
+Saving checkpoint to ./runs/checkpoints/checkpoints_gru_mhsa/checkpoint-35000.pth...
+Checkpoint saved.
+Epoch 83 complete. Average loss: 0.9280
+[35100/75000] loss=0.9275 lr=5.5E-04 time/iter=0.202s eta=2:14:23
+[35200/75000] loss=0.9286 lr=5.5E-04 time/iter=0.202s eta=2:14:03
+[35300/75000] loss=0.9287 lr=5.5E-04 time/iter=0.202s eta=2:13:43
+[35400/75000] loss=0.9282 lr=5.4E-04 time/iter=0.202s eta=2:13:23
+Epoch 84 complete. Average loss: 0.9282
+[35500/75000] loss=0.9285 lr=5.4E-04 time/iter=0.202s eta=2:13:02
+[35600/75000] loss=0.9278 lr=5.4E-04 time/iter=0.202s eta=2:12:42
+[35700/75000] loss=0.9276 lr=5.4E-04 time/iter=0.202s eta=2:12:21
+[35800/75000] loss=0.9276 lr=5.4E-04 time/iter=0.202s eta=2:12:01
+Epoch 85 complete. Average loss: 0.9277
+[35900/75000] loss=0.9272 lr=5.3E-04 time/iter=0.202s eta=2:11:41
+[36000/75000] loss=0.9274 lr=5.3E-04 time/iter=0.202s eta=2:11:20
+[36100/75000] loss=0.9278 lr=5.3E-04 time/iter=0.202s eta=2:11:00
+[36200/75000] loss=0.9280 lr=5.3E-04 time/iter=0.202s eta=2:10:40
+Epoch 86 complete. Average loss: 0.9278
+[36300/75000] loss=0.9284 lr=5.3E-04 time/iter=0.202s eta=2:10:20
+[36400/75000] loss=0.9273 lr=5.2E-04 time/iter=0.202s eta=2:09:59
+[36500/75000] loss=0.9283 lr=5.2E-04 time/iter=0.202s eta=2:09:39
+[36600/75000] loss=0.9286 lr=5.2E-04 time/iter=0.202s eta=2:09:19
+[36700/75000] loss=0.9283 lr=5.2E-04 time/iter=0.202s eta=2:08:58
+Epoch 87 complete. Average loss: 0.9282
+[36800/75000] loss=0.9275 lr=5.1E-04 time/iter=0.202s eta=2:08:38
+[36900/75000] loss=0.9278 lr=5.1E-04 time/iter=0.202s eta=2:08:18
+[37000/75000] loss=0.9280 lr=5.1E-04 time/iter=0.202s eta=2:07:57
+[37100/75000] loss=0.9281 lr=5.1E-04 time/iter=0.202s eta=2:07:37
+Epoch 88 complete. Average loss: 0.9279
+[37200/75000] loss=0.9284 lr=5.1E-04 time/iter=0.202s eta=2:07:17
+[37300/75000] loss=0.9284 lr=5.0E-04 time/iter=0.202s eta=2:06:56
+[37400/75000] loss=0.9282 lr=5.0E-04 time/iter=0.202s eta=2:06:36
+[37500/75000] loss=0.9281 lr=5.0E-04 time/iter=0.202s eta=2:06:16
+Epoch 89 complete. Average loss: 0.9280
+[37600/75000] loss=0.9283 lr=5.0E-04 time/iter=0.202s eta=2:05:55
+[37700/75000] loss=0.9277 lr=5.0E-04 time/iter=0.202s eta=2:05:35
+[37800/75000] loss=0.9276 lr=4.9E-04 time/iter=0.202s eta=2:05:15
+[37900/75000] loss=0.9276 lr=4.9E-04 time/iter=0.202s eta=2:04:54
+Epoch 90 complete. Average loss: 0.9275
+[38000/75000] loss=0.9271 lr=4.9E-04 time/iter=0.202s eta=2:04:34
+[38100/75000] loss=0.9279 lr=4.9E-04 time/iter=0.202s eta=2:04:14
+[38200/75000] loss=0.9286 lr=4.9E-04 time/iter=0.202s eta=2:03:53
+[38300/75000] loss=0.9283 lr=4.8E-04 time/iter=0.202s eta=2:03:33
+[38400/75000] loss=0.9281 lr=4.8E-04 time/iter=0.202s eta=2:03:13
+Epoch 91 complete. Average loss: 0.9281
+[38500/75000] loss=0.9279 lr=4.8E-04 time/iter=0.202s eta=2:02:52
+[38600/75000] loss=0.9275 lr=4.8E-04 time/iter=0.202s eta=2:02:32
+[38700/75000] loss=0.9276 lr=4.7E-04 time/iter=0.202s eta=2:02:12
+[38800/75000] loss=0.9278 lr=4.7E-04 time/iter=0.202s eta=2:01:51
+Epoch 92 complete. Average loss: 0.9278
+[38900/75000] loss=0.9284 lr=4.7E-04 time/iter=0.202s eta=2:01:31
+[39000/75000] loss=0.9276 lr=4.7E-04 time/iter=0.202s eta=2:01:11
+[39100/75000] loss=0.9280 lr=4.7E-04 time/iter=0.202s eta=2:00:51
+[39200/75000] loss=0.9279 lr=4.6E-04 time/iter=0.202s eta=2:00:30
+Epoch 93 complete. Average loss: 0.9279
+[39300/75000] loss=0.9280 lr=4.6E-04 time/iter=0.202s eta=2:00:10
+[39400/75000] loss=0.9285 lr=4.6E-04 time/iter=0.202s eta=1:59:50
+[39500/75000] loss=0.9284 lr=4.6E-04 time/iter=0.202s eta=1:59:29
+[39600/75000] loss=0.9278 lr=4.6E-04 time/iter=0.202s eta=1:59:09
+Epoch 94 complete. Average loss: 0.9279
+[39700/75000] loss=0.9272 lr=4.5E-04 time/iter=0.202s eta=1:58:49
+[39800/75000] loss=0.9279 lr=4.5E-04 time/iter=0.202s eta=1:58:28
+[39900/75000] loss=0.9276 lr=4.5E-04 time/iter=0.202s eta=1:58:08
+[40000/75000] loss=0.9281 lr=4.5E-04 time/iter=0.202s eta=1:57:48
+Saving checkpoint to ./runs/checkpoints/checkpoints_gru_mhsa/checkpoint-40000.pth...
+Checkpoint saved.
+Epoch 95 complete. Average loss: 0.9279
+[40100/75000] loss=0.9239 lr=4.5E-04 time/iter=0.202s eta=1:57:28
+[40200/75000] loss=0.9274 lr=4.4E-04 time/iter=0.202s eta=1:57:07
+[40300/75000] loss=0.9278 lr=4.4E-04 time/iter=0.202s eta=1:56:47
+[40400/75000] loss=0.9279 lr=4.4E-04 time/iter=0.202s eta=1:56:26
+[40500/75000] loss=0.9281 lr=4.4E-04 time/iter=0.202s eta=1:56:06
+Epoch 96 complete. Average loss: 0.9280
+[40600/75000] loss=0.9284 lr=4.4E-04 time/iter=0.202s eta=1:55:46
+[40700/75000] loss=0.9285 lr=4.3E-04 time/iter=0.202s eta=1:55:26
+[40800/75000] loss=0.9285 lr=4.3E-04 time/iter=0.202s eta=1:55:05
+[40900/75000] loss=0.9285 lr=4.3E-04 time/iter=0.202s eta=1:54:45
+Epoch 97 complete. Average loss: 0.9283
+[41000/75000] loss=0.9285 lr=4.3E-04 time/iter=0.202s eta=1:54:24
+[41100/75000] loss=0.9286 lr=4.2E-04 time/iter=0.202s eta=1:54:04
+[41200/75000] loss=0.9283 lr=4.2E-04 time/iter=0.202s eta=1:53:44
+[41300/75000] loss=0.9282 lr=4.2E-04 time/iter=0.202s eta=1:53:23
+Epoch 98 complete. Average loss: 0.9280
+[41400/75000] loss=0.9262 lr=4.2E-04 time/iter=0.202s eta=1:53:03
+[41500/75000] loss=0.9280 lr=4.2E-04 time/iter=0.202s eta=1:52:43
+[41600/75000] loss=0.9281 lr=4.1E-04 time/iter=0.202s eta=1:52:22
+[41700/75000] loss=0.9279 lr=4.1E-04 time/iter=0.202s eta=1:52:02
+Epoch 99 complete. Average loss: 0.9281
+[41800/75000] loss=0.9273 lr=4.1E-04 time/iter=0.202s eta=1:51:42
+[41900/75000] loss=0.9277 lr=4.1E-04 time/iter=0.202s eta=1:51:22
+[42000/75000] loss=0.9281 lr=4.1E-04 time/iter=0.202s eta=1:51:01
+[42100/75000] loss=0.9281 lr=4.0E-04 time/iter=0.202s eta=1:50:41
+[42200/75000] loss=0.9281 lr=4.0E-04 time/iter=0.202s eta=1:50:21
+Epoch 100 complete. Average loss: 0.9281
+[42300/75000] loss=0.9278 lr=4.0E-04 time/iter=0.202s eta=1:50:00
+[42400/75000] loss=0.9277 lr=4.0E-04 time/iter=0.202s eta=1:49:40
+[42500/75000] loss=0.9278 lr=4.0E-04 time/iter=0.202s eta=1:49:20
+[42600/75000] loss=0.9279 lr=3.9E-04 time/iter=0.202s eta=1:48:59
+Epoch 101 complete. Average loss: 0.9278
+[42700/75000] loss=0.9282 lr=3.9E-04 time/iter=0.202s eta=1:48:39
+[42800/75000] loss=0.9280 lr=3.9E-04 time/iter=0.202s eta=1:48:19
+[42900/75000] loss=0.9280 lr=3.9E-04 time/iter=0.202s eta=1:47:58
+[43000/75000] loss=0.9281 lr=3.9E-04 time/iter=0.202s eta=1:47:38
+Epoch 102 complete. Average loss: 0.9280
+[43100/75000] loss=0.9287 lr=3.8E-04 time/iter=0.202s eta=1:47:18
+[43200/75000] loss=0.9279 lr=3.8E-04 time/iter=0.202s eta=1:46:57
+[43300/75000] loss=0.9277 lr=3.8E-04 time/iter=0.202s eta=1:46:37
+[43400/75000] loss=0.9276 lr=3.8E-04 time/iter=0.202s eta=1:46:17
+Epoch 103 complete. Average loss: 0.9278
+[43500/75000] loss=0.9274 lr=3.8E-04 time/iter=0.202s eta=1:45:57
+[43600/75000] loss=0.9283 lr=3.7E-04 time/iter=0.202s eta=1:45:36
+[43700/75000] loss=0.9282 lr=3.7E-04 time/iter=0.202s eta=1:45:16
+[43800/75000] loss=0.9279 lr=3.7E-04 time/iter=0.202s eta=1:44:56
+Epoch 104 complete. Average loss: 0.9278
+[43900/75000] loss=0.9307 lr=3.7E-04 time/iter=0.202s eta=1:44:35
+[44000/75000] loss=0.9287 lr=3.7E-04 time/iter=0.202s eta=1:44:15
+[44100/75000] loss=0.9286 lr=3.6E-04 time/iter=0.202s eta=1:43:55
+[44200/75000] loss=0.9284 lr=3.6E-04 time/iter=0.202s eta=1:43:35
+[44300/75000] loss=0.9282 lr=3.6E-04 time/iter=0.202s eta=1:43:14
+Epoch 105 complete. Average loss: 0.9282
+[44400/75000] loss=0.9278 lr=3.6E-04 time/iter=0.202s eta=1:42:54
+[44500/75000] loss=0.9285 lr=3.6E-04 time/iter=0.202s eta=1:42:34
+[44600/75000] loss=0.9283 lr=3.5E-04 time/iter=0.202s eta=1:42:14
+[44700/75000] loss=0.9283 lr=3.5E-04 time/iter=0.202s eta=1:41:53
+Epoch 106 complete. Average loss: 0.9282
+[44800/75000] loss=0.9281 lr=3.5E-04 time/iter=0.202s eta=1:41:33
+[44900/75000] loss=0.9279 lr=3.5E-04 time/iter=0.202s eta=1:41:13
+[45000/75000] loss=0.9277 lr=3.5E-04 time/iter=0.202s eta=1:40:53
+Saving checkpoint to ./runs/checkpoints/checkpoints_gru_mhsa/checkpoint-45000.pth...
+Checkpoint saved.
+[45100/75000] loss=0.9277 lr=3.4E-04 time/iter=0.202s eta=1:40:32
+Epoch 107 complete. Average loss: 0.9277
+[45200/75000] loss=0.9270 lr=3.4E-04 time/iter=0.202s eta=1:40:12
+[45300/75000] loss=0.9278 lr=3.4E-04 time/iter=0.202s eta=1:39:52
+[45400/75000] loss=0.9281 lr=3.4E-04 time/iter=0.202s eta=1:39:32
+[45500/75000] loss=0.9280 lr=3.4E-04 time/iter=0.202s eta=1:39:11
+Epoch 108 complete. Average loss: 0.9279
+[45600/75000] loss=0.9290 lr=3.3E-04 time/iter=0.202s eta=1:38:51
+[45700/75000] loss=0.9285 lr=3.3E-04 time/iter=0.202s eta=1:38:31
+[45800/75000] loss=0.9282 lr=3.3E-04 time/iter=0.202s eta=1:38:10
+[45900/75000] loss=0.9277 lr=3.3E-04 time/iter=0.202s eta=1:37:50
+Epoch 109 complete. Average loss: 0.9280
+[46000/75000] loss=0.9360 lr=3.3E-04 time/iter=0.202s eta=1:37:30
+[46100/75000] loss=0.9281 lr=3.2E-04 time/iter=0.202s eta=1:37:10
+[46200/75000] loss=0.9278 lr=3.2E-04 time/iter=0.202s eta=1:36:49
+[46300/75000] loss=0.9279 lr=3.2E-04 time/iter=0.202s eta=1:36:29
+[46400/75000] loss=0.9280 lr=3.2E-04 time/iter=0.202s eta=1:36:09
+Epoch 110 complete. Average loss: 0.9280
+[46500/75000] loss=0.9276 lr=3.2E-04 time/iter=0.202s eta=1:35:49
+[46600/75000] loss=0.9279 lr=3.1E-04 time/iter=0.202s eta=1:35:28
+[46700/75000] loss=0.9283 lr=3.1E-04 time/iter=0.202s eta=1:35:08
+[46800/75000] loss=0.9280 lr=3.1E-04 time/iter=0.202s eta=1:34:48
+Epoch 111 complete. Average loss: 0.9280
+[46900/75000] loss=0.9277 lr=3.1E-04 time/iter=0.202s eta=1:34:28
+[47000/75000] loss=0.9282 lr=3.1E-04 time/iter=0.202s eta=1:34:07
+[47100/75000] loss=0.9279 lr=3.0E-04 time/iter=0.202s eta=1:33:47
+[47200/75000] loss=0.9279 lr=3.0E-04 time/iter=0.202s eta=1:33:27
+Epoch 112 complete. Average loss: 0.9279
+[47300/75000] loss=0.9270 lr=3.0E-04 time/iter=0.202s eta=1:33:07
+[47400/75000] loss=0.9282 lr=3.0E-04 time/iter=0.202s eta=1:32:46
+[47500/75000] loss=0.9281 lr=3.0E-04 time/iter=0.202s eta=1:32:26
+[47600/75000] loss=0.9282 lr=2.9E-04 time/iter=0.202s eta=1:32:06
+Epoch 113 complete. Average loss: 0.9283
+[47700/75000] loss=0.9288 lr=2.9E-04 time/iter=0.202s eta=1:31:46
+[47800/75000] loss=0.9284 lr=2.9E-04 time/iter=0.202s eta=1:31:25
+[47900/75000] loss=0.9286 lr=2.9E-04 time/iter=0.202s eta=1:31:05
+[48000/75000] loss=0.9282 lr=2.9E-04 time/iter=0.202s eta=1:30:45
+[48100/75000] loss=0.9280 lr=2.9E-04 time/iter=0.202s eta=1:30:25
+Epoch 114 complete. Average loss: 0.9280
+[48200/75000] loss=0.9279 lr=2.8E-04 time/iter=0.202s eta=1:30:04
+[48300/75000] loss=0.9282 lr=2.8E-04 time/iter=0.202s eta=1:29:44
+[48400/75000] loss=0.9282 lr=2.8E-04 time/iter=0.202s eta=1:29:24
+[48500/75000] loss=0.9279 lr=2.8E-04 time/iter=0.202s eta=1:29:04
+Epoch 115 complete. Average loss: 0.9278
+[48600/75000] loss=0.9265 lr=2.8E-04 time/iter=0.202s eta=1:28:43
+[48700/75000] loss=0.9278 lr=2.7E-04 time/iter=0.202s eta=1:28:23
+[48800/75000] loss=0.9277 lr=2.7E-04 time/iter=0.202s eta=1:28:03
+[48900/75000] loss=0.9278 lr=2.7E-04 time/iter=0.202s eta=1:27:43
+Epoch 116 complete. Average loss: 0.9279
+[49000/75000] loss=0.9269 lr=2.7E-04 time/iter=0.202s eta=1:27:22
+[49100/75000] loss=0.9272 lr=2.7E-04 time/iter=0.202s eta=1:27:02
+[49200/75000] loss=0.9274 lr=2.6E-04 time/iter=0.202s eta=1:26:42
+[49300/75000] loss=0.9277 lr=2.6E-04 time/iter=0.202s eta=1:26:22
+Epoch 117 complete. Average loss: 0.9277
+[49400/75000] loss=0.9280 lr=2.6E-04 time/iter=0.202s eta=1:26:02
+[49500/75000] loss=0.9287 lr=2.6E-04 time/iter=0.202s eta=1:25:41
+[49600/75000] loss=0.9279 lr=2.6E-04 time/iter=0.202s eta=1:25:21
+[49700/75000] loss=0.9277 lr=2.6E-04 time/iter=0.202s eta=1:25:01
+Epoch 118 complete. Average loss: 0.9277
+[49800/75000] loss=0.9280 lr=2.5E-04 time/iter=0.202s eta=1:24:41
+[49900/75000] loss=0.9279 lr=2.5E-04 time/iter=0.202s eta=1:24:21
+[50000/75000] loss=0.9279 lr=2.5E-04 time/iter=0.202s eta=1:24:00
+Saving checkpoint to ./runs/checkpoints/checkpoints_gru_mhsa/checkpoint-50000.pth...
+Checkpoint saved.
+[50100/75000] loss=0.9280 lr=2.5E-04 time/iter=0.202s eta=1:23:40
+[50200/75000] loss=0.9279 lr=2.5E-04 time/iter=0.202s eta=1:23:20
+Epoch 119 complete. Average loss: 0.9279
+[50300/75000] loss=0.9283 lr=2.4E-04 time/iter=0.202s eta=1:23:00
+[50400/75000] loss=0.9283 lr=2.4E-04 time/iter=0.202s eta=1:22:39
+[50500/75000] loss=0.9282 lr=2.4E-04 time/iter=0.202s eta=1:22:19
+[50600/75000] loss=0.9283 lr=2.4E-04 time/iter=0.202s eta=1:21:59
+Epoch 120 complete. Average loss: 0.9281
+[50700/75000] loss=0.9283 lr=2.4E-04 time/iter=0.202s eta=1:21:39
+[50800/75000] loss=0.9278 lr=2.4E-04 time/iter=0.202s eta=1:21:18
+[50900/75000] loss=0.9279 lr=2.3E-04 time/iter=0.202s eta=1:20:58
+[51000/75000] loss=0.9279 lr=2.3E-04 time/iter=0.202s eta=1:20:38
+Epoch 121 complete. Average loss: 0.9279
+[51100/75000] loss=0.9282 lr=2.3E-04 time/iter=0.202s eta=1:20:18
+[51200/75000] loss=0.9275 lr=2.3E-04 time/iter=0.202s eta=1:19:58
+[51300/75000] loss=0.9276 lr=2.3E-04 time/iter=0.202s eta=1:19:37
+[51400/75000] loss=0.9277 lr=2.3E-04 time/iter=0.202s eta=1:19:17
+Epoch 122 complete. Average loss: 0.9277
+[51500/75000] loss=0.9322 lr=2.2E-04 time/iter=0.202s eta=1:18:57
+[51600/75000] loss=0.9279 lr=2.2E-04 time/iter=0.202s eta=1:18:37
+[51700/75000] loss=0.9282 lr=2.2E-04 time/iter=0.202s eta=1:18:16
+[51800/75000] loss=0.9282 lr=2.2E-04 time/iter=0.202s eta=1:17:56
+[51900/75000] loss=0.9282 lr=2.2E-04 time/iter=0.202s eta=1:17:36
+Epoch 123 complete. Average loss: 0.9282
+[52000/75000] loss=0.9272 lr=2.1E-04 time/iter=0.202s eta=1:17:16
+[52100/75000] loss=0.9277 lr=2.1E-04 time/iter=0.202s eta=1:16:56
+[52200/75000] loss=0.9278 lr=2.1E-04 time/iter=0.202s eta=1:16:35
+[52300/75000] loss=0.9279 lr=2.1E-04 time/iter=0.202s eta=1:16:15
+Epoch 124 complete. Average loss: 0.9280
+[52400/75000] loss=0.9285 lr=2.1E-04 time/iter=0.202s eta=1:15:55
+[52500/75000] loss=0.9275 lr=2.1E-04 time/iter=0.202s eta=1:15:35
+[52600/75000] loss=0.9279 lr=2.0E-04 time/iter=0.202s eta=1:15:15
+[52700/75000] loss=0.9278 lr=2.0E-04 time/iter=0.202s eta=1:14:54
+Epoch 125 complete. Average loss: 0.9277
+[52800/75000] loss=0.9280 lr=2.0E-04 time/iter=0.202s eta=1:14:34
+[52900/75000] loss=0.9280 lr=2.0E-04 time/iter=0.202s eta=1:14:14
+[53000/75000] loss=0.9281 lr=2.0E-04 time/iter=0.202s eta=1:13:54
+[53100/75000] loss=0.9283 lr=2.0E-04 time/iter=0.202s eta=1:13:34
+Epoch 126 complete. Average loss: 0.9280
+[53200/75000] loss=0.9280 lr=1.9E-04 time/iter=0.202s eta=1:13:13
+[53300/75000] loss=0.9277 lr=1.9E-04 time/iter=0.202s eta=1:12:53
+[53400/75000] loss=0.9279 lr=1.9E-04 time/iter=0.202s eta=1:12:33
+[53500/75000] loss=0.9278 lr=1.9E-04 time/iter=0.202s eta=1:12:13
+Epoch 127 complete. Average loss: 0.9277
+[53600/75000] loss=0.9268 lr=1.9E-04 time/iter=0.202s eta=1:11:52
+[53700/75000] loss=0.9292 lr=1.9E-04 time/iter=0.202s eta=1:11:32
+[53800/75000] loss=0.9290 lr=1.8E-04 time/iter=0.202s eta=1:11:12
+[53900/75000] loss=0.9285 lr=1.8E-04 time/iter=0.202s eta=1:10:52
+[54000/75000] loss=0.9282 lr=1.8E-04 time/iter=0.202s eta=1:10:32
+Epoch 128 complete. Average loss: 0.9283
+[54100/75000] loss=0.9281 lr=1.8E-04 time/iter=0.202s eta=1:10:11
+[54200/75000] loss=0.9277 lr=1.8E-04 time/iter=0.202s eta=1:09:51
+[54300/75000] loss=0.9275 lr=1.8E-04 time/iter=0.202s eta=1:09:31
+[54400/75000] loss=0.9275 lr=1.7E-04 time/iter=0.202s eta=1:09:11
+Epoch 129 complete. Average loss: 0.9276
+[54500/75000] loss=0.9285 lr=1.7E-04 time/iter=0.202s eta=1:08:51
+[54600/75000] loss=0.9274 lr=1.7E-04 time/iter=0.202s eta=1:08:30
+[54700/75000] loss=0.9275 lr=1.7E-04 time/iter=0.202s eta=1:08:10
+[54800/75000] loss=0.9276 lr=1.7E-04 time/iter=0.202s eta=1:07:50
+Epoch 130 complete. Average loss: 0.9278
+[54900/75000] loss=0.9287 lr=1.7E-04 time/iter=0.202s eta=1:07:30
+[55000/75000] loss=0.9289 lr=1.7E-04 time/iter=0.202s eta=1:07:10
+Saving checkpoint to ./runs/checkpoints/checkpoints_gru_mhsa/checkpoint-55000.pth...
+Checkpoint saved.
+[55100/75000] loss=0.9282 lr=1.6E-04 time/iter=0.202s eta=1:06:50
+[55200/75000] loss=0.9278 lr=1.6E-04 time/iter=0.202s eta=1:06:29
+Epoch 131 complete. Average loss: 0.9276
+[55300/75000] loss=0.9256 lr=1.6E-04 time/iter=0.202s eta=1:06:09
+[55400/75000] loss=0.9275 lr=1.6E-04 time/iter=0.202s eta=1:05:49
+[55500/75000] loss=0.9277 lr=1.6E-04 time/iter=0.202s eta=1:05:29
+[55600/75000] loss=0.9276 lr=1.6E-04 time/iter=0.202s eta=1:05:09
+[55700/75000] loss=0.9276 lr=1.5E-04 time/iter=0.202s eta=1:04:49
+Epoch 132 complete. Average loss: 0.9276
+[55800/75000] loss=0.9283 lr=1.5E-04 time/iter=0.201s eta=1:04:28
+[55900/75000] loss=0.9278 lr=1.5E-04 time/iter=0.201s eta=1:04:08
+[56000/75000] loss=0.9226 lr=1.5E-04 time/iter=0.201s eta=1:03:48
+[56100/75000] loss=0.9141 lr=1.5E-04 time/iter=0.201s eta=1:03:28
+Epoch 133 complete. Average loss: 0.9121
+[56200/75000] loss=0.8768 lr=1.5E-04 time/iter=0.201s eta=1:03:08
+[56300/75000] loss=0.8800 lr=1.5E-04 time/iter=0.201s eta=1:02:47
+[56400/75000] loss=0.8721 lr=1.4E-04 time/iter=0.201s eta=1:02:27
+[56500/75000] loss=0.8667 lr=1.4E-04 time/iter=0.201s eta=1:02:07
+Epoch 134 complete. Average loss: 0.8639
+[56600/75000] loss=0.8428 lr=1.4E-04 time/iter=0.201s eta=1:01:47
+[56700/75000] loss=0.8372 lr=1.4E-04 time/iter=0.201s eta=1:01:27
+[56800/75000] loss=0.8326 lr=1.4E-04 time/iter=0.201s eta=1:01:07
+[56900/75000] loss=0.8303 lr=1.4E-04 time/iter=0.201s eta=1:00:46
+Epoch 135 complete. Average loss: 0.8291
+[57000/75000] loss=0.8220 lr=1.4E-04 time/iter=0.201s eta=1:00:26
+[57100/75000] loss=0.8221 lr=1.3E-04 time/iter=0.201s eta=1:00:06
+[57200/75000] loss=0.8213 lr=1.3E-04 time/iter=0.201s eta=0:59:46
+[57300/75000] loss=0.8213 lr=1.3E-04 time/iter=0.201s eta=0:59:26
+Epoch 136 complete. Average loss: 0.8214
+[57400/75000] loss=0.8225 lr=1.3E-04 time/iter=0.201s eta=0:59:05
+[57500/75000] loss=0.8221 lr=1.3E-04 time/iter=0.201s eta=0:58:45
+[57600/75000] loss=0.8212 lr=1.3E-04 time/iter=0.201s eta=0:58:25
+[57700/75000] loss=0.8210 lr=1.3E-04 time/iter=0.201s eta=0:58:05
+[57800/75000] loss=0.8208 lr=1.2E-04 time/iter=0.201s eta=0:57:45
+Epoch 137 complete. Average loss: 0.8207
+[57900/75000] loss=0.8189 lr=1.2E-04 time/iter=0.201s eta=0:57:25
+[58000/75000] loss=0.8186 lr=1.2E-04 time/iter=0.201s eta=0:57:04
+[58100/75000] loss=0.8182 lr=1.2E-04 time/iter=0.201s eta=0:56:44
+[58200/75000] loss=0.8184 lr=1.2E-04 time/iter=0.201s eta=0:56:24
+Epoch 138 complete. Average loss: 0.8184
+[58300/75000] loss=0.8183 lr=1.2E-04 time/iter=0.201s eta=0:56:04
+[58400/75000] loss=0.8177 lr=1.2E-04 time/iter=0.201s eta=0:55:44
+[58500/75000] loss=0.8168 lr=1.1E-04 time/iter=0.201s eta=0:55:24
+[58600/75000] loss=0.8166 lr=1.1E-04 time/iter=0.201s eta=0:55:03
+Epoch 139 complete. Average loss: 0.8164
+[58700/75000] loss=0.8155 lr=1.1E-04 time/iter=0.201s eta=0:54:43
+[58800/75000] loss=0.8150 lr=1.1E-04 time/iter=0.201s eta=0:54:23
+[58900/75000] loss=0.8151 lr=1.1E-04 time/iter=0.201s eta=0:54:03
+[59000/75000] loss=0.8150 lr=1.1E-04 time/iter=0.201s eta=0:53:43
+Epoch 140 complete. Average loss: 0.8152
+[59100/75000] loss=0.8131 lr=1.1E-04 time/iter=0.201s eta=0:53:23
+[59200/75000] loss=0.8134 lr=1.1E-04 time/iter=0.201s eta=0:53:02
+[59300/75000] loss=0.8131 lr=1.0E-04 time/iter=0.201s eta=0:52:42
+[59400/75000] loss=0.8120 lr=1.0E-04 time/iter=0.201s eta=0:52:22
+[59500/75000] loss=0.8113 lr=1.0E-04 time/iter=0.201s eta=0:52:02
+Epoch 141 complete. Average loss: 0.8113
+[59600/75000] loss=0.8073 lr=1.0E-04 time/iter=0.201s eta=0:51:42
+[59700/75000] loss=0.8064 lr=9.9E-05 time/iter=0.201s eta=0:51:22
+[59800/75000] loss=0.8060 lr=9.8E-05 time/iter=0.201s eta=0:51:01
+[59900/75000] loss=0.8061 lr=9.7E-05 time/iter=0.201s eta=0:50:41
+Epoch 142 complete. Average loss: 0.8062
+[60000/75000] loss=0.8035 lr=9.5E-05 time/iter=0.201s eta=0:50:21
+Saving checkpoint to ./runs/checkpoints/checkpoints_gru_mhsa/checkpoint-60000.pth...
+Checkpoint saved.
+[60100/75000] loss=0.8037 lr=9.4E-05 time/iter=0.201s eta=0:50:01
+[60200/75000] loss=0.8040 lr=9.3E-05 time/iter=0.201s eta=0:49:41
+[60300/75000] loss=0.8038 lr=9.2E-05 time/iter=0.201s eta=0:49:21
+Epoch 143 complete. Average loss: 0.8038
+[60400/75000] loss=0.8035 lr=9.1E-05 time/iter=0.201s eta=0:49:00
+[60500/75000] loss=0.8030 lr=8.9E-05 time/iter=0.201s eta=0:48:40
+[60600/75000] loss=0.8010 lr=8.8E-05 time/iter=0.201s eta=0:48:20
+[60700/75000] loss=0.7997 lr=8.7E-05 time/iter=0.201s eta=0:48:00
+Epoch 144 complete. Average loss: 0.7982
+[60800/75000] loss=0.7934 lr=8.6E-05 time/iter=0.201s eta=0:47:40
+[60900/75000] loss=0.7913 lr=8.5E-05 time/iter=0.201s eta=0:47:20
+[61000/75000] loss=0.7902 lr=8.4E-05 time/iter=0.201s eta=0:46:59
+[61100/75000] loss=0.7900 lr=8.2E-05 time/iter=0.201s eta=0:46:39
+Epoch 145 complete. Average loss: 0.7895
+[61200/75000] loss=0.7840 lr=8.1E-05 time/iter=0.201s eta=0:46:19
+[61300/75000] loss=0.7875 lr=8.0E-05 time/iter=0.201s eta=0:45:59
+[61400/75000] loss=0.7868 lr=7.9E-05 time/iter=0.201s eta=0:45:39
+[61500/75000] loss=0.7865 lr=7.8E-05 time/iter=0.201s eta=0:45:19
+[61600/75000] loss=0.7859 lr=7.7E-05 time/iter=0.201s eta=0:44:58
+Epoch 146 complete. Average loss: 0.7858
+[61700/75000] loss=0.7844 lr=7.6E-05 time/iter=0.201s eta=0:44:38
+[61800/75000] loss=0.7827 lr=7.5E-05 time/iter=0.201s eta=0:44:18
+[61900/75000] loss=0.7822 lr=7.3E-05 time/iter=0.201s eta=0:43:58
+[62000/75000] loss=0.7814 lr=7.2E-05 time/iter=0.201s eta=0:43:38
+Epoch 147 complete. Average loss: 0.7812
+[62100/75000] loss=0.7758 lr=7.1E-05 time/iter=0.201s eta=0:43:18
+[62200/75000] loss=0.7729 lr=7.0E-05 time/iter=0.201s eta=0:42:57
+[62300/75000] loss=0.7683 lr=6.9E-05 time/iter=0.201s eta=0:42:37
+[62400/75000] loss=0.7646 lr=6.8E-05 time/iter=0.201s eta=0:42:17
+Epoch 148 complete. Average loss: 0.7624
+[62500/75000] loss=0.7450 lr=6.7E-05 time/iter=0.201s eta=0:41:57
+[62600/75000] loss=0.7431 lr=6.6E-05 time/iter=0.201s eta=0:41:37
+[62700/75000] loss=0.7421 lr=6.5E-05 time/iter=0.201s eta=0:41:17
+[62800/75000] loss=0.7415 lr=6.4E-05 time/iter=0.201s eta=0:40:56
+Epoch 149 complete. Average loss: 0.7406
+[62900/75000] loss=0.7370 lr=6.3E-05 time/iter=0.201s eta=0:40:36
+[63000/75000] loss=0.7357 lr=6.2E-05 time/iter=0.201s eta=0:40:16
+[63100/75000] loss=0.7349 lr=6.1E-05 time/iter=0.201s eta=0:39:56
+[63200/75000] loss=0.7345 lr=6.0E-05 time/iter=0.201s eta=0:39:36
+[63300/75000] loss=0.7341 lr=5.9E-05 time/iter=0.201s eta=0:39:16
+Epoch 150 complete. Average loss: 0.7341
+[63400/75000] loss=0.7314 lr=5.8E-05 time/iter=0.201s eta=0:38:56
+[63500/75000] loss=0.7318 lr=5.7E-05 time/iter=0.201s eta=0:38:35
+[63600/75000] loss=0.7311 lr=5.6E-05 time/iter=0.201s eta=0:38:15
+[63700/75000] loss=0.7307 lr=5.5E-05 time/iter=0.201s eta=0:37:55
+Epoch 151 complete. Average loss: 0.7307
+[63800/75000] loss=0.7275 lr=5.4E-05 time/iter=0.201s eta=0:37:35
+[63900/75000] loss=0.7255 lr=5.3E-05 time/iter=0.201s eta=0:37:15
+[64000/75000] loss=0.7201 lr=5.2E-05 time/iter=0.201s eta=0:36:55
+[64100/75000] loss=0.7060 lr=5.1E-05 time/iter=0.201s eta=0:36:35
+Epoch 152 complete. Average loss: 0.6967
+[64200/75000] loss=0.5915 lr=5.0E-05 time/iter=0.201s eta=0:36:14
+[64300/75000] loss=0.5728 lr=4.9E-05 time/iter=0.201s eta=0:35:54
+[64400/75000] loss=0.5584 lr=4.8E-05 time/iter=0.201s eta=0:35:34
+[64500/75000] loss=0.5461 lr=4.8E-05 time/iter=0.201s eta=0:35:14
+Epoch 153 complete. Average loss: 0.5393
+[64600/75000] loss=0.4945 lr=4.7E-05 time/iter=0.201s eta=0:34:54
+[64700/75000] loss=0.4880 lr=4.6E-05 time/iter=0.201s eta=0:34:34
+[64800/75000] loss=0.4805 lr=4.5E-05 time/iter=0.201s eta=0:34:13
+[64900/75000] loss=0.4730 lr=4.4E-05 time/iter=0.201s eta=0:33:53
+Epoch 154 complete. Average loss: 0.4673
+[65000/75000] loss=0.4346 lr=4.3E-05 time/iter=0.201s eta=0:33:33
+Saving checkpoint to ./runs/checkpoints/checkpoints_gru_mhsa/checkpoint-65000.pth...
+Checkpoint saved.
+[65100/75000] loss=0.4326 lr=4.2E-05 time/iter=0.201s eta=0:33:13
+[65200/75000] loss=0.4262 lr=4.2E-05 time/iter=0.201s eta=0:32:53
+[65300/75000] loss=0.4203 lr=4.1E-05 time/iter=0.201s eta=0:32:33
+[65400/75000] loss=0.4148 lr=4.0E-05 time/iter=0.201s eta=0:32:13
+Epoch 155 complete. Average loss: 0.4144
+[65500/75000] loss=0.3904 lr=3.9E-05 time/iter=0.201s eta=0:31:52
+[65600/75000] loss=0.3868 lr=3.8E-05 time/iter=0.201s eta=0:31:32
+[65700/75000] loss=0.3842 lr=3.7E-05 time/iter=0.201s eta=0:31:12
+[65800/75000] loss=0.3819 lr=3.7E-05 time/iter=0.201s eta=0:30:52
+Epoch 156 complete. Average loss: 0.3808
+[65900/75000] loss=0.3608 lr=3.6E-05 time/iter=0.201s eta=0:30:32
+[66000/75000] loss=0.3562 lr=3.5E-05 time/iter=0.201s eta=0:30:12
+[66100/75000] loss=0.3514 lr=3.4E-05 time/iter=0.201s eta=0:29:52
+[66200/75000] loss=0.3488 lr=3.4E-05 time/iter=0.201s eta=0:29:31
+Epoch 157 complete. Average loss: 0.3475
+[66300/75000] loss=0.3339 lr=3.3E-05 time/iter=0.201s eta=0:29:11
+[66400/75000] loss=0.3345 lr=3.2E-05 time/iter=0.201s eta=0:28:51
+[66500/75000] loss=0.3316 lr=3.1E-05 time/iter=0.201s eta=0:28:31
+[66600/75000] loss=0.3294 lr=3.1E-05 time/iter=0.201s eta=0:28:11
+Epoch 158 complete. Average loss: 0.3276
+[66700/75000] loss=0.3200 lr=3.0E-05 time/iter=0.201s eta=0:27:51
+[66800/75000] loss=0.3152 lr=2.9E-05 time/iter=0.201s eta=0:27:31
+[66900/75000] loss=0.3138 lr=2.9E-05 time/iter=0.201s eta=0:27:10
+[67000/75000] loss=0.3120 lr=2.8E-05 time/iter=0.201s eta=0:26:50
+Epoch 159 complete. Average loss: 0.3094
+[67100/75000] loss=0.3065 lr=2.7E-05 time/iter=0.201s eta=0:26:30
+[67200/75000] loss=0.2987 lr=2.6E-05 time/iter=0.201s eta=0:26:10
+[67300/75000] loss=0.2965 lr=2.6E-05 time/iter=0.201s eta=0:25:50
+[67400/75000] loss=0.2945 lr=2.5E-05 time/iter=0.201s eta=0:25:30
+[67500/75000] loss=0.2918 lr=2.4E-05 time/iter=0.201s eta=0:25:09
+Epoch 160 complete. Average loss: 0.2913
+[67600/75000] loss=0.2816 lr=2.4E-05 time/iter=0.201s eta=0:24:49
+[67700/75000] loss=0.2796 lr=2.3E-05 time/iter=0.201s eta=0:24:29
+[67800/75000] loss=0.2772 lr=2.3E-05 time/iter=0.201s eta=0:24:09
+[67900/75000] loss=0.2759 lr=2.2E-05 time/iter=0.201s eta=0:23:49
+Epoch 161 complete. Average loss: 0.2751
+[68000/75000] loss=0.2699 lr=2.1E-05 time/iter=0.201s eta=0:23:29
+[68100/75000] loss=0.2659 lr=2.1E-05 time/iter=0.201s eta=0:23:09
+[68200/75000] loss=0.2642 lr=2.0E-05 time/iter=0.201s eta=0:22:49
+[68300/75000] loss=0.2621 lr=2.0E-05 time/iter=0.201s eta=0:22:28
+Epoch 162 complete. Average loss: 0.2613
+[68400/75000] loss=0.2521 lr=1.9E-05 time/iter=0.201s eta=0:22:08
+[68500/75000] loss=0.2544 lr=1.8E-05 time/iter=0.201s eta=0:21:48
+[68600/75000] loss=0.2531 lr=1.8E-05 time/iter=0.201s eta=0:21:28
+[68700/75000] loss=0.2520 lr=1.7E-05 time/iter=0.201s eta=0:21:08
+Epoch 163 complete. Average loss: 0.2510
+[68800/75000] loss=0.2427 lr=1.7E-05 time/iter=0.201s eta=0:20:48
+[68900/75000] loss=0.2446 lr=1.6E-05 time/iter=0.201s eta=0:20:28
+[69000/75000] loss=0.2445 lr=1.6E-05 time/iter=0.201s eta=0:20:07
+[69100/75000] loss=0.2437 lr=1.5E-05 time/iter=0.201s eta=0:19:47
+[69200/75000] loss=0.2429 lr=1.5E-05 time/iter=0.201s eta=0:19:27
+Epoch 164 complete. Average loss: 0.2428
+[69300/75000] loss=0.2367 lr=1.4E-05 time/iter=0.201s eta=0:19:07
+[69400/75000] loss=0.2360 lr=1.4E-05 time/iter=0.201s eta=0:18:47
+[69500/75000] loss=0.2353 lr=1.3E-05 time/iter=0.201s eta=0:18:27
+[69600/75000] loss=0.2344 lr=1.3E-05 time/iter=0.201s eta=0:18:07
+Epoch 165 complete. Average loss: 0.2341
+[69700/75000] loss=0.2307 lr=1.2E-05 time/iter=0.201s eta=0:17:46
+[69800/75000] loss=0.2294 lr=1.2E-05 time/iter=0.201s eta=0:17:26
+[69900/75000] loss=0.2289 lr=1.1E-05 time/iter=0.201s eta=0:17:06
+[70000/75000] loss=0.2283 lr=1.1E-05 time/iter=0.201s eta=0:16:46
+Saving checkpoint to ./runs/checkpoints/checkpoints_gru_mhsa/checkpoint-70000.pth...
+Checkpoint saved.
+Epoch 166 complete. Average loss: 0.2278
+[70100/75000] loss=0.2251 lr=1.0E-05 time/iter=0.201s eta=0:16:26
+[70200/75000] loss=0.2252 lr=1.0E-05 time/iter=0.201s eta=0:16:06
+[70300/75000] loss=0.2236 lr=9.7E-06 time/iter=0.201s eta=0:15:46
+[70400/75000] loss=0.2233 lr=9.3E-06 time/iter=0.201s eta=0:15:25
+Epoch 167 complete. Average loss: 0.2224
+[70500/75000] loss=0.2208 lr=8.9E-06 time/iter=0.201s eta=0:15:05
+[70600/75000] loss=0.2204 lr=8.5E-06 time/iter=0.201s eta=0:14:45
+[70700/75000] loss=0.2197 lr=8.1E-06 time/iter=0.201s eta=0:14:25
+[70800/75000] loss=0.2188 lr=7.7E-06 time/iter=0.201s eta=0:14:05
+Epoch 168 complete. Average loss: 0.2185
+[70900/75000] loss=0.2191 lr=7.4E-06 time/iter=0.201s eta=0:13:45
+[71000/75000] loss=0.2151 lr=7.0E-06 time/iter=0.201s eta=0:13:25
+[71100/75000] loss=0.2145 lr=6.7E-06 time/iter=0.201s eta=0:13:05
+[71200/75000] loss=0.2145 lr=6.3E-06 time/iter=0.201s eta=0:12:44
+[71300/75000] loss=0.2141 lr=6.0E-06 time/iter=0.201s eta=0:12:24
+Epoch 169 complete. Average loss: 0.2141
+[71400/75000] loss=0.2122 lr=5.7E-06 time/iter=0.201s eta=0:12:04
+[71500/75000] loss=0.2117 lr=5.4E-06 time/iter=0.201s eta=0:11:44
+[71600/75000] loss=0.2116 lr=5.1E-06 time/iter=0.201s eta=0:11:24
+[71700/75000] loss=0.2118 lr=4.8E-06 time/iter=0.201s eta=0:11:04
+Epoch 170 complete. Average loss: 0.2116
+[71800/75000] loss=0.2094 lr=4.5E-06 time/iter=0.201s eta=0:10:44
+[71900/75000] loss=0.2089 lr=4.2E-06 time/iter=0.201s eta=0:10:23
+[72000/75000] loss=0.2092 lr=3.9E-06 time/iter=0.201s eta=0:10:03
+[72100/75000] loss=0.2094 lr=3.7E-06 time/iter=0.201s eta=0:09:43
+Epoch 171 complete. Average loss: 0.2093
+[72200/75000] loss=0.2090 lr=3.4E-06 time/iter=0.201s eta=0:09:23
+[72300/75000] loss=0.2087 lr=3.2E-06 time/iter=0.201s eta=0:09:03
+[72400/75000] loss=0.2078 lr=3.0E-06 time/iter=0.201s eta=0:08:43
+[72500/75000] loss=0.2077 lr=2.7E-06 time/iter=0.201s eta=0:08:23
+Epoch 172 complete. Average loss: 0.2074
+[72600/75000] loss=0.2092 lr=2.5E-06 time/iter=0.201s eta=0:08:03
+[72700/75000] loss=0.2068 lr=2.3E-06 time/iter=0.201s eta=0:07:42
+[72800/75000] loss=0.2065 lr=2.1E-06 time/iter=0.201s eta=0:07:22
+[72900/75000] loss=0.2057 lr=1.9E-06 time/iter=0.201s eta=0:07:02
+[73000/75000] loss=0.2058 lr=1.8E-06 time/iter=0.201s eta=0:06:42
+Epoch 173 complete. Average loss: 0.2058
+[73100/75000] loss=0.2042 lr=1.6E-06 time/iter=0.201s eta=0:06:22
+[73200/75000] loss=0.2049 lr=1.4E-06 time/iter=0.201s eta=0:06:02
+[73300/75000] loss=0.2047 lr=1.3E-06 time/iter=0.201s eta=0:05:42
+[73400/75000] loss=0.2047 lr=1.1E-06 time/iter=0.201s eta=0:05:22
+Epoch 174 complete. Average loss: 0.2047
+[73500/75000] loss=0.2047 lr=9.9E-07 time/iter=0.201s eta=0:05:01
+[73600/75000] loss=0.2046 lr=8.6E-07 time/iter=0.201s eta=0:04:41
+[73700/75000] loss=0.2043 lr=7.4E-07 time/iter=0.201s eta=0:04:21
+[73800/75000] loss=0.2040 lr=6.3E-07 time/iter=0.201s eta=0:04:01
+Epoch 175 complete. Average loss: 0.2041
+[73900/75000] loss=0.2046 lr=5.3E-07 time/iter=0.201s eta=0:03:41
+[74000/75000] loss=0.2038 lr=4.4E-07 time/iter=0.201s eta=0:03:21
+[74100/75000] loss=0.2044 lr=3.6E-07 time/iter=0.201s eta=0:03:01
+[74200/75000] loss=0.2041 lr=2.8E-07 time/iter=0.201s eta=0:02:40
+Epoch 176 complete. Average loss: 0.2042
+[74300/75000] loss=0.2073 lr=2.1E-07 time/iter=0.201s eta=0:02:20
+[74400/75000] loss=0.2038 lr=1.6E-07 time/iter=0.201s eta=0:02:00
+[74500/75000] loss=0.2036 lr=1.1E-07 time/iter=0.201s eta=0:01:40
+[74600/75000] loss=0.2035 lr=7.0E-08 time/iter=0.201s eta=0:01:20
+Epoch 177 complete. Average loss: 0.2035
+[74700/75000] loss=0.2048 lr=3.9E-08 time/iter=0.201s eta=0:01:00
+[74800/75000] loss=0.2037 lr=1.8E-08 time/iter=0.201s eta=0:00:40
+[74900/75000] loss=0.2040 lr=4.4E-09 time/iter=0.201s eta=0:00:20
+[75000/75000] loss=0.2041 lr=0.0E+00 time/iter=0.201s eta=0:00:00
+Saving checkpoint to ./runs/checkpoints/checkpoints_gru_mhsa/checkpoint-75000.pth...
+Checkpoint saved.
+Epoch 178 complete. Average loss: 0.2041
+Training loop finished.
+Logging complete. File saved to train_results/logs_gru_mhsa
+Training completed successfully.
+Job finished at Tue Apr  8 19:03:05 CEST 2025
+
+JOB STATISTICS
+==============
+Job ID: 11084629
+Cluster: snellius
+User/Group: igardner1/igardner1
+State: COMPLETED (exit code 0)
+Nodes: 1
+Cores per node: 18
+CPU Utilized: 04:14:45
+CPU Efficiency: 5.55% of 3-04:33:00 core-walltime
+Job Wall-clock time: 04:15:10
+Memory Utilized: 7.45 GB
+Memory Efficiency: 6.21% of 120.00 GB (120.00 GB/node)
