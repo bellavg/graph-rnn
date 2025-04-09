@@ -1,0 +1,192 @@
+============================================================================================== 
+Warning! Mixing Conda and module environments may lead to corruption of the
+user environment. 
+We do not recommend users mixing those two environments unless absolutely
+necessary. Note that 
+SURF does not provide any support for Conda environment.
+For more information, please refer to our software policy page:
+https://servicedesk.surf.nl/wiki/display/WIKI/Software+policy+Snellius#SoftwarepolicySnellius-UseofAnacondaandMinicondaenvironmentsonSnellius 
+
+Remember that many packages have already been installed on the system and can
+be loaded using 
+the 'module load <package__name>' command. If you are uncertain if a package is
+already available 
+on the system, please use 'module avail' or 'module spider' to search for it.
+============================================================================================== 
+Using config file: configs/config_aig_lstm.yaml
+Loaded config:
+data:
+  dataset_type: aig-directed-multiclass
+  graph_file: dataset/final_data.pkl
+  use_bfs: false
+  max_graphs: null
+model:
+  mode: directed-multiclass
+  use_lstm: true
+  use_attention: false
+  edge_model: rnn
+  GraphLSTM:
+    embedding_size: 128
+    hidden_size: 256
+    num_layers: 4
+    edge_feature_len: 3
+    output_size: 128
+  EdgeLSTM:
+    embedding_size: 64
+    hidden_size: 128
+    num_layers: 4
+    edge_feature_len: 3
+train:
+  batch_size: 32
+  lr: 0.0005
+  steps: 75000
+  print_iter: 100
+  checkpoint_iter: 7500
+  checkpoint_dir: checkpoints/checkpoints_lstm_rnn
+  log_file: train_results/logs_lstm_rnn
+
+Computing maximum node count from dataset...
+Maximum node count: 89
+Computing maximum level from dataset...
+Calculated max level 18 from 37000 valid graphs
+Maximum level: 18
+Loading AIG graphs from dataset/final_data.pkl...
+Limited to 30000 graphs for processing.
+Preprocessing graphs...
+Graph preprocessing complete. 30000 graphs processed, 0 skipped.
+Maximum node count in processed dataset: 89
+INFO: Topological Sort mode. Effective input size (m_internal): 88
+Calculating node levels...
+Maximum node level across dataset: 18
+Calculating edge type counts for class weighting...
+Calculating weights based on 27000 training graphs...
+Total edge slots considered for weights: 98341408
+Raw edge counts: {0: 96753923, 1: 959297, 2: 628188}
+Calculated edge weights (Inverse Frequency): [0.011724252253770828, 1.1824986934661865, 1.8057770729064941]
+Dataset ready: 27000 graphs (training split).
+Total available graphs: 30000
+Training graphs: 27000 (limited by split ratio)
+Testing graphs: 3000
+Ordering: Topological Sort
+Dataset initialized with 27000 training graphs
+Final statistics - Max node count: 89, Max level: 18
+INFO: Using Topological Sort mode. Effective input/output size (max_nodes-1): 88
+INFO: GraphLevelLSTM using level embedding up to level 18
+INFO: Using GraphLevelLSTM for node level.
+Selected EdgeLevelLSTM model.
+Setting up CrossEntropyLoss for 3 edge classes.
+Applying edge class weights: [0.011724252253770828, 1.1824986934661865, 1.8057770729064941]
+Logger initialized. Logging to train_results/logs_lstm_rnn
+Logger initialized. Writing to: train_results/logs_lstm_rnn
+[100/75000] loss=0.9562 lr=5.0E-04 time/iter=0.108s eta=2:14:42
+[200/75000] loss=0.9152 lr=5.0E-04 time/iter=0.105s eta=2:10:56
+[300/75000] loss=0.8938 lr=5.0E-04 time/iter=0.104s eta=2:09:47
+[400/75000] loss=0.8758 lr=5.0E-04 time/iter=0.104s eta=2:08:56
+[500/75000] loss=0.8639 lr=5.0E-04 time/iter=0.104s eta=2:08:31
+[600/75000] loss=0.8547 lr=5.0E-04 time/iter=0.103s eta=2:08:07
+[700/75000] loss=0.8458 lr=5.0E-04 time/iter=0.103s eta=2:07:48
+[800/75000] loss=0.8371 lr=5.0E-04 time/iter=0.103s eta=2:07:31
+Epoch 1 complete. Average loss: 0.8335
+[900/75000] loss=0.7656 lr=5.0E-04 time/iter=0.103s eta=2:07:11
+[1000/75000] loss=0.7652 lr=5.0E-04 time/iter=0.103s eta=2:06:53
+[1100/75000] loss=0.7651 lr=5.0E-04 time/iter=0.103s eta=2:06:45
+[1200/75000] loss=0.7639 lr=5.0E-04 time/iter=0.103s eta=2:06:30
+[1300/75000] loss=0.7635 lr=5.0E-04 time/iter=0.103s eta=2:06:21
+[1400/75000] loss=0.7630 lr=5.0E-04 time/iter=0.103s eta=2:06:10
+[1500/75000] loss=0.7629 lr=5.0E-04 time/iter=0.103s eta=2:05:58
+[1600/75000] loss=0.7627 lr=5.0E-04 time/iter=0.103s eta=2:05:42
+Epoch 2 complete. Average loss: 0.7621
+[1700/75000] loss=0.7636 lr=5.0E-04 time/iter=0.103s eta=2:05:29
+[1800/75000] loss=0.7587 lr=5.0E-04 time/iter=0.103s eta=2:05:13
+[1900/75000] loss=0.7593 lr=5.0E-04 time/iter=0.103s eta=2:05:04
+[2000/75000] loss=0.7602 lr=5.0E-04 time/iter=0.103s eta=2:04:51
+[2100/75000] loss=0.7310 lr=5.0E-04 time/iter=0.103s eta=2:04:39
+[2200/75000] loss=0.6724 lr=5.0E-04 time/iter=0.103s eta=2:04:26
+[2300/75000] loss=0.6173 lr=5.0E-04 time/iter=0.103s eta=2:04:15
+[2400/75000] loss=0.5717 lr=5.0E-04 time/iter=0.103s eta=2:04:03
+[2500/75000] loss=0.5359 lr=5.0E-04 time/iter=0.103s eta=2:03:55
+Epoch 3 complete. Average loss: 0.5257
+[2600/75000] loss=0.2588 lr=5.0E-04 time/iter=0.103s eta=2:03:41
+[2700/75000] loss=0.2565 lr=5.0E-04 time/iter=0.102s eta=2:03:30
+[2800/75000] loss=0.2548 lr=5.0E-04 time/iter=0.103s eta=2:03:20
+[2900/75000] loss=0.2555 lr=5.0E-04 time/iter=0.102s eta=2:03:10
+[3000/75000] loss=0.2542 lr=5.0E-04 time/iter=0.102s eta=2:02:56
+[3100/75000] loss=0.2531 lr=5.0E-04 time/iter=0.102s eta=2:02:45
+[3200/75000] loss=0.2528 lr=5.0E-04 time/iter=0.102s eta=2:02:32
+[3300/75000] loss=0.2516 lr=5.0E-04 time/iter=0.102s eta=2:02:22
+Epoch 4 complete. Average loss: 0.2519
+[3400/75000] loss=0.2269 lr=5.0E-04 time/iter=0.102s eta=2:02:12
+[3500/75000] loss=0.2430 lr=5.0E-04 time/iter=0.102s eta=2:02:03
+[3600/75000] loss=0.2409 lr=5.0E-04 time/iter=0.102s eta=2:01:53
+[3700/75000] loss=0.2403 lr=5.0E-04 time/iter=0.102s eta=2:01:42
+[3800/75000] loss=0.2396 lr=5.0E-04 time/iter=0.102s eta=2:01:32
+[3900/75000] loss=0.2396 lr=5.0E-04 time/iter=0.102s eta=2:01:23
+[4000/75000] loss=0.2386 lr=5.0E-04 time/iter=0.102s eta=2:01:12
+[4100/75000] loss=0.2388 lr=5.0E-04 time/iter=0.102s eta=2:01:01
+[4200/75000] loss=0.2380 lr=5.0E-04 time/iter=0.102s eta=2:00:51
+Epoch 5 complete. Average loss: 0.2378
+[4300/75000] loss=0.2353 lr=5.0E-04 time/iter=0.102s eta=2:00:39
+[4400/75000] loss=0.2348 lr=5.0E-04 time/iter=0.102s eta=2:00:28
+[4500/75000] loss=0.2380 lr=5.0E-04 time/iter=0.102s eta=2:00:15
+[4600/75000] loss=0.2346 lr=5.0E-04 time/iter=0.102s eta=2:00:05
+[4700/75000] loss=0.2353 lr=5.0E-04 time/iter=0.102s eta=1:59:55
+[4800/75000] loss=0.2343 lr=4.9E-04 time/iter=0.102s eta=1:59:46
+[4900/75000] loss=0.2339 lr=4.9E-04 time/iter=0.102s eta=1:59:35
+[5000/75000] loss=0.2321 lr=4.9E-04 time/iter=0.102s eta=1:59:26
+Epoch 6 complete. Average loss: 0.2325
+[5100/75000] loss=0.2286 lr=4.9E-04 time/iter=0.102s eta=1:59:15
+[5200/75000] loss=0.2290 lr=4.9E-04 time/iter=0.102s eta=1:59:05
+[5300/75000] loss=0.2247 lr=4.9E-04 time/iter=0.102s eta=1:58:56
+[5400/75000] loss=0.2234 lr=4.9E-04 time/iter=0.102s eta=1:58:47
+[5500/75000] loss=0.2239 lr=4.9E-04 time/iter=0.102s eta=1:58:36
+[5600/75000] loss=0.2247 lr=4.9E-04 time/iter=0.102s eta=1:58:25
+[5700/75000] loss=0.2231 lr=4.9E-04 time/iter=0.102s eta=1:58:14
+[5800/75000] loss=0.2244 lr=4.9E-04 time/iter=0.102s eta=1:58:03
+[5900/75000] loss=0.2229 lr=4.9E-04 time/iter=0.102s eta=1:57:53
+Epoch 7 complete. Average loss: 0.2229
+[6000/75000] loss=0.2245 lr=4.9E-04 time/iter=0.102s eta=1:57:42
+[6100/75000] loss=0.2218 lr=4.9E-04 time/iter=0.102s eta=1:57:31
+[6200/75000] loss=0.2219 lr=4.9E-04 time/iter=0.102s eta=1:57:22
+[6300/75000] loss=0.2220 lr=4.9E-04 time/iter=0.102s eta=1:57:12
+[6400/75000] loss=0.2209 lr=4.9E-04 time/iter=0.102s eta=1:57:01
+[6500/75000] loss=0.2193 lr=4.9E-04 time/iter=0.102s eta=1:56:50
+[6600/75000] loss=0.2195 lr=4.9E-04 time/iter=0.102s eta=1:56:40
+[6700/75000] loss=0.2204 lr=4.9E-04 time/iter=0.102s eta=1:56:31
+Epoch 8 complete. Average loss: 0.2199
+[6800/75000] loss=0.2196 lr=4.9E-04 time/iter=0.102s eta=1:56:22
+[6900/75000] loss=0.2113 lr=4.9E-04 time/iter=0.102s eta=1:56:11
+[7000/75000] loss=0.2153 lr=4.9E-04 time/iter=0.102s eta=1:56:01
+[7100/75000] loss=0.2136 lr=4.9E-04 time/iter=0.102s eta=1:55:51
+[7200/75000] loss=0.2137 lr=4.9E-04 time/iter=0.102s eta=1:55:41
+[7300/75000] loss=0.2152 lr=4.9E-04 time/iter=0.102s eta=1:55:31
+[7400/75000] loss=0.2149 lr=4.9E-04 time/iter=0.102s eta=1:55:21
+[7500/75000] loss=0.2140 lr=4.9E-04 time/iter=0.102s eta=1:55:11
+Saving checkpoint to ./runs/checkpoints/checkpoints_lstm_rnn/checkpoint-7500.pth...
+Checkpoint saved.
+Epoch 9 complete. Average loss: 0.2136
+[7600/75000] loss=0.2255 lr=4.9E-04 time/iter=0.102s eta=1:55:00
+[7700/75000] loss=0.2144 lr=4.9E-04 time/iter=0.102s eta=1:54:49
+[7800/75000] loss=0.2202 lr=4.9E-04 time/iter=0.102s eta=1:54:38
+[7900/75000] loss=0.2263 lr=4.9E-04 time/iter=0.102s eta=1:54:28
+[8000/75000] loss=0.2263 lr=4.9E-04 time/iter=0.102s eta=1:54:17
+[8100/75000] loss=0.2233 lr=4.9E-04 time/iter=0.102s eta=1:54:08
+[8200/75000] loss=0.2221 lr=4.9E-04 time/iter=0.102s eta=1:53:57
+[8300/75000] loss=0.2191 lr=4.9E-04 time/iter=0.102s eta=1:53:47
+[8400/75000] loss=0.2176 lr=4.8E-04 time/iter=0.102s eta=1:53:37
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+slurmstepd: error: *** JOB 11084000 ON gcn66 CANCELLED AT 2025-04-08T14:25:32 ***
+slurmstepd: error: *** STEP 11084000.0 ON gcn66 CANCELLED AT 2025-04-08T14:25:32 ***
+
+JOB STATISTICS
+==============
+Job ID: 11084000
+Cluster: snellius
+User/Group: igardner1/igardner1
+State: CANCELLED (exit code 0)
+Nodes: 1
+Cores per node: 18
+CPU Utilized: 00:17:37
+CPU Efficiency: 5.46% of 05:22:30 core-walltime
+Job Wall-clock time: 00:17:55
+Memory Utilized: 7.52 GB
+Memory Efficiency: 6.26% of 120.00 GB (120.00 GB/node)
