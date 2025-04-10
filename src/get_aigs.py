@@ -89,6 +89,16 @@ def load_model_from_config(model_path):
         use_node_attention = model_config.get('use_attention', False) # General flag
         # Specific node model config dict (GraphRNN or GraphLSTM)
         node_config_dict = model_config.get('GraphRNN', model_config.get('GraphLSTM', {}))
+        max_level_from_config = node_config_dict.get('max_level')
+        if max_level_from_config is None:
+            # Option 1: Raise an error if max_level MUST be in config
+            # raise ValueError(f"'max_level' not found in 'model.{node_config_section}' config.")
+            # Option 2: Add a manual injection/default (similar to 'm', but riskier)
+            known_max_level = 18  # <<<--- SET YOUR KNOWN MAX_LEVEL HERE (from logs)
+            node_config_dict['max_level'] = known_max_level
+            logger.warning(f"Manually injected 'max_level={known_max_level}' into node_config_dict.")
+        else:
+            logger.info(f"Found max_level={max_level_from_config} in node config.")
         if not use_node_attention: # Check specific config if global is false
             use_node_attention = node_config_dict.get('use_attention', False)
 
