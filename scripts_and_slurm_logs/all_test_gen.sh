@@ -1,138 +1,129 @@
 #!/bin/bash
-#SBATCH --job-name=eval_all_aigs
-#SBATCH --partition=gpu_a100 # Or your preferred partition
-#SBATCH --gpus=1
-#SBATCH --time=04:00:00       # Adjust time as needed
-#SBATCH --output=slurm_logs/eval_all_%j.out
+#SBATCH --job-name=aig_test
+#SBATCH --partition=gpu_a100         # Keep partition if appropriate
+#SBATCH --gpus=1                     # Request 1 GPU per run
+#SBATCH --time=04:00:00              # Increased time, adjust as needed per checkpoint             # Keep memory request
+#SBATCH --output=slurm_logs/aig_get_multi_%j.out # Changed log file name pattern
 
 
-# --- User Configuration ---
 
-# !! EDIT THIS ARRAY: List paths to directories containing each model's checkpoints !!
-MODEL_DIRS=(
-    "./checkpoints/checkpoints_gru_mhsa"
-    "./checkpoints/checkpoints_gru_mhsa2"
-    "./checkpoints/checkpoints_gru_mlp"
-    "./checkpoints/checkpoints_gru_mlp2"
-    "./checkpoints/checkpoints_gru_rnn"
-    "./checkpoints/checkpoints_lstm_mhsa"
-    "./checkpoints/checkpoints_lstm_rnn"
-    # Add any other relevant model directories following this pattern
-)
+cd ..
 
-# !! EDIT THESE VALUES: Set the correct max nodes/level used during TRAINING !!
-# !! This script assumes these are the SAME for all models in MODEL_DIRS !!
-# This is for final_data.pkl
-FORCE_MAX_NODES=89  # Replace with the actual max_node_count_train
-FORCE_MAX_LEVEL=18  # Replace with the actual max_level_train
 
-# --- Script Configuration ---
-PYTHON_SCRIPT="src/all_gen_eval.py" # Path to your evaluation script
-BASE_OUTPUT_DIR="./evaluation_results_all" # Base directory for all outputs
+PYTHON_SCRIPT="src/get_aigs.py"      # <<< Path to your main Python script
+# Directory containing subdirectories like 'checkpoints_gru_rmsp', 'checkpoints_gru_node2', etc.
+BASE_CHECKPOINT_DIR="$./checkpoints" # <<< CHANGE THIS if needed (based on image, this seems correct relative to PROJECT_BASE_DIR)
+# Base directory where all results will be saved (new location)
+BASE_OUTPUT_DIR="./evaluation_results_all" # <<< CHANGE THIS destination as desired
 
-# Parameters for the Python script (adjust as needed)
-NUM_GRAPHS=50         # Number of graphs to generate per checkpoint
-NODES_TARGET=100      # Target number of nodes per graph
-TEMPERATURES="0.8 1.0 1.2 1.5" # List of temperatures (space-separated)
-NUM_PLOTS=3           # Number of best plots to save
-PLOT_SORT_BY="nodes"  # Sort plots by 'nodes' (biggest) or 'level'
-SAVE_PLOTS_FLAG="--save_plots" # Enable plot saving
-FIND_CHECKPOINTS_FLAG="--find_checkpoints" # Use if checkpoints are in subdirs
-# DEBUG_FLAG="--debug" # Uncomment for verbose python script output
+# === PARAMETERS for get_aigs.py ===
+NUM_GENERATE=500       # Number of graphs to generate per checkpoint
+NUM_EVALUATE=500       # Number of graphs to evaluate per checkpoint
+DO_VISUALIZE=true      # Set to true to enable visualization, false to disable
+NUM_VISUALIZE=10       # Number of graphs to visualize if visualization is enabled
 
-# --- Environment Setup ---
-echo "Loading environment..."
-cd .. || { echo "Failed to cd .."; exit 1; } # Go to parent dir where src is
 
+
+echo "======================================================"
+echo "Starting Multi-Checkpoint AIG Generation/Evaluation"
+echo "Timestamp: $(date)"
+echo "Python Script: $PYTHON_SCRIPT"
+echo "Base Checkpoint Dir: $BASE_CHECKPOINT_DIR"
+echo "Base Output Dir: $BASE_OUTPUT_DIR"
+echo "Num Generate per Checkpoint: $NUM_GENERATE"
+echo "Num Evaluate per Checkpoint: $NUM_EVALUATE"
+echo "Visualize: $DO_VISUALIZE"
+echo "Num Visualize: $NUM_VISUALIZE"
+echo "======================================================"
+
+# --- Load environment ---
+# Adjust module load and conda activate commands based on your cluster setup
+echo "Loading environment modules..."
 module purge
-module load 2024
-module load Anaconda3/2024.06-1
+module load 2024                # Or your required environment modules
+module load Anaconda3/2024.06-1 # Or your Anaconda/Python module
+echo "Activating Conda environment..."
+source activate aig-rnn         # <<< Make sure this conda env name is correct
 
-# Activate your environment
-source activate aig-rnn || { echo "Failed to activate conda env aig-rnn"; exit 1; }
-
-echo "Environment loaded."
-
-# --- Check Python Script ---
+# --- Check if Python script exists ---
 if [ ! -f "$PYTHON_SCRIPT" ]; then
     echo "Error: Python script not found at ${PYTHON_SCRIPT}"
     exit 1
 fi
 
-# --- Main Loop ---
-mkdir -p "$BASE_OUTPUT_DIR"
+# --- Find all checkpoint files ---
+# Use find to search for .pth files within the subdirectories of BASE_CHECKPOINT_DIR
+# -maxdepth 2 assumes checkpoints are directly inside subdirs like checkpoints_gru_rmsp/
+# Adjust maxdepth if they are nested deeper.
+CHECKPOINT_FILES=()
+while IFS= read -r -d $'\0'; do
+    CHECKPOINT_FILES+=("$REPLY")
+done < <(find "$BASE_CHECKPOINT_DIR" -maxdepth 2 -name "*.pth" -print0)
 
-echo "Starting evaluation for ${#MODEL_DIRS[@]} models..."
+# Check if any files were found
+if [ ${#CHECKPOINT_FILES[@]} -eq 0 ]; then
+    echo "Error: No checkpoint .pth files found in subdirectories of $BASE_CHECKPOINT_DIR"
+    exit 1
+fi
 
-for MODEL_CHECKPOINT_DIR in "${MODEL_DIRS[@]}"; do
-    # Extract a short name for the model from its directory path for output naming
-    MODEL_NAME=$(basename "$(dirname "$MODEL_CHECKPOINT_DIR")")_$(basename "$MODEL_CHECKPOINT_DIR")
-    # Sanitize model name for use in paths (replace / with _)
-    MODEL_NAME_SAFE=$(echo "$MODEL_NAME" | tr '/' '_')
+echo "Found ${#CHECKPOINT_FILES[@]} checkpoint files to process."
 
+# --- Set Visualization Flag ---
+VISUALIZE_FLAG=""
+if [ "$DO_VISUALIZE" = true ]; then
+    VISUALIZE_FLAG="--visualize"
+fi
+
+# --- Loop through each checkpoint file ---
+for CKPT_FILE_PATH in "${CHECKPOINT_FILES[@]}"; do
     echo "-----------------------------------------------------"
-    echo "Processing Model: $MODEL_NAME"
-    echo "Checkpoint Directory: $MODEL_CHECKPOINT_DIR"
-    echo "-----------------------------------------------------"
+    echo "Processing Checkpoint File: $CKPT_FILE_PATH"
 
-    if [ ! -d "$MODEL_CHECKPOINT_DIR" ]; then
-        echo "Warning: Checkpoint directory not found: ${MODEL_CHECKPOINT_DIR}. Skipping."
-        continue
-    fi
-
-    # --- Define Output Paths for this Model ---
-    CURRENT_OUTPUT_DIR="${BASE_OUTPUT_DIR}/${MODEL_NAME_SAFE}/results"
-    CURRENT_PLOT_DIR="${BASE_OUTPUT_DIR}/${MODEL_NAME_SAFE}/plots"
-    CURRENT_OUTPUT_CSV="${CURRENT_OUTPUT_DIR}/results_summary_${MODEL_NAME_SAFE}.csv"
-
-    mkdir -p "$CURRENT_OUTPUT_DIR"
-    mkdir -p "$CURRENT_PLOT_DIR"
-
-    echo "Output CSV:    $CURRENT_OUTPUT_CSV"
-    echo "Plot Dir:      $CURRENT_PLOT_DIR"
-    echo "Num Graphs:    $NUM_GRAPHS"
-    echo "Target Nodes:  $NODES_TARGET"
-    echo "Temperatures:  $TEMPERATURES"
-    echo "Num Plots:     $NUM_PLOTS (Sorted by: $PLOT_SORT_BY)"
-    echo "Forcing Train Max Nodes: $FORCE_MAX_NODES"
-    echo "Forcing Train Max Level: $FORCE_MAX_LEVEL"
-
-    # --- Run the Python Evaluation Script for this model ---
-    python -u "$PYTHON_SCRIPT" \
-        "$MODEL_CHECKPOINT_DIR" \
-        --output_csv "$CURRENT_OUTPUT_CSV" \
-        --plot_dir "$CURRENT_PLOT_DIR" \
-        --num_graphs $NUM_GRAPHS \
-        --nodes_target $NODES_TARGET \
-        --temperatures $TEMPERATURES \
-        --num_plots $NUM_PLOTS \
-        --plot_sort_by "$PLOT_SORT_BY" \
-        $SAVE_PLOTS_FLAG \
-        $FIND_CHECKPOINTS_FLAG \
-        --force_max_nodes_train $FORCE_MAX_NODES \
-        --force_max_level_train $FORCE_MAX_LEVEL \
-        # $DEBUG_FLAG # Uncomment for debug
-
-    # Check the exit status of the python script
+    # --- Create unique output directory for this checkpoint ---
+    # Extract the specific model run dir name (e.g., checkpoints_gru_rmsp)
+    MODEL_RUN_SUBDIR=$(basename "$(dirname "$CKPT_FILE_PATH")")
+    # Extract the checkpoint filename without extension (e.g., checkpoint-100)
+    CHECKPOINT_NAME=$(basename "$CKPT_FILE_PATH" .pth)
+    # Define the specific output directory for this checkpoint's results
+    OUTPUT_DIR="${BASE_OUTPUT_DIR}/${MODEL_RUN_SUBDIR}/${CHECKPOINT_NAME}"
+    mkdir -p "$OUTPUT_DIR"
     if [ $? -ne 0 ]; then
-        echo "Error: Python script failed for model $MODEL_NAME. Check logs."
-        # Decide whether to continue with the next model or exit
-        # continue
-        # exit 1 # Uncomment to stop the whole script on failure
-    else
-        echo "Successfully processed model $MODEL_NAME."
+        echo "Error: Failed to create output directory $OUTPUT_DIR"
+        # Decide whether to skip or exit
+        echo "Skipping checkpoint $CKPT_FILE_PATH"
+        continue # Skip to the next checkpoint
     fi
+    echo "Output Dir: $OUTPUT_DIR"
+    # --- ---
 
-    echo "Finished processing $MODEL_NAME at $(date)"
+    # --- Construct and Execute the Python Command ---
+    echo "Launching get_aigs.py for $CHECKPOINT_NAME..."
+    # Use srun if you need SLURM to manage the python process resource allocation specifically
+    # If the main script handles resource usage well, you might just run python directly
+    srun python -u "$PYTHON_SCRIPT" \
+        --model-path "$CKPT_FILE_PATH" \
+        --output-dir "$OUTPUT_DIR" \
+        --num-generate "$NUM_GENERATE" \
+        --num-evaluate "$NUM_EVALUATE" \
+        $VISUALIZE_FLAG \
+        --num-visualize "$NUM_VISUALIZE"
+
+    exit_code=$?
+    # --- ---
+
+    if [ $exit_code -ne 0 ]; then
+        echo "  WARNING: Python script for $CKPT_FILE_PATH returned non-zero exit code: $exit_code"
+        # Optional: Add more error handling here, e.g., stop the whole script
+    else
+        echo "  Processing completed successfully for $CKPT_FILE_PATH"
+    fi
+    echo "-----------------------------------------------------"
 
 done
 
-echo "--------------------------------------"
-echo "All model evaluations finished at $(date)"
-echo "Results saved in subdirectories under $BASE_OUTPUT_DIR"
-echo "--------------------------------------"
-
-# Deactivate environment (optional)
-# conda deactivate
+echo "======================================================"
+echo "All checkpoint processing finished at $(date)"
+echo "Results are located under: $BASE_OUTPUT_DIR"
+echo "======================================================"
 
 exit 0
