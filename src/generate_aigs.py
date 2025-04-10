@@ -251,7 +251,6 @@ def generate(
     # Determine device from node_model parameters
     try:
         device = next(node_model.parameters()).device
-        logger.info(f"Generation using device: {device}")
     except StopIteration:
         logger.warning("Could not determine device from node_model parameters. Using CPU.")
         device = torch.device('cpu')
@@ -292,7 +291,7 @@ def generate(
     generated_nodes_count = 0
     no_edge_streak = 0
 
-    logger.info(f"Starting generation: max_nodes={max_nodes}, min_nodes={min_nodes}, patience={patience}, temp={temperature}, top_k={top_k}, top_p={top_p}")
+    #logger.info(f"Starting generation: max_nodes={max_nodes}, min_nodes={min_nodes}, patience={patience}, temp={temperature}, top_k={top_k}, top_p={top_p}")
 
     with torch.no_grad():
         for i in range(max_nodes): # Loop up to the maximum allowed nodes
@@ -426,7 +425,7 @@ def generate(
          # Decide if this is acceptable or should return None
          # return None, None # Option to return None if min_nodes not met
 
-    logger.info(f"Building AIG matrices for {generated_nodes_count} generated nodes...")
+    #logger.info(f"Building AIG matrices for {generated_nodes_count} generated nodes...")
     try:
         adj_conn_final, adj_inv_final = build_aig_matrices(list_adj_indices, input_size, generated_nodes_count)
     except Exception as e:

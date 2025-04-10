@@ -104,9 +104,9 @@ for CKPT_FILE_PATH in "${CHECKPOINT_FILES[@]}"; do
         --model-path "$CKPT_FILE_PATH" \
         --output-dir "$OUTPUT_DIR" \
         --num-generate "$NUM_GENERATE" \
-        --num-evaluate "$NUM_EVALUATE" \
         $VISUALIZE_FLAG \
-        --num-visualize "$NUM_VISUALIZE"
+        --num-visualize "$NUM_VISUALIZE"\
+        --evaluate
 
     exit_code=$?
     # --- ---
