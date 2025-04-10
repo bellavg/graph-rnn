@@ -4,6 +4,7 @@ data:
   graph_file: 'dataset/final_data.pkl'
   use_bfs: false
   max_graphs: null
+  m: 88
 
 model:
   mode: 'directed-multiclass'
