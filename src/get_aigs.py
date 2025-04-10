@@ -75,6 +75,7 @@ def load_model_from_config(model_path):
         # Default values or structure checks might be needed depending on config format
         data_config = config.get('data', {})
         model_config = config.get('model', {})
+
         if data_config.get('m') is None:  # Check if 'm' is missing or None
             known_m_value = 88  # <<<--- SET YOUR KNOWN CORRECT M VALUE HERE
             data_config['m'] = known_m_value
