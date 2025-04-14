@@ -374,7 +374,7 @@ def generate(
                     no_edge_streak = 0 # Reset streak if any edge was predicted
 
                 if no_edge_streak >= patience:
-                    logger.info(f"Stopping early at node {i} (total {num_nodes_generated_so_far}): "
+                    logger.debug(f"Stopping early at node {i} (total {num_nodes_generated_so_far}): "
                                 f"reached patience={patience} of consecutive 'No Edge > NONE' steps.")
                     break # Exit the generation loop
 
@@ -432,7 +432,7 @@ def generate(
         logger.error(f"Error building AIG matrices: {e}", exc_info=True)
         return None, None
 
-    logger.info(f"Generation successful. Returning matrices for {generated_nodes_count} nodes.")
+    logger.debug(f"Generation successful. Returning matrices for {generated_nodes_count} nodes.")
     return adj_conn_final, adj_inv_final
 
 # Example of how to use if run standalone (for testing)
