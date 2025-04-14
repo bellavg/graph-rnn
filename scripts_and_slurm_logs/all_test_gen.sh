@@ -50,7 +50,8 @@ conda remove pyemb
 pip install scipy==1.14.0
 pip install numpy
 pip install EMD-signal
-
+pip install pyemd
+conda install pyemd
 
 
 # --- Check if Python script exists ---
