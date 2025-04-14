@@ -12,12 +12,12 @@ cd ..
 
 PYTHON_SCRIPT="src/get_aigs.py"      # <<< Path to your main Python script
 # Directory containing subdirectories like 'checkpoints_gru_rmsp', 'checkpoints_gru_node2', etc.
-BASE_CHECKPOINT_DIR="./checkpoints" # <<< CHANGE THIS if needed (based on image, this seems correct relative to PROJECT_BASE_DIR)
+BASE_CHECKPOINT_DIR="./checkpoints/checkpoints_lstm_mhsa" # <<< CHANGE THIS if needed (based on image, this seems correct relative to PROJECT_BASE_DIR)
 # Base directory where all results will be saved (new location)
 BASE_OUTPUT_DIR="./evaluation_results_all" # <<< CHANGE THIS destination as desired
 
 # === PARAMETERS for get_aigs.py ===
-NUM_GENERATE=50       # Number of graphs to generate per checkpoint
+NUM_GENERATE=500       # Number of graphs to generate per checkpoint
 DO_VISUALIZE=true      # Set to true to enable visualization, false to disable
 NUM_VISUALIZE=5       # Number of graphs to visualize if visualization is enabled
 
