@@ -45,10 +45,9 @@ module load Anaconda3/2024.06-1 # Or your Anaconda/Python module
 echo "Activating Conda environment..."
 source activate aig-rnn         # <<< Make sure this conda env name is correct
 
-conda remove numpy scipy
-pip uninstall numpy scipy
-conda install scipy=1.11.2
-conda install numpy
+conda remove numpy
+pip install scipy==1.11.2
+pip install numpy
 
 # --- Check if Python script exists ---
 if [ ! -f "$PYTHON_SCRIPT" ]; then
