@@ -70,6 +70,12 @@ logging.basicConfig(
 logger = logging.getLogger("get_aigs_main")
 
 # --- Model Loading Function ---
+# In src/get_aigs.py
+
+import inspect # Ensure inspect is imported at the top
+
+# ... other imports ...
+
 def load_model_from_config(model_path):
     """Loads model based on config stored in checkpoint."""
     logger.info(f"Attempting to load state from: {model_path}")
@@ -91,51 +97,97 @@ def load_model_from_config(model_path):
 
     # --- Extract Config ---
     try:
-        # Default values or structure checks might be needed depending on config format
         data_config = config.get('data', {})
         model_config = config.get('model', {})
 
-        if data_config.get('m') is None:  # Check if 'm' is missing or None
-            known_m_value = 88  # <<<--- SET YOUR KNOWN CORRECT M VALUE HERE
+        # Manually inject 'm' if missing (keep your existing logic)
+        if data_config.get('m') is None:
+            known_m_value = 88
             data_config['m'] = known_m_value
             logger.warning(f"Manually injected 'm={known_m_value}' into loaded config for {model_path}.")
 
-        input_size = data_config.get('m') # History length 'm'
+        input_size = data_config.get('m')
         if input_size is None: raise KeyError("Missing 'm' in data config.")
 
         # Node model type and attention
-        node_model_type = model_config.get('node_model', 'gru').lower()
+        node_model_type = model_config.get('node_model', 'gru').lower() # Default 'gru'
         use_node_attention = model_config.get('use_attention', False) # General flag
-        # Specific node model config dict (GraphRNN or GraphLSTM)
-        node_config_dict = model_config.get('GraphRNN', model_config.get('GraphLSTM', {}))
+
+        # <<< START MODIFICATION >>>
+        # Determine the correct config section for the node model
+        node_config_section_name = None
+        if node_model_type == 'lstm':
+             node_config_section_name = 'GraphAttentionLSTM' if use_node_attention else 'GraphLSTM'
+        elif node_model_type == 'gru':
+             node_config_section_name = 'GraphAttentionRNN' if use_node_attention else 'GraphRNN'
+        else:
+             raise ValueError(f"Unsupported node_model type in config: {node_model_type}")
+
+        logger.info(f"Attempting to load node parameters from config section: 'model.{node_config_section_name}'")
+
+        # Get the specific config dictionary for the node model
+        node_config_dict = model_config.get(node_config_section_name)
+        if node_config_dict is None:
+             # Fallback for attention models if specific section is missing but base exists
+             if use_node_attention and node_model_type == 'gru' and 'GraphRNN' in model_config:
+                 logger.warning(f"Config section 'model.{node_config_section_name}' not found, using 'GraphRNN'.")
+                 node_config_dict = model_config.get('GraphRNN')
+             elif use_node_attention and node_model_type == 'lstm' and 'GraphLSTM' in model_config:
+                 logger.warning(f"Config section 'model.{node_config_section_name}' not found, using 'GraphLSTM'.")
+                 node_config_dict = model_config.get('GraphLSTM')
+             else:
+                 raise ValueError(f"Required config section 'model.{node_config_section_name}' not found in checkpoint.")
+
+        # Ensure node_config_dict is a mutable dictionary
+        node_config_dict = dict(node_config_dict) if node_config_dict else {}
+
+        # --- Explicitly check for required parameters ---
+        required_node_params = ['embedding_size', 'hidden_size', 'num_layers']
+        missing_params = [p for p in required_node_params if p not in node_config_dict]
+        if missing_params:
+            raise KeyError(f"Missing required node parameters in config section '{node_config_section_name}': {missing_params}")
+        # --- End Check ---
+
+        # Manually inject max_level if needed (keep your existing logic)
         max_level_from_config = node_config_dict.get('max_level')
         if max_level_from_config is None:
-            # Option 1: Raise an error if max_level MUST be in config
-            # raise ValueError(f"'max_level' not found in 'model.{node_config_section}' config.")
-            # Option 2: Add a manual injection/default (similar to 'm', but riskier)
-            known_max_level = 18  # <<<--- SET YOUR KNOWN MAX_LEVEL HERE (from logs)
+            known_max_level = 18
             node_config_dict['max_level'] = known_max_level
             logger.warning(f"Manually injected 'max_level={known_max_level}' into node_config_dict.")
         else:
             logger.info(f"Found max_level={max_level_from_config} in node config.")
-        if not use_node_attention: # Check specific config if global is false
-            use_node_attention = node_config_dict.get('use_attention', False)
+        # <<< END MODIFICATION >>>
 
-        # Edge model type and attention
+        # --- Continue with edge model logic (mostly unchanged) ---
         edge_model_type = model_config.get('edge_model', 'rnn').lower()
-        # Specific edge model config dict (EdgeRNN, EdgeLSTM, or EdgeMLP)
-        edge_config_dict = model_config.get('EdgeRNN', model_config.get('EdgeLSTM', model_config.get('EdgeMLP', {})))
-        use_edge_attention = edge_config_dict.get('use_attention', False) # Check edge specific config
+        edge_config_dict_base = {} # Find the base config for the edge model
+        if edge_model_type == 'attention_rnn':
+             edge_config_dict_base = model_config.get('EdgeAttentionRNN', model_config.get('EdgeRNN', {})) # Fallback to EdgeRNN
+        elif edge_model_type == 'rnn':
+             edge_config_dict_base = model_config.get('EdgeRNN', {})
+        elif edge_model_type == 'mlp':
+             edge_config_dict_base = model_config.get('EdgeMLP', {})
+        elif edge_model_type == 'attention_lstm':
+             edge_config_dict_base = model_config.get('EdgeAttentionLSTM', model_config.get('EdgeLSTM', {}))
+        elif edge_model_type == 'lstm':
+             edge_config_dict_base = model_config.get('EdgeLSTM', {})
+        else:
+            raise ValueError(f"Unsupported edge_model type in config: {edge_model_type}")
+        edge_config_dict = dict(edge_config_dict_base) # Make mutable
 
-        edge_feature_len = model_config.get('edge_feature_len', NUM_EDGE_FEATURES)
+        use_edge_attention = edge_config_dict.get('use_attention', edge_model_type.startswith('attention'))
+
+        edge_feature_len = node_config_dict.get('edge_feature_len', NUM_EDGE_FEATURES) # <<< Get edge_feature_len from node_config_dict
+
 
         logger.info(f"Model config suggests: node_model={node_model_type}, edge_model={edge_model_type}, "
                     f"node_attn={use_node_attention}, edge_attn={use_edge_attention}, "
                     f"m={input_size}, edge_features={edge_feature_len}")
 
-        # Ensure edge_feature_len is passed down to constructors via config dicts
+        # Ensure edge_feature_len is passed down
         node_config_dict['edge_feature_len'] = edge_feature_len
         edge_config_dict['edge_feature_len'] = edge_feature_len
+
 
     except KeyError as e:
          logger.error(f"Missing key in loaded config: {e}. Check checkpoint structure.", exc_info=True)
@@ -145,97 +197,105 @@ def load_model_from_config(model_path):
         raise
 
     # --- Instantiate Models ---
-    if not MODEL_CLASSES_LOADED:
+    if not MODEL_CLASSES_LOADED: # Assuming this global flag exists
         raise RuntimeError("Model classes could not be imported. Cannot instantiate model.")
 
     node_model = None
     edge_model = None
-    edge_gen_function = None # Will be set based on edge_model_type
+    edge_gen_function = None
 
     # --- Node Model ---
-    # Determine node model output size if needed by edge RNN/LSTM
-    node_output_size_for_edge = None
-    if edge_model_type == 'rnn' or edge_model_type == 'lstm': # Corrected logic
+    node_output_size_for_edge = None # Determine if edge model needs node output
+    if edge_model_type in ['rnn', 'lstm', 'attention_rnn', 'attention_lstm']:
+        # Ensure edge config has hidden size
+        if 'hidden_size' not in edge_config_dict:
+             raise ValueError(f"Edge model config missing 'hidden_size', needed for node output size.")
         node_output_size_for_edge = edge_config_dict.get('hidden_size')
-        if node_output_size_for_edge is None:
-            raise ValueError("EdgeRNN/LSTM config missing 'hidden_size', needed for NodeModel output size.")
-    node_config_dict['output_size'] = node_output_size_for_edge # Set output size for node model
+        node_config_dict['output_size'] = node_output_size_for_edge # Set output size for node model
 
-    # Select Node Model Class
+    # Select Node Model Class based on parsed type and attention
     NodeModelClass = None
     if node_model_type == 'lstm':
         NodeModelClass = GraphLevelAttentionLSTM if use_node_attention else GraphLevelLSTM
     elif node_model_type == 'gru':
         NodeModelClass = GraphLevelAttentionRNN if use_node_attention else GraphLevelRNN
-    else:
-        raise ValueError(f"Unsupported node_model type in config: {node_model_type}")
+    # Ensure NodeModelClass is assigned
+    if NodeModelClass is None:
+        raise ValueError(f"Could not determine NodeModelClass for type {node_model_type}")
+
     logger.info(f"Using Node Model Class: {NodeModelClass.__name__}")
 
     # Filter config keys to match constructor signature
     sig_node = inspect.signature(NodeModelClass.__init__)
     valid_keys_node = {p for p in sig_node.parameters if p != 'self'}
-    node_config_dict['input_size'] = input_size # Ensure m is passed
+    # Add required params explicitly if not already in node_config_dict (should be checked above now)
+    node_config_dict['input_size'] = input_size
+    # node_config_dict['embedding_size'] = node_config_dict['embedding_size'] # Already checked
+    # node_config_dict['hidden_size'] = node_config_dict['hidden_size'] # Already checked
+    # node_config_dict['num_layers'] = node_config_dict['num_layers'] # Already checked
+    if use_node_attention: # Add attention params if needed by class
+         node_config_dict['attention_heads'] = node_config_dict.get('attention_heads', 4) # Default if missing
+         node_config_dict['attention_dropout'] = node_config_dict.get('attention_dropout', 0.1) # Default if missing
+
+
     filtered_node_config = {k: v for k, v in node_config_dict.items() if k in valid_keys_node}
     logger.debug(f"Node Model filtered config: {filtered_node_config}")
 
     try:
+        # Instantiate the node model with the filtered config
         node_model = NodeModelClass(**filtered_node_config).to(device)
     except TypeError as e:
         logger.error(f"TypeError instantiating {NodeModelClass.__name__}: {e}. Config: {filtered_node_config}", exc_info=True)
         raise
 
     # --- Edge Model ---
+    # (Edge model instantiation logic - keep similar to your existing code,
+    # ensuring edge_config_dict is populated correctly based on edge_model_type
+    # and necessary parameters like input_size (from node hidden) and output_size (m)
+    # are set correctly, especially for EdgeLevelMLP)
+
+    # Example for EdgeLevelAttentionRNN:
     EdgeModelClass = None
-    if edge_model_type == 'rnn' or edge_model_type == 'lstm': # Corrected logic
-        edge_gen_function = rnn_edge_gen
-        # Select Edge RNN/LSTM Class based on node type and attention
-        if node_model_type == 'lstm': # Assume EdgeLSTM if NodeLSTM
-            EdgeModelClass = EdgeLevelAttentionLSTM if use_edge_attention else EdgeLevelLSTM
-        else: # Assume EdgeRNN (GRU) otherwise
-            EdgeModelClass = EdgeLevelAttentionRNN if use_edge_attention else EdgeLevelRNN
-        logger.info(f"Using Edge Model Class: {EdgeModelClass.__name__}")
-
-        # Filter config keys
-        sig_edge = inspect.signature(EdgeModelClass.__init__)
-        valid_keys_edge = {p for p in sig_edge.parameters if p != 'self'}
-        filtered_edge_config = {k: v for k, v in edge_config_dict.items() if k in valid_keys_edge}
-        logger.debug(f"Edge RNN/LSTM Model filtered config: {filtered_edge_config}")
-
-        try:
-            edge_model = EdgeModelClass(**filtered_edge_config).to(device)
-        except TypeError as e:
-            logger.error(f"TypeError instantiating {EdgeModelClass.__name__}: {e}. Config: {filtered_edge_config}", exc_info=True)
-            raise
-
+    if edge_model_type == 'attention_rnn':
+         edge_gen_function = rnn_edge_gen # Check if this function exists and handles attention models
+         EdgeModelClass = EdgeLevelAttentionRNN
+         logger.info(f"Using Edge Model Class: {EdgeModelClass.__name__}")
+         # Filter config keys for EdgeLevelAttentionRNN
+         sig_edge = inspect.signature(EdgeModelClass.__init__)
+         valid_keys_edge = {p for p in sig_edge.parameters if p != 'self'}
+         # Add default attention params if missing in config
+         edge_config_dict['attention_heads'] = edge_config_dict.get('attention_heads', 4)
+         edge_config_dict['attention_dropout'] = edge_config_dict.get('attention_dropout', 0.1)
+         filtered_edge_config = {k: v for k, v in edge_config_dict.items() if k in valid_keys_edge}
+         logger.debug(f"Edge Attention RNN Model filtered config: {filtered_edge_config}")
+         try:
+             edge_model = EdgeModelClass(**filtered_edge_config).to(device)
+         except TypeError as e:
+             logger.error(f"TypeError instantiating {EdgeModelClass.__name__}: {e}. Config: {filtered_edge_config}", exc_info=True)
+             raise
     elif edge_model_type == 'mlp':
-        edge_gen_function = mlp_edge_gen
-        EdgeModelClass = EdgeLevelMLP
-        logger.info(f"Using Edge Model Class: {EdgeModelClass.__name__}")
-
-        # Setup required MLP config keys
-        try:
-             # MLP input size is the hidden size of the node model output sequence
-             mlp_input_dim = node_config_dict.get('hidden_size')
-             if mlp_input_dim is None: raise KeyError("'hidden_size' not found in node config for MLP input")
-             edge_config_dict['input_size'] = mlp_input_dim
-             # MLP output size 'm' (history length for edge predictions)
-             edge_config_dict['output_size'] = input_size
-        except KeyError as e:
-             raise ValueError(f"Missing key needed for EdgeMLP config setup: {e}")
-
-        # Filter config keys
-        sig_edge = inspect.signature(EdgeModelClass.__init__)
-        valid_keys_edge = {p for p in sig_edge.parameters if p != 'self'}
-        filtered_edge_config = {k: v for k, v in edge_config_dict.items() if k in valid_keys_edge}
-        logger.debug(f"Edge MLP Model filtered config: {filtered_edge_config}")
-
-        try:
-            edge_model = EdgeModelClass(**filtered_edge_config).to(device)
-        except TypeError as e:
-            logger.error(f"TypeError instantiating {EdgeModelClass.__name__}: {e}. Config: {filtered_edge_config}", exc_info=True)
-            raise
+         edge_gen_function = mlp_edge_gen
+         EdgeModelClass = EdgeLevelMLP
+         # ... (ensure input/output sizes are set correctly for MLP based on node_hidden_size and input_size (m)) ...
+         # Example setting required MLP params (ensure these exist in node/edge config)
+         if 'hidden_size' not in node_config_dict: raise ValueError("Node config missing hidden_size for MLP input")
+         edge_config_dict['input_size'] = node_config_dict['hidden_size']
+         edge_config_dict['output_size'] = input_size # m
+         # Filter and instantiate MLP
+         sig_edge = inspect.signature(EdgeModelClass.__init__)
+         valid_keys_edge = {p for p in sig_edge.parameters if p != 'self'}
+         filtered_edge_config = {k: v for k, v in edge_config_dict.items() if k in valid_keys_edge}
+         logger.debug(f"Edge MLP Model filtered config: {filtered_edge_config}")
+         try:
+             edge_model = EdgeModelClass(**filtered_edge_config).to(device)
+         except TypeError as e:
+              logger.error(f"TypeError instantiating {EdgeModelClass.__name__}: {e}. Config: {filtered_edge_config}", exc_info=True)
+              raise
+    # ... Add cases for other edge models (RNN, LSTM, AttentionLSTM) ...
     else:
-        raise ValueError(f"Unsupported edge_model type in config: {edge_model_type}")
+        # Handle other edge model types or raise error
+        raise ValueError(f"Unsupported edge_model type '{edge_model_type}' needs instantiation logic.")
+
 
     # --- Load State Dicts ---
     try:
@@ -253,7 +313,11 @@ def load_model_from_config(model_path):
          logger.error(f"Error loading state_dict (likely mismatched model architecture or keys): {e}", exc_info=True)
          raise
 
-    mode = model_config.get('mode', 'aig') # Get generation mode, default 'aig'
+    mode = model_config.get('mode', 'aig') # Get generation mode
+
+    # Ensure all models were assigned
+    if node_model is None or edge_model is None or edge_gen_function is None:
+        raise RuntimeError("Failed to instantiate all required model components.")
 
     return node_model, edge_model, input_size, edge_gen_function, mode, edge_feature_len
 
