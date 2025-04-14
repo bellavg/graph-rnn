@@ -45,6 +45,8 @@ module load Anaconda3/2024.06-1 # Or your Anaconda/Python module
 echo "Activating Conda environment..."
 source activate aig-rnn         # <<< Make sure this conda env name is correct
 
+pip install pyemb
+
 # --- Check if Python script exists ---
 if [ ! -f "$PYTHON_SCRIPT" ]; then
     echo "Error: Python script not found at ${PYTHON_SCRIPT}"
@@ -100,7 +102,7 @@ for CKPT_FILE_PATH in "${CHECKPOINT_FILES[@]}"; do
     echo "Launching get_aigs.py for $CHECKPOINT_NAME..."
     # Use srun if you need SLURM to manage the python process resource allocation specifically
     # If the main script handles resource usage well, you might just run python directly
-    srun python -u "$PYTHON_SCRIPT" \
+    python -u "$PYTHON_SCRIPT" \
         --model-path "$CKPT_FILE_PATH" \
         --output-dir "$OUTPUT_DIR" \
         --num-generate "$NUM_GENERATE" \
