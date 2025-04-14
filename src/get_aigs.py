@@ -509,7 +509,7 @@ def get_visualization(
 # --- UPDATED get_evaluation FUNCTION ---
 def get_evaluation(
     generated_graphs: List[nx.DiGraph],
-    test_graphs: List[nx.DiGraph],
+    #test_graphs: List[nx.DiGraph],
     num_graphs_to_evaluate: int, # Max number to evaluate from the list
     num_successfully_generated: int # Actual number of valid graphs generated
     ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
@@ -627,69 +627,69 @@ def get_evaluation(
          aggregated_evaluation_results["avg_structural_validity_score"] = 0.0
          # ... add placeholders for other metrics ...
 
-
-    # --- Comparison Metrics (MMD, Averages vs Test Set) ---
-    # This part should remain unchanged as it seemed to be working
-    if not test_graphs:
-        logger.warning("Test dataset is empty or failed to load. Skipping comparison metrics.")
-    elif not generated_graphs:
-        logger.warning("Generated graph list is empty. Skipping comparison metrics.")
-    else:
-        logger.info(
-            f"Calculating comparison metrics between {len(generated_graphs)} generated and {len(test_graphs)} test graphs...")
-        comp_metric_start_time = time.time()
-        try:
-            # Define MMD functions
-            mmd_stanford_fn_is_hist = lambda x, y: compute_mmd(x, y, kernel=gaussian_emd, is_hist=True, sigma=1.0)
-            mmd_stanford_fn_is_hist_clustering_settings = lambda x, y: compute_mmd(x, y, kernel=gaussian_emd, is_hist=True, sigma=1.0/10, distance_scaling=100.0)
-            mmd_stanford_fn_orbit_settings = lambda x, y: compute_mmd(x, y, kernel=gaussian, is_hist=False, sigma=30.0) # Requires Orca
-
-            # Calculate MMD Metrics (keep try-except blocks)
-            try:
-                mmd_deg = compare_graphs_mmd_degree(generated_graphs, test_graphs, mmd_stanford_fn_is_hist)
-                aggregated_evaluation_results["mmd_degree_distribution"] = round(mmd_deg, 6)
-            except Exception as e: logger.error(f"Error calculating MMD Degree: {e}", exc_info=False)
-            try:
-                mmd_clus = compare_graphs_mmd_clustering_coeff(generated_graphs, test_graphs, mmd_stanford_fn_is_hist_clustering_settings)
-                aggregated_evaluation_results["mmd_clustering_coeff"] = round(mmd_clus, 6)
-            except Exception as e: logger.error(f"Error calculating MMD Clustering Coeff: {e}", exc_info=False)
-            try:
-                mmd_orbit = compare_graphs_mmd_orbit_stats(generated_graphs, test_graphs, mmd_stanford_fn_orbit_settings)
-                aggregated_evaluation_results["mmd_orbit_stats"] = round(mmd_orbit, 6)
-            except FileNotFoundError: logger.error("Orca executable not found. Skipping MMD Orbit Stats.")
-            except Exception as e: logger.error(f"Error calculating MMD Orbit Stats: {e}", exc_info=False)
-
-            # Calculate Average Metrics (keep helper and calls)
-            def calculate_avg_metric(graph_list, metric_func, metric_name):
-                # ... (keep implementation from previous versions) ...
-                values = []
-                for g_idx, g in enumerate(graph_list):
-                     if not isinstance(g, nx.Graph) or g.number_of_nodes() == 0: continue
-                     try:
-                         metric_val = metric_func(g)
-                         if isinstance(metric_val, dict):
-                             dict_vals = list(metric_val.values())
-                             if dict_vals: values.append(statistics.mean(dict_vals))
-                         else: values.append(metric_val)
-                     except Exception as e: logger.warning(f"Could not calculate {metric_name} for graph index {g_idx}: {e}")
-                return round(statistics.mean(values), 4) if values else 0.0
-
-            from graph_metrics import average_degree # Ensure import
-            aggregated_evaluation_results["avg_degree_gen"] = calculate_avg_metric(generated_graphs, average_degree, "Avg Degree (Gen)")
-            aggregated_evaluation_results["avg_clustering_coeff_gen"] = calculate_avg_metric(generated_graphs, nx.average_clustering, "Avg Clustering (Gen)")
-            aggregated_evaluation_results["avg_density_gen"] = calculate_avg_metric(generated_graphs, nx.density, "Density (Gen)")
-            aggregated_evaluation_results["avg_transitivity_gen"] = calculate_avg_metric(generated_graphs, nx.transitivity, "Transitivity (Gen)")
-            aggregated_evaluation_results["avg_degree_test"] = calculate_avg_metric(test_graphs, average_degree, "Avg Degree (Test)")
-            aggregated_evaluation_results["avg_clustering_coeff_test"] = calculate_avg_metric(test_graphs, nx.average_clustering, "Avg Clustering (Test)")
-            aggregated_evaluation_results["avg_density_test"] = calculate_avg_metric(test_graphs, nx.density, "Density (Test)")
-            aggregated_evaluation_results["avg_transitivity_test"] = calculate_avg_metric(test_graphs, nx.transitivity, "Transitivity (Test)")
-
-            comp_metric_time = time.time() - comp_metric_start_time
-            logger.info(f"Comparison metrics calculated in {comp_metric_time:.2f} seconds.")
-
-        except Exception as e:
-            logger.error(f"General error during comparison metric calculation: {e}", exc_info=True)
-    # --- END: Comparison Metrics ---
+    #
+    # # --- Comparison Metrics (MMD, Averages vs Test Set) ---
+    # # This part should remain unchanged as it seemed to be working
+    # if not test_graphs:
+    #     logger.warning("Test dataset is empty or failed to load. Skipping comparison metrics.")
+    # elif not generated_graphs:
+    #     logger.warning("Generated graph list is empty. Skipping comparison metrics.")
+    # else:
+    #     logger.info(
+    #         f"Calculating comparison metrics between {len(generated_graphs)} generated and {len(test_graphs)} test graphs...")
+    #     comp_metric_start_time = time.time()
+    #     try:
+    #         # Define MMD functions
+    #         mmd_stanford_fn_is_hist = lambda x, y: compute_mmd(x, y, kernel=gaussian_emd, is_hist=True, sigma=1.0)
+    #         mmd_stanford_fn_is_hist_clustering_settings = lambda x, y: compute_mmd(x, y, kernel=gaussian_emd, is_hist=True, sigma=1.0/10, distance_scaling=100.0)
+    #         mmd_stanford_fn_orbit_settings = lambda x, y: compute_mmd(x, y, kernel=gaussian, is_hist=False, sigma=30.0) # Requires Orca
+    #
+    #         # Calculate MMD Metrics (keep try-except blocks)
+    #         try:
+    #             mmd_deg = compare_graphs_mmd_degree(generated_graphs, test_graphs, mmd_stanford_fn_is_hist)
+    #             aggregated_evaluation_results["mmd_degree_distribution"] = round(mmd_deg, 6)
+    #         except Exception as e: logger.error(f"Error calculating MMD Degree: {e}", exc_info=False)
+    #         try:
+    #             mmd_clus = compare_graphs_mmd_clustering_coeff(generated_graphs, test_graphs, mmd_stanford_fn_is_hist_clustering_settings)
+    #             aggregated_evaluation_results["mmd_clustering_coeff"] = round(mmd_clus, 6)
+    #         except Exception as e: logger.error(f"Error calculating MMD Clustering Coeff: {e}", exc_info=False)
+    #         try:
+    #             mmd_orbit = compare_graphs_mmd_orbit_stats(generated_graphs, test_graphs, mmd_stanford_fn_orbit_settings)
+    #             aggregated_evaluation_results["mmd_orbit_stats"] = round(mmd_orbit, 6)
+    #         except FileNotFoundError: logger.error("Orca executable not found. Skipping MMD Orbit Stats.")
+    #         except Exception as e: logger.error(f"Error calculating MMD Orbit Stats: {e}", exc_info=False)
+    #
+    #         # Calculate Average Metrics (keep helper and calls)
+    #         def calculate_avg_metric(graph_list, metric_func, metric_name):
+    #             # ... (keep implementation from previous versions) ...
+    #             values = []
+    #             for g_idx, g in enumerate(graph_list):
+    #                  if not isinstance(g, nx.Graph) or g.number_of_nodes() == 0: continue
+    #                  try:
+    #                      metric_val = metric_func(g)
+    #                      if isinstance(metric_val, dict):
+    #                          dict_vals = list(metric_val.values())
+    #                          if dict_vals: values.append(statistics.mean(dict_vals))
+    #                      else: values.append(metric_val)
+    #                  except Exception as e: logger.warning(f"Could not calculate {metric_name} for graph index {g_idx}: {e}")
+    #             return round(statistics.mean(values), 4) if values else 0.0
+    #
+    #         from graph_metrics import average_degree # Ensure import
+    #         aggregated_evaluation_results["avg_degree_gen"] = calculate_avg_metric(generated_graphs, average_degree, "Avg Degree (Gen)")
+    #         aggregated_evaluation_results["avg_clustering_coeff_gen"] = calculate_avg_metric(generated_graphs, nx.average_clustering, "Avg Clustering (Gen)")
+    #         aggregated_evaluation_results["avg_density_gen"] = calculate_avg_metric(generated_graphs, nx.density, "Density (Gen)")
+    #         aggregated_evaluation_results["avg_transitivity_gen"] = calculate_avg_metric(generated_graphs, nx.transitivity, "Transitivity (Gen)")
+    #         aggregated_evaluation_results["avg_degree_test"] = calculate_avg_metric(test_graphs, average_degree, "Avg Degree (Test)")
+    #         aggregated_evaluation_results["avg_clustering_coeff_test"] = calculate_avg_metric(test_graphs, nx.average_clustering, "Avg Clustering (Test)")
+    #         aggregated_evaluation_results["avg_density_test"] = calculate_avg_metric(test_graphs, nx.density, "Density (Test)")
+    #         aggregated_evaluation_results["avg_transitivity_test"] = calculate_avg_metric(test_graphs, nx.transitivity, "Transitivity (Test)")
+    #
+    #         comp_metric_time = time.time() - comp_metric_start_time
+    #         logger.info(f"Comparison metrics calculated in {comp_metric_time:.2f} seconds.")
+    #
+    #     except Exception as e:
+    #         logger.error(f"General error during comparison metric calculation: {e}", exc_info=True)
+    # # --- END: Comparison Metrics ---
 
     # Log summary (Combined)
     logger.info("--- Aggregated Evaluation Summary (Structural & Comparison) ---")
@@ -710,8 +710,7 @@ def aig_control(
     output_dir: str,
     gen_params: Dict[str, Any],
     graph_file: str, # <<< Correct placement
-    num_graphs_to_generate: int = 50,
-    num_graphs_to_evaluate: int = 50,
+    num_graphs_to_generate: int = 500,
     evaluate: bool = True,
     visualize: bool = True,
     num_graphs_to_visualize: int = 5,
@@ -773,51 +772,51 @@ num_test_graphs: Optional[int] = None # <<< ADD THIS LINE
         return aggregated_results # Exit early
 
 
-    # 2. Load Test Dataset (if evaluating)
-    test_graphs = []
-    if evaluate:
-        try:
-            logger.info(f"Loading test dataset from: {graph_file}")
-            # Use train_split from the loaded config if possible, else default
-            train_split_from_config = config.get('data', {}).get('train_split', 0.9) # Default 0.9
-
-            test_dataset = AIGDataset(
-                graph_file=graph_file,
-                training=False, # Load the test split
-                train_split=train_split_from_config,
-                # Add other relevant AIGDataset params if needed (e.g., max_graphs from config?)
-                # max_graphs=config.get('data', {}).get('max_graphs'), # Example
-            )
-            # Retrieve the actual graph objects for the test split
-            if hasattr(test_dataset, 'graphs') and test_dataset.graphs is not None:
-                 test_graphs = [g for g in test_dataset.graphs if isinstance(g, nx.DiGraph)] # Ensure they are graphs
-                 if num_test_graphs is not None and 0 < num_test_graphs < len(test_graphs):
-                     logger.info(f"Randomly sampling {num_test_graphs} graphs from the test set for evaluation...")
-                     try:
-                         test_graphs = random.sample(test_graphs, num_test_graphs)
-                         logger.info(f"Using {len(test_graphs)} sampled test graphs.")
-                     except ValueError as e:
-                         logger.error(f"Error during random sampling: {e}. Using full test set.")
-                 elif num_test_graphs is not None:
-                     logger.warning(
-                         f"--num-test-graphs value ({num_test_graphs}) is invalid or >= total test graphs. Using all {len(test_graphs)} test graphs.")
-                 else:
-                     logger.info(f"Using all {len(test_graphs)} loaded test graphs for evaluation.")
-            else:
-                 test_graphs = []
-
-            logger.info(f"Loaded {len(test_graphs)} graphs for test set.")
-            if not test_graphs:
-                 logger.warning("Test dataset is empty. Comparison metrics will be skipped.")
-                 # Decide if this should be a fatal error or just skip comparisons
-                 # evaluate = False # Option: Disable evaluation if test set empty
-
-        except FileNotFoundError:
-            logger.error(f"Test dataset file not found: {graph_file}. Comparison metrics will be skipped.")
-            test_graphs = []
-        except Exception as e:
-            logger.error(f"Error loading test dataset: {e}. Comparison metrics will be skipped.", exc_info=True)
-            test_graphs = []
+    # # 2. Load Test Dataset (if evaluating)
+    # test_graphs = []
+    # if evaluate:
+    #     try:
+    #         logger.info(f"Loading test dataset from: {graph_file}")
+    #         # Use train_split from the loaded config if possible, else default
+    #         train_split_from_config = config.get('data', {}).get('train_split', 0.9) # Default 0.9
+    #
+    #         test_dataset = AIGDataset(
+    #             graph_file=graph_file,
+    #             training=False, # Load the test split
+    #             train_split=train_split_from_config,
+    #             # Add other relevant AIGDataset params if needed (e.g., max_graphs from config?)
+    #             # max_graphs=config.get('data', {}).get('max_graphs'), # Example
+    #         )
+    #         # Retrieve the actual graph objects for the test split
+    #         if hasattr(test_dataset, 'graphs') and test_dataset.graphs is not None:
+    #              test_graphs = [g for g in test_dataset.graphs if isinstance(g, nx.DiGraph)] # Ensure they are graphs
+    #              if num_test_graphs is not None and 0 < num_test_graphs < len(test_graphs):
+    #                  logger.info(f"Randomly sampling {num_test_graphs} graphs from the test set for evaluation...")
+    #                  try:
+    #                      test_graphs = random.sample(test_graphs, num_test_graphs)
+    #                      logger.info(f"Using {len(test_graphs)} sampled test graphs.")
+    #                  except ValueError as e:
+    #                      logger.error(f"Error during random sampling: {e}. Using full test set.")
+    #              elif num_test_graphs is not None:
+    #                  logger.warning(
+    #                      f"--num-test-graphs value ({num_test_graphs}) is invalid or >= total test graphs. Using all {len(test_graphs)} test graphs.")
+    #              else:
+    #                  logger.info(f"Using all {len(test_graphs)} loaded test graphs for evaluation.")
+    #         else:
+    #              test_graphs = []
+    #
+    #         logger.info(f"Loaded {len(test_graphs)} graphs for test set.")
+    #         if not test_graphs:
+    #              logger.warning("Test dataset is empty. Comparison metrics will be skipped.")
+    #              # Decide if this should be a fatal error or just skip comparisons
+    #              # evaluate = False # Option: Disable evaluation if test set empty
+    #
+    #     except FileNotFoundError:
+    #         logger.error(f"Test dataset file not found: {graph_file}. Comparison metrics will be skipped.")
+    #         test_graphs = []
+    #     except Exception as e:
+    #         logger.error(f"Error loading test dataset: {e}. Comparison metrics will be skipped.", exc_info=True)
+    #         test_graphs = []
 
 
     # 3. Generate Graphs
@@ -851,20 +850,30 @@ num_test_graphs: Optional[int] = None # <<< ADD THIS LINE
     # 4. Evaluate Generated Graphs (if requested)
     aggregated_evaluation_results = {}
     evaluation_details_list = [] # Keep this if you want detailed per-graph results later
-    if evaluate:
-        # Call get_evaluation, passing the loaded test_graphs
+    aggregated_evaluation_results = {}
+    evaluation_details_list = []
+    if evaluate:  # Check if evaluation is enabled (via args.evaluate)
+        logger.info(
+            f"Evaluation flag is set, preparing to evaluate all {num_successfully_generated} generated graphs structurally.")
+        # <<< CHANGE HERE: Pass num_successfully_generated as the count to evaluate >>>
         aggregated_evaluation_results, evaluation_details_list = get_evaluation(
             generated_graphs=generated_graphs,
-            test_graphs=test_graphs,  # Pass the loaded test graphs
-            num_graphs_to_evaluate=num_graphs_to_evaluate,
+            #test_graphs=test_graphs,
+            # Use the actual number generated for structural evaluation count
+            num_graphs_to_evaluate=num_successfully_generated,  # <<< Use this value
             num_successfully_generated=num_successfully_generated
         )
+        # <<< END CHANGE >>>
+
         # Merge evaluation results into main results dict
         aggregated_results.update(aggregated_evaluation_results)
         # Optionally add the detailed list if saving it
         # aggregated_results["evaluation_details_per_graph"] = evaluation_details_list
     else:
-         logger.info("Evaluation step skipped as per request.")
+        logger.info("Evaluation step skipped as per request.")
+        # You might want to explicitly add keys indicating skipped eval to results
+        aggregated_results["num_graphs_structurally_evaluated"] = 0
+        aggregated_results["num_structural_evaluation_exceptions"] = 0
 
 
     # 5. Visualize Generated Graphs (if requested)
@@ -921,9 +930,9 @@ if __name__ == "__main__":
                         help="Path to the dataset pickle file (e.g., ./dataset/final_data.pkl)")
 
     # Generation and Evaluation Control
-    parser.add_argument("--num-generate", type=int, default=1000, # Renamed from num-graphs
+    parser.add_argument("--num-generate", type=int, default=500, # Renamed from num-graphs
                         help="Number of AIGs to attempt generating.")
-    parser.add_argument("--num-test-graphs", type=int, default=1000,
+    parser.add_argument("--num-test-graphs", type=int, default=500,
                         help="Number of test graphs to randomly sample for evaluation (default: use all).")
     parser.add_argument("--evaluate", action='store_true', # Added flag
                         help="Evaluate structural and comparison metrics for generated graphs.") # Updated help text
@@ -938,9 +947,9 @@ if __name__ == "__main__":
 
     # --- Base Generation Config Dictionary ---
     GENERATION_CONFIG = {
-        'max_nodes': 100, # Example, adjust as needed
+        'max_nodes': 80, # Example, adjust as needed
         'min_nodes': 8,   # Example
-        'patience': 30,   # Example
+        'patience': 16,   # Example
         'temperature': 1.2,
         'top_k': 0,
         'top_p': 0.0,
