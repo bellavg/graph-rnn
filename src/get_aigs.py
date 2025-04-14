@@ -8,6 +8,7 @@ import argparse
 import numpy as np
 import torch
 import networkx as nx
+import random
 import inspect
 from typing import Dict, Any, List, Tuple, Optional, Callable # Added Callable
 import statistics # <<< ADDED IMPORT
@@ -580,7 +581,8 @@ def aig_control(
     num_graphs_to_evaluate: int = 50,
     evaluate: bool = True,
     visualize: bool = True,
-    num_graphs_to_visualize: int = 5
+    num_graphs_to_visualize: int = 5,
+num_test_graphs: Optional[int] = None # <<< ADD THIS LINE
 ) -> Dict[str, Any]:
     """
     Main control function to load model, generate, evaluate, and visualize AIGs.
@@ -656,6 +658,18 @@ def aig_control(
             # Retrieve the actual graph objects for the test split
             if hasattr(test_dataset, 'graphs') and test_dataset.graphs is not None:
                  test_graphs = [g for g in test_dataset.graphs if isinstance(g, nx.DiGraph)] # Ensure they are graphs
+                 if num_test_graphs is not None and 0 < num_test_graphs < len(test_graphs):
+                     logger.info(f"Randomly sampling {num_test_graphs} graphs from the test set for evaluation...")
+                     try:
+                         test_graphs = random.sample(test_graphs, num_test_graphs)
+                         logger.info(f"Using {len(test_graphs)} sampled test graphs.")
+                     except ValueError as e:
+                         logger.error(f"Error during random sampling: {e}. Using full test set.")
+                 elif num_test_graphs is not None:
+                     logger.warning(
+                         f"--num-test-graphs value ({num_test_graphs}) is invalid or >= total test graphs. Using all {len(test_graphs)} test graphs.")
+                 else:
+                     logger.info(f"Using all {len(test_graphs)} loaded test graphs for evaluation.")
             else:
                  test_graphs = []
 
@@ -776,6 +790,8 @@ if __name__ == "__main__":
     # Generation and Evaluation Control
     parser.add_argument("--num-generate", type=int, default=1000, # Renamed from num-graphs
                         help="Number of AIGs to attempt generating.")
+    parser.add_argument("--num-test-graphs", type=int, default=1000,
+                        help="Number of test graphs to randomly sample for evaluation (default: use all).")
     parser.add_argument("--evaluate", action='store_true', # Added flag
                         help="Evaluate structural and comparison metrics for generated graphs.") # Updated help text
 
@@ -810,7 +826,8 @@ if __name__ == "__main__":
         num_graphs_to_generate=args.num_generate,
         evaluate=args.evaluate,                  # Pass the evaluate flag
         visualize=args.visualize,
-        num_graphs_to_visualize=args.num_visualize
+        num_graphs_to_visualize=args.num_visualize,
+        num_test_graphs=args.num_test_graphs
     )
     # --- End Correction ---
 
