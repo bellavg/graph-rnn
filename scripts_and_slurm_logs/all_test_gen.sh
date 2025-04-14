@@ -46,11 +46,11 @@ echo "Activating Conda environment..."
 source activate aig-rnn         # <<< Make sure this conda env name is correct
 
 
-pip install scipy==1.14.0
-pip install numpy
-pip install EMD-signal
-pip install pyemd
-conda install pyemd
+#pip install scipy==1.14.0
+#pip install numpy
+#pip install EMD-signal
+#pip install pyemd
+#conda install pyemd
 
 
 # --- Check if Python script exists ---
