@@ -2,7 +2,7 @@
 #SBATCH --job-name=aig_test
 #SBATCH --partition=gpu_a100         # Keep partition if appropriate
 #SBATCH --gpus=1                     # Request 1 GPU per run
-#SBATCH --time=04:00:00              # Increased time, adjust as needed per checkpoint             # Keep memory request
+#SBATCH --time=08:00:00              # Increased time, adjust as needed per checkpoint             # Keep memory request
 #SBATCH --output=slurm_logs/aig_get_multi_%j.out # Changed log file name pattern
 
 
