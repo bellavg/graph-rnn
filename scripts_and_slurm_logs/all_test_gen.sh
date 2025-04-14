@@ -45,8 +45,7 @@ module load Anaconda3/2024.06-1 # Or your Anaconda/Python module
 echo "Activating Conda environment..."
 source activate aig-rnn         # <<< Make sure this conda env name is correct
 
-conda remove numpy
-conda remove pyemb
+
 pip install scipy==1.14.0
 pip install numpy
 pip install EMD-signal
