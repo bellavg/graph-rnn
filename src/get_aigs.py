@@ -429,7 +429,7 @@ def get_generation(
     valid_generated_graphs = [g for g in raw_generated_graphs if isinstance(g, nx.DiGraph) and g.number_of_nodes() > 0]
     num_successfully_generated = len(valid_generated_graphs) # This should match generation_successful_count
 
-    logger.debug(f"Finished generation. Generated {num_successfully_generated}/{num_graphs_to_generate} non-empty graphs.")
+    logger.info(f"Finished generation. Generated {num_successfully_generated}/{num_graphs_to_generate} non-empty graphs.")
 
     # Return the list of valid graphs and the count
     return valid_generated_graphs, num_successfully_generated
