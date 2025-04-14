@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 import math
+from typing import Optional
 
 # --- Renamed GraphLevelAttentionRNN ---
 class GraphLevelAttentionRNN(nn.Module):
@@ -242,87 +243,73 @@ class EdgeLevelAttentionRNN(nn.Module):
 
         # --- In class EdgeLevelAttentionRNN in model.py ---
 
-    def forward(self, x, x_lens=None, return_logits=False, truth_table=None):
-        # x shape: [batch (packed), seq_len_edge, edge_feature_len]
-        # x_lens shape: [batch (packed)] (tensor of actual edge sequence lengths)
-        # truth_table shape: [batch (packed), tt_size] (if used)
-        assert self.hidden is not None, "Hidden state not set for EdgeLevelAttentionRNN!"
-        device = x.device  # Get device from input tensor
+    def forward(self, x,
+                node_context: Optional[torch.Tensor] = None, # <<< ADDED: Accept node context (Optional)
+              # hidden: Optional[torch.Tensor] = None, # Using self.hidden instead
+                x_lens=None,
+                return_logits=False,
+                truth_table=None):
 
-        # 1. Embed edge features
-        embedded_x = self.relu(self.linear_in(x))  # [batch, seq_len_edge, embedding_size]
-        batch_size, seq_len_edge, _ = embedded_x.shape  # Get dimensions after embedding
+        # <<< START STATE INITIALIZATION >>>
+        local_hidden = self.hidden # Use stored state
 
-        # --- 2. Create Padding Mask ---
-        padding_mask = None
-        if x_lens is not None:
-            # Ensure x_lens is a tensor on the correct device
-            if not isinstance(x_lens, torch.Tensor):
-                # NOTE: If x_lens comes from pack_padded_sequence's batch_sizes,
-                # it needs careful handling. Assuming x_lens is passed correctly
-                # corresponding to the batch dimension of x.
-                x_lens_tensor = torch.tensor(x_lens, dtype=torch.long, device=device)
-            else:
-                x_lens_tensor = x_lens.to(device)
+        if local_hidden is None:
+             # Initialize GRU state h_0 to zeros
+             batch_size = x.shape[0] if x.dim() > 1 else 1
+             device = x.device
+             print(f"INFO: Initializing hidden state for {type(self).__name__} (Batch: {batch_size}, Device: {device})")
+             local_hidden = torch.zeros(self.num_layers, batch_size, self.hidden_size, device=device)
+        # <<< END STATE INITIALIZATION >>>
 
-            # Create mask: True for positions >= length
-            max_len = seq_len_edge  # Use seq dim size from embedded_x
-            indices = torch.arange(max_len, device=device).expand(batch_size, max_len)  # [batch, seq_len_edge]
-            padding_mask = indices >= x_lens_tensor.unsqueeze(
-                1)  # [batch, seq_len_edge] -> True where index >= length
+        # Remove the assert statement
+        # assert self.hidden is not None, "Hidden state not set for EdgeLevelAttentionRNN!" # <<< REMOVED
 
-        # --- 3. Apply Self-Attention over edge sequence ---
-        attn_output, _ = self.self_attention(
-            query=embedded_x,
-            key=embedded_x,
-            value=embedded_x,
-            key_padding_mask=padding_mask  # <<< Pass the mask here
-        )
-        attended_edges = embedded_x + self.attention_dropout_layer(attn_output)
+        # (Keep embedding, attention, context fusion, tt embedding logic similar to LSTM version)
+        embedded_x = self.relu(self.linear_in(x))
+        attn_input = embedded_x
+
+        padding_mask = None # No padding needed for single step generation
+        attn_output, _ = self.self_attention(query=attn_input, key=attn_input, value=attn_input, key_padding_mask=padding_mask)
+        attended_edges = attn_input + self.attention_dropout_layer(attn_output)
         attended_edges_norm = self.attention_norm(attended_edges)
-        # --- End Attention ---
 
-        # 4. Condition on Truth Table (if enabled) - AFTER attention
         gru_input = attended_edges_norm
+
+        # --- Optional: Use node_context ---
+        if node_context is not None:
+             node_context = node_context.to(x.device)
+             if node_context.shape[0] == gru_input.shape[0] and \
+                node_context.shape[1] == gru_input.shape[1] and \
+                node_context.shape[2] == gru_input.shape[2]:
+                  gru_input = gru_input + node_context
+             else:
+                  pass # Skip fusion
+        # --- End Optional ---
+
         if self.use_conditioning and truth_table is not None and self.tt_embedding is not None:
             truth_table = truth_table.to(gru_input.device)
             tt_emb = self.tt_embedding(truth_table)
-            tt_emb_expanded = tt_emb.unsqueeze(1).expand(-1, seq_len_edge, -1)
+            tt_emb_expanded = tt_emb.unsqueeze(1).expand(-1, gru_input.shape[1], -1)
             gru_input = torch.cat((gru_input, tt_emb_expanded), dim=2)
+            # Ensure gru_input_size in __init__ accounts for this!
 
-        # 5. Pack sequence (if lengths provided)
-        # Note: Packing *after* attention here. If you pack *before* attention,
-        # the masking logic would need adjustment.
-        target_padded_length = gru_input.shape[1]
-        if x_lens is not None:
-            x_lens_cpu = x_lens if isinstance(x_lens, torch.Tensor) else torch.tensor(x_lens)
-            x_lens_cpu = x_lens_cpu.cpu()
-            try:
-                gru_input = pack_padded_sequence(gru_input, x_lens_cpu, batch_first=True, enforce_sorted=False)
-            except RuntimeError as e:
-                print(f"Error packing sequence in EdgeLevelAttentionRNN: {e}")
 
-        # 6. Process through GRU
-        gru_output_packed, self.hidden = self.gru(gru_input, self.hidden)
+        # --- Use GRU ---
+        gru_output, next_hidden = self.gru(gru_input, local_hidden) # <<< Use local_hidden
+        # --- End GRU ---
 
-        # 7. Unpack sequence
-        gru_output = gru_output_packed
-        if x_lens is not None:
-            try:
-                gru_output, _ = pad_packed_sequence(gru_output_packed, batch_first=True,
-                                                    total_length=target_padded_length)
-            except RuntimeError as e:
-                print(f"Error unpacking sequence in EdgeLevelAttentionRNN: {e}")
+        # <<< Update the stored hidden state >>>
+        self.hidden = next_hidden
 
-        # 8. Output layers
+        # Output layers
         out = self.relu(self.linear_out1(gru_output))
         logits = self.linear_out2(out)
 
+        # Return only logits
         if not return_logits:
             return self.sigmoid(logits)
         else:
             return logits
-
 
 # --- Original GraphLevelRNN (No Attention) ---
 class GraphLevelRNN(nn.Module):
@@ -982,58 +969,82 @@ class EdgeLevelAttentionLSTM(nn.Module):
         c_0 = torch.zeros_like(h_0)
         self.hidden = (h_0, c_0)
 
-    def forward(self, x, x_lens=None, return_logits=False, truth_table=None):
-        assert self.hidden is not None, "Hidden state not set for EdgeLevelAttentionLSTM!"
-        device = x.device
+    def forward(self, x,
+                node_context: Optional[torch.Tensor] = None, # <<< ADDED: Accept node context (Optional)
+              # hidden: Optional[Tuple[torch.Tensor, torch.Tensor]] = None, # Using self.hidden instead
+                x_lens=None,
+                return_logits=False,
+                truth_table=None):
+
+        # <<< START STATE INITIALIZATION >>>
+        # Initialize hidden state IF self.hidden is None (e.g., first call in sequence)
+        local_hidden = self.hidden # Use the stored state if available
+
+        if local_hidden is None:
+             # Initialize to zeros if this is the first step for this instance
+             batch_size = x.shape[0] if x.dim() > 1 else 1 # Get batch size from input x
+             device = x.device
+             # Use logger if available, otherwise print
+             # logger.debug(f"Initializing hidden state for {type(self).__name__} (Batch: {batch_size}, Device: {device})")
+             print(f"INFO: Initializing hidden state for {type(self).__name__} (Batch: {batch_size}, Device: {device})") # Use print if logger not set up here
+             h_0 = torch.zeros(self.num_layers, batch_size, self.hidden_size, device=device)
+             c_0 = torch.zeros(self.num_layers, batch_size, self.hidden_size, device=device)
+             local_hidden = (h_0, c_0)
+        # <<< END STATE INITIALIZATION >>>
+
+        # Remove the assert statement that caused the crash
+        # assert self.hidden is not None, "Hidden state not set for EdgeLevelAttentionLSTM!" # <<< REMOVED
 
         embedded_x = self.relu(self.linear_in(x))
-        batch_size, seq_len_edge, _ = embedded_x.shape
+        attn_input = embedded_x
 
-        padding_mask = None
-        if x_lens is not None:
-            if not isinstance(x_lens, torch.Tensor):
-                x_lens_tensor = torch.tensor(x_lens, dtype=torch.long, device=device)
-            else:
-                x_lens_tensor = x_lens.to(device)
-            max_len = seq_len_edge
-            indices = torch.arange(max_len, device=device).expand(batch_size, max_len)
-            padding_mask = indices >= x_lens_tensor.unsqueeze(1)
-
-        attn_output, _ = self.self_attention(
-            query=embedded_x, key=embedded_x, value=embedded_x,
-            key_padding_mask=padding_mask
-        )
-        attended_edges = embedded_x + self.attention_dropout_layer(attn_output)
+        # Apply Attention
+        padding_mask = None # No padding mask needed for single step generation
+        attn_output, _ = self.self_attention(query=attn_input, key=attn_input, value=attn_input, key_padding_mask=padding_mask)
+        attended_edges = attn_input + self.attention_dropout_layer(attn_output)
         attended_edges_norm = self.attention_norm(attended_edges)
 
+        # Prepare LSTM Input
         lstm_input = attended_edges_norm
+
+        # --- Optional: Use node_context ---
+        if node_context is not None:
+             node_context = node_context.to(x.device)
+             # Example: Add node context if dimensions match (Node output_size == Edge embedding_size)
+             if node_context.shape[0] == lstm_input.shape[0] and \
+                node_context.shape[1] == lstm_input.shape[1] and \
+                node_context.shape[2] == lstm_input.shape[2]:
+                  lstm_input = lstm_input + node_context
+                  # print("DEBUG: Added node context to EdgeLevelAttentionLSTM input.") # Optional debug print
+             else:
+                  # print(f"WARN: EdgeLevelAttentionLSTM node_context shape {node_context.shape} mismatch with input {lstm_input.shape}. Skipping fusion.") # Optional warning
+                   pass # Skip fusion if shapes don't match for addition
+        # --- End Optional ---
+
+        # Add truth table conditioning if enabled
         if self.use_conditioning and truth_table is not None and self.tt_embedding is not None:
             truth_table = truth_table.to(lstm_input.device)
             tt_emb = self.tt_embedding(truth_table)
-            tt_emb_expanded = tt_emb.unsqueeze(1).expand(-1, seq_len_edge, -1)
+            tt_emb_expanded = tt_emb.unsqueeze(1).expand(-1, lstm_input.shape[1], -1)
+            # Ensure lstm_input_size in __init__ accounts for this!
             lstm_input = torch.cat((lstm_input, tt_emb_expanded), dim=2)
 
-        target_padded_length = lstm_input.shape[1]
-        if x_lens is not None:
-            x_lens_cpu = x_lens if isinstance(x_lens, torch.Tensor) else torch.tensor(x_lens)
-            x_lens_cpu = x_lens_cpu.cpu()
-            try:
-                lstm_input = pack_padded_sequence(lstm_input, x_lens_cpu, batch_first=True, enforce_sorted=False)
-            except RuntimeError as e: print(f"Error packing sequence in EdgeLevelAttentionLSTM: {e}")
 
         # --- Use LSTM ---
-        lstm_output_packed, self.hidden = self.lstm(lstm_input, self.hidden)
+        # Pass the current local_hidden state, receive output and next hidden state
+        lstm_output, next_hidden = self.lstm(lstm_input, local_hidden) # Use local_hidden
         # --- End LSTM ---
 
-        lstm_output = lstm_output_packed
-        if x_lens is not None:
-            try:
-                lstm_output, _ = pad_packed_sequence(lstm_output_packed, batch_first=True, total_length=target_padded_length)
-            except RuntimeError as e: print(f"Error unpacking sequence in EdgeLevelAttentionLSTM: {e}")
+        # <<< Update the stored hidden state for the next call >>>
+        self.hidden = next_hidden
 
+        # Output layers
         out = self.relu(self.linear_out1(lstm_output))
         logits = self.linear_out2(out)
 
-        if not return_logits: return self.sigmoid(logits)
-        else: return logits
+        # Return only logits
+        if not return_logits:
+            return self.sigmoid(logits)
+        else:
+            return logits
 
