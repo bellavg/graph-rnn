@@ -12,7 +12,7 @@ cd ..
 
 PYTHON_SCRIPT="src/get_aigs.py"      # <<< Path to your main Python script
 # Directory containing subdirectories like 'checkpoints_gru_rmsp', 'checkpoints_gru_node2', etc.
-BASE_CHECKPOINT_DIR="./checkpoints/checkpoints_lstm_mhsa" # <<< CHANGE THIS if needed (based on image, this seems correct relative to PROJECT_BASE_DIR)
+BASE_CHECKPOINT_DIR="./checkpoints" # <<< CHANGE THIS if needed (based on image, this seems correct relative to PROJECT_BASE_DIR)
 # Base directory where all results will be saved (new location)
 BASE_OUTPUT_DIR="./evaluation_results_all" # <<< CHANGE THIS destination as desired
 
@@ -106,7 +106,7 @@ for CKPT_FILE_PATH in "${CHECKPOINT_FILES[@]}"; do
     echo "Launching get_aigs.py for $CHECKPOINT_NAME..."
     # Use srun if you need SLURM to manage the python process resource allocation specifically
     # If the main script handles resource usage well, you might just run python directly
-    python -u "$PYTHON_SCRIPT" \
+    srun python -u "$PYTHON_SCRIPT" \
         --model-path "$CKPT_FILE_PATH" \
         --output-dir "$OUTPUT_DIR" \
         --num-generate "$NUM_GENERATE" \
