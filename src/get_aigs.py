@@ -772,8 +772,8 @@ if __name__ == "__main__":
                         help="Directory to save generated graphs, evaluations, and visualizations.")
     # --- ENSURE graph-file argument is correctly defined ---
     # It was graph_file in the previous response, ensure consistency or fix here
-    parser.add_argument("--graph-file", type=str, required=True, # Changed from graph_file
-                        help="Path to the dataset pickle file (e.g., dataset/final_data.pkl)")
+    parser.add_argument("--graph-file", type=str, default="./dataset/final_data.pkl", # Changed from graph_file
+                        help="Path to the dataset pickle file (e.g., ./dataset/final_data.pkl)")
 
     # Generation and Evaluation Control
     parser.add_argument("--num-generate", type=int, default=1000, # Renamed from num-graphs
