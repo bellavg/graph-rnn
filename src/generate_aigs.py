@@ -86,43 +86,22 @@ def sample_softmax(logits: torch.Tensor,
 
 
 # --- Edge Generation Helper Functions ---
-def rnn_edge_gen(edge_rnn, h, num_edges, adj_vec_size, sample_fun, mode,
-                 temperature=1.0, top_k=0, top_p=0.0, attempts=None): # Added attempts for API consistency
-    """ Generates edge indices using an RNN edge model. Handles tuple input for LSTM state. """
+def rnn_edge_gen(edge_rnn,
+                 node_output_context, # <<< Argument now holds the node output sequence 'h'
+                 num_edges, adj_vec_size, sample_fun, mode,
+                 temperature=1.0, top_k=0, top_p=0.0, attempts=None):
+    """ Generates edge indices using an RNN edge model, using node output context (if model uses it). """
 
-    # <<< START MODIFICATION >>>
-    # Handle potential tuple input (h_n, c_n) from LSTM node model
-    hidden_state_tensor = h
-    if isinstance(h, tuple):
-        hidden_state_tensor = h[0] # Use the first element (h_n)
-        logger.debug("rnn_edge_gen received tuple, using h[0].")
-    elif not isinstance(h, torch.Tensor):
-        # Raise error if it's neither Tensor nor Tuple
-        raise TypeError(f"rnn_edge_gen expected Tensor or Tuple for hidden state, got {type(h)}")
-
-    # Get device from the tensor part of the state
+    # Get device from the node_output_context tensor
     try:
-        device = hidden_state_tensor.device
+        # node_output_context shape is likely [batch=1, seq=1, node_output_size=256]
+        device = node_output_context.device
     except AttributeError as e:
-         logger.error(f"Could not get device from hidden_state_tensor (type: {type(hidden_state_tensor)}). Error: {e}")
-         # Fallback or re-raise
-         # For example, try getting device from the model?
-         try:
-             device = next(edge_rnn.parameters()).device
-             logger.warning("Falling back to edge_rnn device.")
-         except Exception:
-              raise RuntimeError("Cannot determine device for rnn_edge_gen.") from e
+         logger.error(f"Could not get device from node_output_context (type: {type(node_output_context)}). Error: {e}")
+         try: device = next(edge_rnn.parameters()).device; logger.warning("Falling back to edge_rnn device.")
+         except Exception: raise RuntimeError("Cannot determine device for rnn_edge_gen.") from e
 
     adj_indices_vec = torch.full((1, 1, adj_vec_size), EDGE_TYPES["NONE"], dtype=torch.long, device=device)
-
-    # Pass the correct tensor state to set_first_layer_hidden
-    if hasattr(edge_rnn, 'set_first_layer_hidden') and callable(edge_rnn.set_first_layer_hidden):
-        # Pass the extracted tensor, not the original h if it was a tuple
-        edge_rnn.set_first_layer_hidden(hidden_state_tensor)
-    # <<< END MODIFICATION >>>
-    else:
-        logger.warning(f"Edge RNN model {type(edge_rnn)} does not have 'set_first_layer_hidden' method.")
-        # Need alternative way to set hidden state if required by edge_rnn
 
     # Initial SOS token (assuming one-hot for class 0 - NoEdge)
     x = torch.zeros([1, 1, edge_rnn.edge_feature_len], device=device)
@@ -323,123 +302,79 @@ def generate(
             current_node_idx = i
             logger.debug(f"Generating node {current_node_idx}...")
 
-            # 1. Get hidden state from node model
+            # --- Step 1: Get OUTPUT SEQUENCE from node model ---
             try:
-                 # For generation, node_model usually takes only the previous step's output
-                 h = node_model(adj_vec_input) # Pass input: [1, 1, m, C]
-                 # Handle LSTM tuple output (h_n, c_n) -> take h_n for edge model input
-                 # Assuming edge models are designed to take the hidden state sequence output, not (h_n, c_n)
-                 if isinstance(h, tuple):
-                     # If edge model needs h_n: h = h[0] # Shape [num_layers, batch, hidden]
-                     # If edge model needs output sequence: keep h as is (output of LSTM layer)
-                     # The provided edge models seem to expect the output sequence 'h'
-                     # Let's assume h is the output sequence [batch, seq=1, hidden]
-                     pass # Keep the output sequence for edge model input
-                     # BUT, the set_first_layer_hidden takes h[0:1, :, :] assuming h is like GRU hidden state
-                     # Let's adjust to pass h_n from LSTM if it exists
-                     h_n, c_n = node_model.hidden # Assuming hidden stores (h_n, c_n)
-                     h_for_edge = h_n # Pass the actual hidden state h_n
-                 else:
-                     # GRU output h is the sequence output, hidden is also updated internally
-                     # set_first_layer_hidden expects the hidden state
-                     h_for_edge = node_model.hidden # Pass the updated hidden state
-
-                 # Ensure h_for_edge has the correct shape for edge models [layers, batch, hidden]
-                 # Models expect h to initialize hidden state, need consistency
-                 # Let's stick to passing the *last hidden state* (h_n or equivalent)
-                 # Adjust `set_first_layer_hidden` if needed.
+                 # h is the OUTPUT SEQUENCE tensor, e.g., [1, 1, 256]
+                 # The node model manages its internal hidden state (self.hidden)
+                 h = node_model(adj_vec_input)
 
             except Exception as e:
                  logger.error(f"Error during NodeModel forward pass for node {i}: {e}", exc_info=True)
                  return None, None
 
-            # 2. Generate edge *indices* for connections *into* the current node 'i'
-            num_edges_to_generate = min(i, input_size) # How many predecessors exist and fit in 'm'
-            current_indices = np.array([], dtype=int) # Default for node 0
+            # --- Step 2: Generate edge indices using the node output 'h' ---
+            num_edges_to_generate = min(i, input_size) # How many predecessors exist/fit in m
+            current_indices = np.array([], dtype=int)  # Default for node 0
 
             if num_edges_to_generate > 0:
                 logger.debug(f"  Generating {num_edges_to_generate} potential edges into node {i}...")
                 try:
-                     # Call the appropriate edge generator (RNN or MLP)
+                     # Pass 'h' (the node output tensor) to the edge generator function
+                     # The edge generator function (e.g., rnn_edge_gen) should NOT call
+                     # set_first_layer_hidden anymore.
                      adj_indices_vec = edge_gen_function(
                         edge_model,
-                        h_for_edge, # Pass the relevant state from node model
+                        h, # Pass the actual node output sequence tensor
                         num_edges=num_edges_to_generate,
-                        adj_vec_size=input_size, # Max size ('m') for the output vector
+                        adj_vec_size=input_size,
                         sample_fun=sample_fun,
                         mode=mode,
-                        # Pass sampling params
                         temperature=temperature,
                         top_k=top_k,
                         top_p=top_p,
-                        attempts=edge_sample_attempts # For MLP attempts
+                        attempts=edge_sample_attempts
                      )
-                     # Get the generated indices for the current node
-                     # Shape is [1, 1, adj_vec_size], take the relevant slice
+                     # Extract the sampled indices
                      current_indices = adj_indices_vec[0, 0, :num_edges_to_generate].cpu().numpy()
                 except Exception as e:
-                     logger.error(f"Error during EdgeModel generation for node {i}: {e}", exc_info=True)
-                     return None, None
+                     logger.error(f"Error during EdgeModel generation for node {i} using context shape {h.shape if isinstance(h, torch.Tensor) else 'N/A'}: {e}", exc_info=True)
+                     return None, None # Stop generation if edge model fails
 
-            # Store the generated indices for this node
+            # Store the sampled indices for building the matrix later
             list_adj_indices.append(current_indices)
             generated_nodes_count += 1
 
-            # --- Patience Stopping Check ---
+            # --- Step 3: Patience Stopping Check ---
             num_nodes_generated_so_far = generated_nodes_count
             if num_nodes_generated_so_far >= min_nodes:
-                # Check if *only* "NONE" edges were predicted among the generated indices
                 only_no_edge_predicted = np.all(current_indices <= EDGE_TYPES["NONE"]) if current_indices.size > 0 else True
-
                 if only_no_edge_predicted:
                     no_edge_streak += 1
                     logger.debug(f"  Node {i}: No edge > NONE predicted. Streak: {no_edge_streak}/{patience}")
                 else:
                     if no_edge_streak > 0: logger.debug(f"  Node {i}: Edge > NONE predicted. Resetting streak.")
-                    no_edge_streak = 0 # Reset streak if any edge was predicted
-
+                    no_edge_streak = 0
                 if no_edge_streak >= patience:
-                    logger.debug(f"Stopping early at node {i} (total {num_nodes_generated_so_far}): "
-                                f"reached patience={patience} of consecutive 'No Edge > NONE' steps.")
+                    logger.debug(f"Stopping early at node {i} (total {num_nodes_generated_so_far}): reached patience={patience}.")
                     break # Exit the generation loop
 
-            # 3. Prepare input for the *next* iteration (generating node i+1)
-            # Create one-hot encoding based on `current_indices` for the *previous* step
+            # --- Step 4: Prepare input for the NEXT iteration ---
+            # (This part correctly uses current_indices to build next_adj_vec_input)
             next_adj_vec_input = torch.zeros([1, 1, input_size, edge_feature_len], device=device)
-            next_adj_vec_input[:, :, :, EDGE_TYPES["NONE"]] = 1 # Default to "No Edge"
-
-            # Fill based on the edges generated *into node i* (stored in current_indices)
-            # These describe connections from i-1, i-2, ..., i-m relative to node i.
-            # For the input to node i+1, the k-th position represents the connection from node (i+1)-1-k = i-k.
-            # The indices `current_indices[k]` describe edge type from `i-1-k -> i`.
-            # We map this to the input vector for step i+1.
+            next_adj_vec_input[:, :, :, EDGE_TYPES["NONE"]] = 1
             num_indices = len(current_indices)
             len_slice = min(num_indices, input_size)
-
             for k in range(len_slice):
-                 # class_idx is the type of edge from node i-1-k --> i
                  class_idx = current_indices[k]
-                 # We need to place this information in the input vector for node i+1.
-                 # The slot 'k' in the input vector corresponds to the edge from node i-k --> i+1.
-                 # The GraphRNN structure relates input slot k to node i-k.
-                 # Let's stick to the original interpretation: input slot k is edge from i-k.
-
-                 # Position k in the input tensor corresponds to the edge from node i-k
-                 # Check index bounds carefully
                  if 0 <= k < input_size:
-                     # Check if class_idx is valid
                      if 0 <= class_idx < edge_feature_len:
-                         next_adj_vec_input[0, 0, k, EDGE_TYPES["NONE"]] = 0 # Clear default NONE
-                         next_adj_vec_input[0, 0, k, class_idx] = 1 # Set one-hot
-                     else:
-                         # This should ideally not happen if sampling is correct
-                         logger.warning(f"Node {i}, Edge input prep: Invalid class index {class_idx} from generator. Using NONE.")
-                         # Ensure it remains NONE
+                         next_adj_vec_input[0, 0, k, EDGE_TYPES["NONE"]] = 0
+                         next_adj_vec_input[0, 0, k, class_idx] = 1
+                     else: # Should not happen if index validation is correct
                          next_adj_vec_input[0, 0, k, :] = 0
                          next_adj_vec_input[0, 0, k, EDGE_TYPES["NONE"]] = 1
 
-            # Update input for the next node generation step
-            adj_vec_input = next_adj_vec_input
+            adj_vec_input = next_adj_vec_input # Update input for the next loop iteration
 
     # --- Post-processing After Loop ---
     if generated_nodes_count == 0:
