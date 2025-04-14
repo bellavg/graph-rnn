@@ -268,7 +268,7 @@ def get_generation(
     (node_model, edge_model, input_size, edge_gen_function,
      mode, edge_feature_len) = models_tuple
 
-    logger.info(f"Generating {num_graphs_to_generate} AIGs...")
+    logger.debug(f"Generating {num_graphs_to_generate} AIGs...")
     raw_generated_graphs: List[Optional[nx.DiGraph]] = []
 
     current_gen_params = {
@@ -282,7 +282,7 @@ def get_generation(
     generation_successful_count = 0
     for i in range(num_graphs_to_generate):
         # gen_start_time = time.time() # Optional: time each generation
-        logger.info(f"Generating graph {i+1}/{num_graphs_to_generate}...")
+        logger.debug(f"Generating graph {i+1}/{num_graphs_to_generate}...")
         try:
             # --- Call generate function from generate_aigs.py ---
             adj_conn, adj_inv = generate(
@@ -320,7 +320,7 @@ def get_generation(
     valid_generated_graphs = [g for g in raw_generated_graphs if isinstance(g, nx.DiGraph) and g.number_of_nodes() > 0]
     num_successfully_generated = len(valid_generated_graphs) # This should match generation_successful_count
 
-    logger.info(f"Finished generation. Generated {num_successfully_generated}/{num_graphs_to_generate} non-empty graphs.")
+    logger.debug(f"Finished generation. Generated {num_successfully_generated}/{num_graphs_to_generate} non-empty graphs.")
 
     # Return the list of valid graphs and the count
     return valid_generated_graphs, num_successfully_generated
@@ -411,8 +411,8 @@ def get_evaluation(
         return aggregated_evaluation_results, evaluation_results_list
 
     # Decide how many graphs to actually evaluate
-    num_to_evaluate = min(num_graphs_to_evaluate, num_successfully_generated)
-    graphs_for_eval = generated_graphs[:num_to_evaluate]
+    num_to_evaluate = num_successfully_generated
+    graphs_for_eval = generated_graphs
     logger.info(f"Evaluating structural properties of {num_to_evaluate} generated graphs...")
     eval_start_time = time.time()
 
@@ -595,7 +595,6 @@ def aig_control(
     logger.info(f"Starting AIG control process. Output dir: {output_dir}")
     logger.info(f"Graph file: {graph_file}") # Log the graph file being used
     logger.info(f"Requested Generations: {num_graphs_to_generate}, Evaluate: {'Yes' if evaluate else 'No'}, "
-                f"Num Evaluate: {num_graphs_to_evaluate if evaluate else 'N/A'}, "
                 f"Visualize: {'Yes' if visualize else 'No'}, Num Visualize: {num_graphs_to_visualize if visualize else 'N/A'}")
     logger.info(f"Base Generation Parameters: {gen_params}")
 
@@ -606,7 +605,6 @@ def aig_control(
         "output_directory": output_dir,
         "requested_generations": num_graphs_to_generate,
         "evaluation_enabled": evaluate,
-        "requested_evaluations": num_graphs_to_evaluate if evaluate else 0,
         "visualization_enabled": visualize,
         "requested_visualizations": num_graphs_to_visualize if visualize else 0,
         "graph_file_used": graph_file,
@@ -778,8 +776,6 @@ if __name__ == "__main__":
     # Generation and Evaluation Control
     parser.add_argument("--num-generate", type=int, default=1000, # Renamed from num-graphs
                         help="Number of AIGs to attempt generating.")
-    parser.add_argument("--num-evaluate", type=int, default=1000,
-                        help="Maximum number of successfully generated AIGs to evaluate (if --evaluate is enabled).")
     parser.add_argument("--evaluate", action='store_true', # Added flag
                         help="Evaluate structural and comparison metrics for generated graphs.") # Updated help text
 
@@ -795,7 +791,7 @@ if __name__ == "__main__":
     GENERATION_CONFIG = {
         'max_nodes': 100, # Example, adjust as needed
         'min_nodes': 8,   # Example
-        'patience': 20,   # Example
+        'patience': 30,   # Example
         'temperature': 1.2,
         'top_k': 0,
         'top_p': 0.0,
@@ -812,7 +808,6 @@ if __name__ == "__main__":
         gen_params=GENERATION_CONFIG,
         graph_file=args.graph_file,           # <<< Pass args.graph_file here
         num_graphs_to_generate=args.num_generate,
-        num_graphs_to_evaluate=args.num_evaluate, # Pass this value
         evaluate=args.evaluate,                  # Pass the evaluate flag
         visualize=args.visualize,
         num_graphs_to_visualize=args.num_visualize

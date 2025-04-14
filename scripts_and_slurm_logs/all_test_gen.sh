@@ -17,8 +17,7 @@ BASE_CHECKPOINT_DIR="./checkpoints" # <<< CHANGE THIS if needed (based on image,
 BASE_OUTPUT_DIR="./evaluation_results_all" # <<< CHANGE THIS destination as desired
 
 # === PARAMETERS for get_aigs.py ===
-NUM_GENERATE=500       # Number of graphs to generate per checkpoint
-NUM_EVALUATE=500       # Number of graphs to evaluate per checkpoint
+NUM_GENERATE=50       # Number of graphs to generate per checkpoint
 DO_VISUALIZE=true      # Set to true to enable visualization, false to disable
 NUM_VISUALIZE=10       # Number of graphs to visualize if visualization is enabled
 
@@ -31,7 +30,6 @@ echo "Python Script: $PYTHON_SCRIPT"
 echo "Base Checkpoint Dir: $BASE_CHECKPOINT_DIR"
 echo "Base Output Dir: $BASE_OUTPUT_DIR"
 echo "Num Generate per Checkpoint: $NUM_GENERATE"
-echo "Num Evaluate per Checkpoint: $NUM_EVALUATE"
 echo "Visualize: $DO_VISUALIZE"
 echo "Num Visualize: $NUM_VISUALIZE"
 echo "======================================================"
