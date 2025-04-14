@@ -88,16 +88,41 @@ def sample_softmax(logits: torch.Tensor,
 # --- Edge Generation Helper Functions ---
 def rnn_edge_gen(edge_rnn, h, num_edges, adj_vec_size, sample_fun, mode,
                  temperature=1.0, top_k=0, top_p=0.0, attempts=None): # Added attempts for API consistency
-    """ Generates edge indices using an RNN edge model. """
-    device = h.device
+    """ Generates edge indices using an RNN edge model. Handles tuple input for LSTM state. """
+
+    # <<< START MODIFICATION >>>
+    # Handle potential tuple input (h_n, c_n) from LSTM node model
+    hidden_state_tensor = h
+    if isinstance(h, tuple):
+        hidden_state_tensor = h[0] # Use the first element (h_n)
+        logger.debug("rnn_edge_gen received tuple, using h[0].")
+    elif not isinstance(h, torch.Tensor):
+        # Raise error if it's neither Tensor nor Tuple
+        raise TypeError(f"rnn_edge_gen expected Tensor or Tuple for hidden state, got {type(h)}")
+
+    # Get device from the tensor part of the state
+    try:
+        device = hidden_state_tensor.device
+    except AttributeError as e:
+         logger.error(f"Could not get device from hidden_state_tensor (type: {type(hidden_state_tensor)}). Error: {e}")
+         # Fallback or re-raise
+         # For example, try getting device from the model?
+         try:
+             device = next(edge_rnn.parameters()).device
+             logger.warning("Falling back to edge_rnn device.")
+         except Exception:
+              raise RuntimeError("Cannot determine device for rnn_edge_gen.") from e
+
     adj_indices_vec = torch.full((1, 1, adj_vec_size), EDGE_TYPES["NONE"], dtype=torch.long, device=device)
 
-    # Check if set_first_layer_hidden exists and call it
+    # Pass the correct tensor state to set_first_layer_hidden
     if hasattr(edge_rnn, 'set_first_layer_hidden') and callable(edge_rnn.set_first_layer_hidden):
-        edge_rnn.set_first_layer_hidden(h)
+        # Pass the extracted tensor, not the original h if it was a tuple
+        edge_rnn.set_first_layer_hidden(hidden_state_tensor)
+    # <<< END MODIFICATION >>>
     else:
-        logger.warning("Edge RNN model does not have 'set_first_layer_hidden' method.")
-        # Decide how to initialize hidden state if needed, or assume it's handled internally
+        logger.warning(f"Edge RNN model {type(edge_rnn)} does not have 'set_first_layer_hidden' method.")
+        # Need alternative way to set hidden state if required by edge_rnn
 
     # Initial SOS token (assuming one-hot for class 0 - NoEdge)
     x = torch.zeros([1, 1, edge_rnn.edge_feature_len], device=device)
