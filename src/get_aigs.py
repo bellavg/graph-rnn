@@ -795,8 +795,8 @@ if __name__ == "__main__":
     GENERATION_CONFIG = {
         'max_nodes': 100, # Example, adjust as needed
         'min_nodes': 8,   # Example
-        'patience': 12,   # Example
-        'temperature': 1.0,
+        'patience': 20,   # Example
+        'temperature': 1.2,
         'top_k': 0,
         'top_p': 0.0,
         'edge_sample_attempts': 3,
