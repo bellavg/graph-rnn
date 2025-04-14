@@ -407,7 +407,7 @@ def get_evaluation(
     ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """
     Evaluates structural and comparison properties of the generated graphs.
-    Includes enhanced error logging for structural evaluation.
+    Includes enhanced error logging and more nuanced aggregation.
     """
     aggregated_evaluation_results: Dict[str, Any] = {}
     evaluation_results_list: List[Dict[str, Any]] = []
@@ -416,175 +416,161 @@ def get_evaluation(
         logger.warning("No graphs to evaluate.")
         return aggregated_evaluation_results, evaluation_results_list
 
-    # Decide how many graphs to actually evaluate for structural metrics
-    # (Comparison metrics use the full lists passed in)
     num_to_struct_evaluate = min(num_successfully_generated, num_graphs_to_evaluate)
-    # Use slice in case num_graphs_to_evaluate < num_successfully_generated
     graphs_for_struct_eval = generated_graphs[:num_to_struct_evaluate]
 
     logger.info(f"Evaluating structural properties of {len(graphs_for_struct_eval)} generated graphs...")
     eval_start_time = time.time()
-    num_errors = 0 # Keep track of structural evaluation errors
+    num_exceptions = 0 # Count only exceptions caught
 
     for i, g in enumerate(graphs_for_struct_eval):
         graph_eval_results = {'graph_index_in_list': i}
         try:
-            # Add more detailed logging before evaluation
             graph_size_info = "N/A"
             if isinstance(g, nx.DiGraph):
                  graph_size_info = f"(Nodes: {g.number_of_nodes()}, Edges: {g.number_of_edges()})"
             logger.debug(f"Evaluating graph {i+1}/{len(graphs_for_struct_eval)} {graph_size_info}")
 
-            # Ensure node types are inferred if not already done (safety check)
             if isinstance(g, nx.DiGraph) and '_inferred_types_cleaned' not in g.graph:
                  g.graph['_inferred_types_cleaned'] = infer_node_types(g)
 
-            # --- Call structural evaluation functions from evaluate_aigs.py ---
             struct_info = calculate_structural_aig_validity(g)
             seadag_v = calculate_seadag_validity(g)
-            path_info = count_pi_po_paths(g) # This might fail if not DAG
+            path_info = count_pi_po_paths(g) # This returns 'error' key if not DAG
 
-            # Store results on graph object (optional)
             if isinstance(g, nx.DiGraph):
                 g.graph['_structural_validity'] = struct_info
                 g.graph['_seadag_validity'] = seadag_v
-                g.graph['_path_info'] = path_info # path_info might contain its own error field
+                g.graph['_path_info'] = path_info
 
-            # Store results for aggregation
+            # Store results for aggregation - include everything returned
             graph_eval_results.update(struct_info)
             graph_eval_results['seadag_validity'] = seadag_v
-            graph_eval_results.update(path_info)
+            graph_eval_results.update(path_info) # Includes potential 'error' key from path_info
 
-            # Check for internal errors reported by path_info or struct_info
+            # Log warning if path_info reported an error (e.g., not DAG)
             if path_info.get('error'):
                  logger.warning(f"Path evaluation for graph {i+1} reported error: {path_info['error']}")
-                 # Optionally mark the whole evaluation as having an error
-                 # graph_eval_results["error"] = f"Path eval error: {path_info['error']}"
-                 # num_errors += 1 # Avoid double counting if exception is also caught
-
-            # Add similar check if calculate_structural_aig_validity can return an 'error' key
-            # if struct_info.get('error'): ...
 
         except Exception as eval_e:
-            # Log the full traceback for exceptions during structural evaluation
+            # Log exceptions and mark the result dict with a different error key maybe?
             logger.error(f"Exception during structural evaluation of graph {i+1}: {eval_e}", exc_info=True)
-            graph_eval_results["error"] = str(eval_e) # Mark error
-            num_errors += 1 # Increment error count
+            graph_eval_results["evaluation_exception"] = str(eval_e) # Use a different key
+            num_exceptions += 1
 
+        # Log the full dictionary before appending
+        logger.debug(f"Graph {i+1} evaluation result dict: {graph_eval_results}")
         evaluation_results_list.append(graph_eval_results)
 
     eval_time = time.time() - eval_start_time
-    # Report structural error count
-    logger.info(f"Structural evaluation loop completed in {eval_time:.2f} seconds with {num_errors} errors.")
+    logger.info(f"Structural evaluation loop completed in {eval_time:.2f} seconds with {num_exceptions} exceptions caught.")
 
-    # --- Aggregate Structural Evaluation Results ---
+    # --- Aggregate Structural Evaluation Results (Revised Logic) ---
     aggregated_evaluation_results["num_graphs_structurally_evaluated"] = len(graphs_for_struct_eval)
-    aggregated_evaluation_results["num_structural_evaluation_errors"] = num_errors # Report errors
+    aggregated_evaluation_results["num_structural_evaluation_exceptions"] = num_exceptions
 
-    # Filter out results marked with an "error" key for calculating validity rates/scores
-    valid_struct_evals = [r for r in evaluation_results_list if 'error' not in r]
-    num_valid_struct_evals = len(valid_struct_evals)
-    aggregated_evaluation_results["num_valid_structural_evaluations"] = num_valid_struct_evals # Report valid count
+    # --- Calculate stats based on results WITHOUT exceptions ---
+    evals_without_exception = [r for r in evaluation_results_list if 'evaluation_exception' not in r]
+    num_evals_without_exception = len(evals_without_exception)
+    aggregated_evaluation_results["num_evals_without_exception"] = num_evals_without_exception
 
-    # Calculate structural averages only if there are valid evaluations
-    if num_valid_struct_evals > 0:
-        aggregated_evaluation_results["evaluated_dag_rate"] = sum(r.get('is_dag', False) for r in valid_struct_evals) / num_valid_struct_evals
-        aggregated_evaluation_results["avg_structural_validity_score"] = round(np.mean([r.get('validity_score', 0.0) for r in valid_struct_evals]), 4)
-        aggregated_evaluation_results["avg_seadag_validity"] = round(np.mean([r.get('seadag_validity', 0.0) for r in valid_struct_evals]), 4)
-        aggregated_evaluation_results["num_perfect_structural_validity"] = sum(1 for r in valid_struct_evals if r.get('validity_score') == 1.0)
-        aggregated_evaluation_results["num_perfect_seadag_validity"] = sum(1 for r in valid_struct_evals if r.get('seadag_validity') == 1.0)
-        aggregated_evaluation_results["avg_nodes_struct_eval"] = round(np.mean([r.get('num_nodes', 0) for r in valid_struct_evals]), 2)
-        aggregated_evaluation_results["avg_pi_struct_eval"] = round(np.mean([r.get('num_pi', 0) for r in valid_struct_evals]), 2)
-        aggregated_evaluation_results["avg_po_struct_eval"] = round(np.mean([r.get('num_po', 0) for r in valid_struct_evals]), 2)
-        aggregated_evaluation_results["avg_and_struct_eval"] = round(np.mean([r.get('num_and', 0) for r in valid_struct_evals]), 2)
-        aggregated_evaluation_results["total_invalid_fanin_nodes_struct_eval"] = sum(r.get('num_invalid_fanin', 0) for r in valid_struct_evals)
-        aggregated_evaluation_results["total_unknown_type_nodes_struct_eval"] = sum(r.get('num_unknown', 0) for r in valid_struct_evals)
+    if num_evals_without_exception > 0:
+        # Calculate basic counts and SEADAG validity based on all non-exception results
+        # These don't strictly require the graph to be a DAG
+        aggregated_evaluation_results["avg_nodes_eval"] = round(np.mean([r.get('num_nodes', 0) for r in evals_without_exception]), 2)
+        aggregated_evaluation_results["avg_pi_eval"] = round(np.mean([r.get('num_pi', 0) for r in evals_without_exception]), 2)
+        aggregated_evaluation_results["avg_po_eval"] = round(np.mean([r.get('num_po', 0) for r in evals_without_exception]), 2)
+        aggregated_evaluation_results["avg_and_eval"] = round(np.mean([r.get('num_and', 0) for r in evals_without_exception]), 2)
+        aggregated_evaluation_results["avg_unknown_eval"] = round(np.mean([r.get('num_unknown', 0) for r in evals_without_exception]), 2)
+        aggregated_evaluation_results["avg_invalid_fanin_eval"] = round(np.mean([r.get('num_invalid_fanin', 0) for r in evals_without_exception]), 2)
+        aggregated_evaluation_results["avg_seadag_validity"] = round(np.mean([r.get('seadag_validity', 0.0) for r in evals_without_exception]), 4) # SEADAG validity doesn't require DAG check itself
 
-        # Calculate path statistics only for graphs that are DAGs and evaluated successfully
-        path_evals = [r for r in valid_struct_evals if r.get('is_dag', False)]
-        if path_evals:
-            aggregated_evaluation_results["avg_fraction_pis_connected"] = round(np.mean([r.get('fraction_pis_connected', 0.0) for r in path_evals]), 4)
-            aggregated_evaluation_results["avg_fraction_pos_connected"] = round(np.mean([r.get('fraction_pos_connected', 0.0) for r in path_evals]), 4)
-            aggregated_evaluation_results["avg_pis_reaching_po"] = round(np.mean([r.get('num_pis_reaching_po', 0) for r in path_evals]), 2)
-            aggregated_evaluation_results["avg_pos_reachable_from_pi"] = round(np.mean([r.get('num_pos_reachable_from_pi', 0) for r in path_evals]), 2)
+        # --- Calculate DAG-dependent stats based ONLY on non-exception AND DAG results ---
+        valid_dag_evals = [r for r in evals_without_exception if r.get('is_dag', False)]
+        num_valid_dag_evals = len(valid_dag_evals)
+        aggregated_evaluation_results["num_valid_dag_evals"] = num_valid_dag_evals
+
+        if num_evals_without_exception > 0: # Calculate rate based on attempts without exceptions
+             aggregated_evaluation_results["evaluated_dag_rate"] = num_valid_dag_evals / num_evals_without_exception
         else:
-            logger.warning("No valid DAGs found among successful evaluations to calculate path statistics.")
+             aggregated_evaluation_results["evaluated_dag_rate"] = 0.0
+
+        if num_valid_dag_evals > 0:
+            # Structural validity score relies on being a DAG
+            aggregated_evaluation_results["avg_structural_validity_score"] = round(np.mean([r.get('validity_score', 0.0) for r in valid_dag_evals]), 4)
+            aggregated_evaluation_results["num_perfect_structural_validity"] = sum(1 for r in valid_dag_evals if r.get('validity_score') == 1.0)
+            # Path statistics also rely on being a DAG
+            aggregated_evaluation_results["avg_fraction_pis_connected"] = round(np.mean([r.get('fraction_pis_connected', 0.0) for r in valid_dag_evals]), 4)
+            aggregated_evaluation_results["avg_fraction_pos_connected"] = round(np.mean([r.get('fraction_pos_connected', 0.0) for r in valid_dag_evals]), 4)
+            aggregated_evaluation_results["avg_pis_reaching_po"] = round(np.mean([r.get('num_pis_reaching_po', 0) for r in valid_dag_evals]), 2)
+            aggregated_evaluation_results["avg_pos_reachable_from_pi"] = round(np.mean([r.get('num_pos_reachable_from_pi', 0) for r in valid_dag_evals]), 2)
+            # Perfect SEADAG might only be meaningful if also a DAG
+            aggregated_evaluation_results["num_perfect_seadag_validity"] = sum(1 for r in valid_dag_evals if r.get('seadag_validity') == 1.0)
+        else:
+            logger.warning("No valid DAGs found among successful evaluations to calculate DAG-dependent averages.")
+            # Add placeholder keys if desired
+            aggregated_evaluation_results["avg_structural_validity_score"] = 0.0
+            # ... add placeholders for other DAG-dependent metrics ...
+
     else:
-         logger.warning("No valid structural evaluations found to calculate averages.")
+         logger.warning("No evaluations completed without exceptions.")
+         # Add placeholder keys if desired
+         aggregated_evaluation_results["evaluated_dag_rate"] = 0.0
+         aggregated_evaluation_results["avg_structural_validity_score"] = 0.0
+         # ... add placeholders for other metrics ...
+
 
     # --- Comparison Metrics (MMD, Averages vs Test Set) ---
-    # This part uses the full generated_graphs list and test_graphs list
+    # This part should remain unchanged as it seemed to be working
     if not test_graphs:
         logger.warning("Test dataset is empty or failed to load. Skipping comparison metrics.")
-    elif not generated_graphs: # Use the full list passed to the function
+    elif not generated_graphs:
         logger.warning("Generated graph list is empty. Skipping comparison metrics.")
     else:
         logger.info(
             f"Calculating comparison metrics between {len(generated_graphs)} generated and {len(test_graphs)} test graphs...")
         comp_metric_start_time = time.time()
         try:
-            # Define MMD functions (adjust sigma/settings as needed)
+            # Define MMD functions
             mmd_stanford_fn_is_hist = lambda x, y: compute_mmd(x, y, kernel=gaussian_emd, is_hist=True, sigma=1.0)
             mmd_stanford_fn_is_hist_clustering_settings = lambda x, y: compute_mmd(x, y, kernel=gaussian_emd, is_hist=True, sigma=1.0/10, distance_scaling=100.0)
             mmd_stanford_fn_orbit_settings = lambda x, y: compute_mmd(x, y, kernel=gaussian, is_hist=False, sigma=30.0) # Requires Orca
 
-            # --- MMD Metrics ---
+            # Calculate MMD Metrics (keep try-except blocks)
             try:
                 mmd_deg = compare_graphs_mmd_degree(generated_graphs, test_graphs, mmd_stanford_fn_is_hist)
                 aggregated_evaluation_results["mmd_degree_distribution"] = round(mmd_deg, 6)
-            except Exception as e:
-                logger.error(f"Error calculating MMD Degree: {e}", exc_info=False) # Set exc_info=False for brevity
-
+            except Exception as e: logger.error(f"Error calculating MMD Degree: {e}", exc_info=False)
             try:
-                mmd_clus = compare_graphs_mmd_clustering_coeff(generated_graphs, test_graphs,
-                                                               mmd_stanford_fn_is_hist_clustering_settings)
+                mmd_clus = compare_graphs_mmd_clustering_coeff(generated_graphs, test_graphs, mmd_stanford_fn_is_hist_clustering_settings)
                 aggregated_evaluation_results["mmd_clustering_coeff"] = round(mmd_clus, 6)
-            except Exception as e:
-                logger.error(f"Error calculating MMD Clustering Coeff: {e}", exc_info=False)
-
+            except Exception as e: logger.error(f"Error calculating MMD Clustering Coeff: {e}", exc_info=False)
             try:
-                # Ensure orca executable is available and permissions are set if running orbit stats
-                # You might need to adjust path in orbit_stats.py or ensure it's in PATH
-                mmd_orbit = compare_graphs_mmd_orbit_stats(generated_graphs, test_graphs,
-                                                           mmd_stanford_fn_orbit_settings)
+                mmd_orbit = compare_graphs_mmd_orbit_stats(generated_graphs, test_graphs, mmd_stanford_fn_orbit_settings)
                 aggregated_evaluation_results["mmd_orbit_stats"] = round(mmd_orbit, 6)
-            except FileNotFoundError:
-                logger.error("Orca executable not found. Skipping MMD Orbit Stats.")
-            except Exception as e:
-                logger.error(f"Error calculating MMD Orbit Stats: {e}", exc_info=False)
+            except FileNotFoundError: logger.error("Orca executable not found. Skipping MMD Orbit Stats.")
+            except Exception as e: logger.error(f"Error calculating MMD Orbit Stats: {e}", exc_info=False)
 
-            # --- Average Metrics (Compare averages of sets) ---
+            # Calculate Average Metrics (keep helper and calls)
             def calculate_avg_metric(graph_list, metric_func, metric_name):
+                # ... (keep implementation from previous versions) ...
                 values = []
                 for g_idx, g in enumerate(graph_list):
-                     # Skip non-graph objects or empty graphs safely
-                    if not isinstance(g, nx.Graph) or g.number_of_nodes() == 0:
-                         continue
-                    try:
-                        metric_val = metric_func(g)
-                        # Handle functions returning dicts (e.g., centralities) vs single values
-                        if isinstance(metric_val, dict):
-                            dict_vals = list(metric_val.values())
-                            if dict_vals: # Check if dict values are not empty
-                                 values.append(statistics.mean(dict_vals)) # Use avg per graph
-                            # Or use all node values: values.extend(dict_vals)
-                        else:
-                            values.append(metric_val)
-                    except Exception as e:
-                        # Log which graph caused the issue if possible
-                        logger.warning(f"Could not calculate {metric_name} for a graph (index {g_idx}): {e}")
+                     if not isinstance(g, nx.Graph) or g.number_of_nodes() == 0: continue
+                     try:
+                         metric_val = metric_func(g)
+                         if isinstance(metric_val, dict):
+                             dict_vals = list(metric_val.values())
+                             if dict_vals: values.append(statistics.mean(dict_vals))
+                         else: values.append(metric_val)
+                     except Exception as e: logger.warning(f"Could not calculate {metric_name} for graph index {g_idx}: {e}")
                 return round(statistics.mean(values), 4) if values else 0.0
 
-            # Import necessary metric functions if not already imported
-            from graph_metrics import average_degree # Example
-
-            # Calculate averages for generated graphs
+            from graph_metrics import average_degree # Ensure import
             aggregated_evaluation_results["avg_degree_gen"] = calculate_avg_metric(generated_graphs, average_degree, "Avg Degree (Gen)")
             aggregated_evaluation_results["avg_clustering_coeff_gen"] = calculate_avg_metric(generated_graphs, nx.average_clustering, "Avg Clustering (Gen)")
             aggregated_evaluation_results["avg_density_gen"] = calculate_avg_metric(generated_graphs, nx.density, "Density (Gen)")
             aggregated_evaluation_results["avg_transitivity_gen"] = calculate_avg_metric(generated_graphs, nx.transitivity, "Transitivity (Gen)")
-
-            # Calculate averages for test graphs
             aggregated_evaluation_results["avg_degree_test"] = calculate_avg_metric(test_graphs, average_degree, "Avg Degree (Test)")
             aggregated_evaluation_results["avg_clustering_coeff_test"] = calculate_avg_metric(test_graphs, nx.average_clustering, "Avg Clustering (Test)")
             aggregated_evaluation_results["avg_density_test"] = calculate_avg_metric(test_graphs, nx.density, "Density (Test)")
@@ -594,22 +580,20 @@ def get_evaluation(
             logger.info(f"Comparison metrics calculated in {comp_metric_time:.2f} seconds.")
 
         except Exception as e:
-            logger.error(f"General error occurred during comparison metric calculation: {e}", exc_info=True)
+            logger.error(f"General error during comparison metric calculation: {e}", exc_info=True)
     # --- END: Comparison Metrics ---
 
-    # Log summary (Combined) - this part should remain
+    # Log summary (Combined)
     logger.info("--- Aggregated Evaluation Summary (Structural & Comparison) ---")
-    # Sort keys for consistent logging output
-    for key in sorted(aggregated_evaluation_results.keys()):
+    for key in sorted(aggregated_evaluation_results.keys()): # Sort for consistency
         value = aggregated_evaluation_results[key]
-        if isinstance(value, float):
-            logger.info(f"  {key}: {value:.4f}")
-        else:
-            logger.info(f"  {key}: {value}")
+        if isinstance(value, float): logger.info(f"  {key}: {value:.4f}")
+        else: logger.info(f"  {key}: {value}")
     logger.info("---------------------------------------------------------------")
 
     # Return the aggregated dictionary and the list of detailed per-graph results
     return aggregated_evaluation_results, evaluation_results_list
+
 
 
 
