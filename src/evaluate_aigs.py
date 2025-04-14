@@ -185,71 +185,107 @@ def calculate_structural_aig_validity(G: nx.DiGraph) -> Dict[str, Any]:
 
     return results
 
+
 def count_pi_po_paths(G: nx.DiGraph) -> Dict[str, Any]:
     """
-    Counts PIs reaching POs and POs reachable from PIs, assuming DAG structure.
+    Counts PIs reaching POs and POs reachable from PIs based on reachability.
+    NOTE: Does NOT explicitly check for DAG property first.
     """
     results = {
-        'error': None, 'is_dag': True, 'num_pis': 0, 'num_pos': 0,
+        'error': None, # Will only be set by specific exceptions now
+        # 'is_dag': True, # We are removing the explicit check, so maybe remove this field or set based on later error?
+        'num_pis': 0, 'num_pos': 0,
         'num_pis_reaching_po': 0, 'num_pos_reachable_from_pi': 0,
         'fraction_pis_connected': 0.0, 'fraction_pos_connected': 0.0
     }
-    if G.number_of_nodes() == 0: return results
+    if G.number_of_nodes() == 0:
+        # results['is_dag'] = True # Empty graph is a DAG
+        return results
 
+    # --- DAG Check Removed ---
+    # try:
+    #     if not nx.is_directed_acyclic_graph(G):
+    #         results['is_dag'] = False
+    #         results['error'] = 'Graph is not a DAG.' # No longer setting this error
+    #         # Continue processing anyway
+    # except Exception as e:
+    #      logger.error(f"Error checking DAG property in count_pi_po_paths: {e}")
+    #      results['is_dag'] = False # Assume not DAG if check fails
+    #      results['error'] = f'DAG check failed: {e}'
+    #      # Decide whether to return or continue
+    #      # return results
+    # --- End DAG Check Removal ---
+
+    # Proceed with PI/PO identification and reachability calculation
     try:
-        if not nx.is_directed_acyclic_graph(G):
-            results['is_dag'] = False
-            results['error'] = 'Graph is not a DAG.'
-            # Proceed with type inference but path results are questionable
+        node_types = infer_node_types(G)
+        pis = {n for n, t in node_types.items() if t == "PI"}
+        pos = {n for n, t in node_types.items() if t == "PO"}
+        results['num_pis'] = len(pis)
+        results['num_pos'] = len(pos)
+
+        if not pis or not pos:
+            # logger.debug("No PIs or POs found, skipping path counting.")
+            return results # No paths possible
+
+        connected_pis: Set[Any] = set()
+        connected_pos: Set[Any] = set()
+
+        # Efficiently find all nodes reachable from any PI
+        all_reachable_from_pis = set()
+        for pi_node in pis:
+            try:
+                # nx.descendants works even with cycles
+                all_reachable_from_pis.update(nx.descendants(G, pi_node))
+                all_reachable_from_pis.add(pi_node) # Include the PI itself
+            except nx.NodeNotFound:
+                logger.warning(f"PI node {pi_node} not found in graph during descendant search.")
+                continue
+            except Exception as e: # Catch other potential NetworkX errors
+                logger.warning(f"Error finding descendants from PI {pi_node}: {e}")
+                # Optionally set a general error flag if needed
+                # results['error'] = results.get('error', '') + f"Descendant search failed for {pi_node}; "
+
+
+        # Efficiently find all nodes that can reach any PO
+        all_ancestors_of_pos = set()
+        for po_node in pos:
+            try:
+                # nx.ancestors works even with cycles
+                all_ancestors_of_pos.update(nx.ancestors(G, po_node))
+                all_ancestors_of_pos.add(po_node) # Include the PO itself
+            except nx.NodeNotFound:
+                logger.warning(f"PO node {po_node} not found in graph during ancestor search.")
+                continue
+            except Exception as e:
+                logger.warning(f"Error finding ancestors for PO {po_node}: {e}")
+                # results['error'] = results.get('error', '') + f"Ancestor search failed for {po_node}; "
+
+        # Find PIs that can reach at least one PO
+        connected_pis = pis.intersection(all_ancestors_of_pos)
+        # Find POs that are reachable from at least one PI
+        connected_pos = pos.intersection(all_reachable_from_pis)
+
+        results['num_pis_reaching_po'] = len(connected_pis)
+        results['num_pos_reachable_from_pi'] = len(connected_pos)
+
+        # Calculate fractions
+        if results['num_pis'] > 0:
+            results['fraction_pis_connected'] = results['num_pis_reaching_po'] / results['num_pis']
+        if results['num_pos'] > 0:
+            results['fraction_pos_connected'] = results['num_pos_reachable_from_pi'] / results['num_pos']
+
     except Exception as e:
-         logger.error(f"Error checking DAG property in count_pi_po_paths: {e}")
-         results['is_dag'] = False # Assume not DAG
-         results['error'] = f'DAG check failed: {e}'
+        # Catch any unexpected errors during the main processing
+        logger.error(f"Unexpected error during count_pi_po_paths execution: {e}", exc_info=True)
+        results['error'] = f"Processing error: {e}"
 
-    node_types = infer_node_types(G)
-    pis = {n for n, t in node_types.items() if t == "PI"}
-    pos = {n for n, t in node_types.items() if t == "PO"}
-    results['num_pis'] = len(pis)
-    results['num_pos'] = len(pos)
-
-    if not pis or not pos: return results # No paths possible
-
-    connected_pis: Set[Any] = set()
-    connected_pos: Set[Any] = set()
-
-    # Efficiently find all nodes reachable from any PI
-    all_reachable_from_pis = set()
-    for pi_node in pis:
-        try:
-            all_reachable_from_pis.update(nx.descendants(G, pi_node))
-            all_reachable_from_pis.add(pi_node) # Include the PI itself
-        except nx.NodeNotFound: continue
-        except Exception as e:
-            logger.warning(f"Error finding descendants from PI {pi_node}: {e}")
-
-    # Efficiently find all nodes that can reach any PO
-    all_ancestors_of_pos = set()
-    for po_node in pos:
-        try:
-            all_ancestors_of_pos.update(nx.ancestors(G, po_node))
-            all_ancestors_of_pos.add(po_node) # Include the PO itself
-        except nx.NodeNotFound: continue
-        except Exception as e:
-            logger.warning(f"Error finding ancestors for PO {po_node}: {e}")
-
-    # Find PIs that can reach at least one PO
-    connected_pis = pis.intersection(all_ancestors_of_pos)
-    # Find POs that are reachable from at least one PI
-    connected_pos = pos.intersection(all_reachable_from_pis)
-
-    results['num_pis_reaching_po'] = len(connected_pis)
-    results['num_pos_reachable_from_pi'] = len(connected_pos)
-    if results['num_pis'] > 0:
-        results['fraction_pis_connected'] = len(connected_pis) / results['num_pis']
-    if results['num_pos'] > 0:
-        results['fraction_pos_connected'] = len(connected_pos) / results['num_pos']
+    # Clean up error message if it only contains separators
+    if results['error'] and not results['error'].strip().replace(';', ''):
+        results['error'] = None
 
     return results
+
 
 
 # --- Visualization ---
