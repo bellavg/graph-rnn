@@ -19,7 +19,7 @@ BASE_OUTPUT_DIR="./evaluation_results_all" # <<< CHANGE THIS destination as desi
 # === PARAMETERS for get_aigs.py ===
 NUM_GENERATE=50       # Number of graphs to generate per checkpoint
 DO_VISUALIZE=true      # Set to true to enable visualization, false to disable
-NUM_VISUALIZE=10       # Number of graphs to visualize if visualization is enabled
+NUM_VISUALIZE=5       # Number of graphs to visualize if visualization is enabled
 
 
 
