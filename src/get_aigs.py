@@ -12,7 +12,7 @@ import random
 import inspect
 from typing import Dict, Any, List, Tuple, Optional, Callable # Added Callable
 import statistics # <<< ADDED IMPORT
-
+from generate_aigs import *
 # --- Import from project files ---
 # Model imports (keep as is)
 try:
@@ -504,21 +504,26 @@ def get_visualization(
     return num_graphs_visualized
 
 
-
-
-# --- UPDATED get_evaluation FUNCTION ---
 def get_evaluation(
-    generated_graphs: List[nx.DiGraph],
-    #test_graphs: List[nx.DiGraph],
-    num_graphs_to_evaluate: int, # Max number to evaluate from the list
-    num_successfully_generated: int # Actual number of valid graphs generated
-    ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+        generated_graphs: List[nx.DiGraph],
+        num_graphs_to_evaluate: int,  # Max number to evaluate from the list
+        num_successfully_generated: int  # Actual number of valid graphs generated
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """
     Evaluates structural and comparison properties of the generated graphs.
-    Includes enhanced error logging and more nuanced aggregation.
+    Always removes isolated nodes before evaluation.
+
+    Args:
+        generated_graphs: List of generated graphs to evaluate
+        num_graphs_to_evaluate: Maximum number of graphs to evaluate
+        num_successfully_generated: Actual number of valid graphs generated
+
+    Returns:
+        Tuple of (aggregated results dictionary, list of per-graph evaluation results)
     """
     aggregated_evaluation_results: Dict[str, Any] = {}
     evaluation_results_list: List[Dict[str, Any]] = []
+    processed_graphs = []  # Store processed graphs (with isolated nodes removed)
 
     if num_successfully_generated == 0:
         logger.warning("No graphs to evaluate.")
@@ -527,24 +532,59 @@ def get_evaluation(
     num_to_struct_evaluate = min(num_successfully_generated, num_graphs_to_evaluate)
     graphs_for_struct_eval = generated_graphs[:num_to_struct_evaluate]
 
-    logger.info(f"Evaluating structural properties of {len(graphs_for_struct_eval)} generated graphs...")
-    eval_start_time = time.time()
-    num_exceptions = 0 # Count only exceptions caught
+    # Track isolated node statistics
+    total_isolated_nodes_removed = 0
+    graphs_with_isolated_nodes = 0
+
+    # Pre-process graphs (always remove isolated nodes)
+    logger.info(f"Pre-processing {len(graphs_for_struct_eval)} graphs to remove isolated nodes...")
 
     for i, g in enumerate(graphs_for_struct_eval):
+        if not isinstance(g, nx.DiGraph):
+            logger.warning(f"Graph {i} is not a valid NetworkX DiGraph. Skipping.")
+            processed_graphs.append(g)  # Keep as is
+            continue
+
+        # Count isolated nodes before removal
+        isolated_nodes = list(nx.isolates(g))
+        if isolated_nodes:
+            graphs_with_isolated_nodes += 1
+
+        # Remove isolated nodes
+        g_processed = remove_isolated_nodes(g)
+
+        # Track statistics
+        num_removed = g_processed.graph.get('_num_removed_isolated_nodes', 0)
+        total_isolated_nodes_removed += num_removed
+
+        # Store processed graph
+        processed_graphs.append(g_processed)
+
+    logger.info(
+        f"Removed total of {total_isolated_nodes_removed} isolated nodes from {graphs_with_isolated_nodes} graphs.")
+
+    logger.info(f"Evaluating structural properties of {len(processed_graphs)} processed graphs...")
+    eval_start_time = time.time()
+    num_exceptions = 0  # Count only exceptions caught
+
+    for i, g in enumerate(processed_graphs):
         graph_eval_results = {'graph_index_in_list': i}
+
+        # Record isolated node removal info in evaluation results
+        graph_eval_results['isolated_nodes_removed'] = g.graph.get('_num_removed_isolated_nodes', 0)
+
         try:
             graph_size_info = "N/A"
             if isinstance(g, nx.DiGraph):
-                 graph_size_info = f"(Nodes: {g.number_of_nodes()}, Edges: {g.number_of_edges()})"
-            logger.debug(f"Evaluating graph {i+1}/{len(graphs_for_struct_eval)} {graph_size_info}")
+                graph_size_info = f"(Nodes: {g.number_of_nodes()}, Edges: {g.number_of_edges()})"
+            logger.debug(f"Evaluating graph {i + 1}/{len(processed_graphs)} {graph_size_info}")
 
             if isinstance(g, nx.DiGraph) and '_inferred_types_cleaned' not in g.graph:
-                 g.graph['_inferred_types_cleaned'] = infer_node_types(g)
+                g.graph['_inferred_types_cleaned'] = infer_node_types(g)
 
             struct_info = calculate_structural_aig_validity(g)
             seadag_v = calculate_seadag_validity(g)
-            path_info = count_pi_po_paths(g) # This returns 'error' key if not DAG
+            path_info = count_pi_po_paths(g)  # This returns 'error' key if not DAG
 
             if isinstance(g, nx.DiGraph):
                 g.graph['_structural_validity'] = struct_info
@@ -554,28 +594,36 @@ def get_evaluation(
             # Store results for aggregation - include everything returned
             graph_eval_results.update(struct_info)
             graph_eval_results['seadag_validity'] = seadag_v
-            graph_eval_results.update(path_info) # Includes potential 'error' key from path_info
+            graph_eval_results.update(path_info)  # Includes potential 'error' key from path_info
 
             # Log warning if path_info reported an error (e.g., not DAG)
             if path_info.get('error'):
-                 logger.warning(f"Path evaluation for graph {i+1} reported error: {path_info['error']}")
+                logger.warning(f"Path evaluation for graph {i + 1} reported error: {path_info['error']}")
 
         except Exception as eval_e:
             # Log exceptions and mark the result dict with a different error key maybe?
-            logger.error(f"Exception during structural evaluation of graph {i+1}: {eval_e}", exc_info=True)
-            graph_eval_results["evaluation_exception"] = str(eval_e) # Use a different key
+            logger.error(f"Exception during structural evaluation of graph {i + 1}: {eval_e}", exc_info=True)
+            graph_eval_results["evaluation_exception"] = str(eval_e)  # Use a different key
             num_exceptions += 1
 
         # Log the full dictionary before appending
-        logger.debug(f"Graph {i+1} evaluation result dict: {graph_eval_results}")
+        logger.debug(f"Graph {i + 1} evaluation result dict: {graph_eval_results}")
         evaluation_results_list.append(graph_eval_results)
 
     eval_time = time.time() - eval_start_time
-    logger.info(f"Structural evaluation loop completed in {eval_time:.2f} seconds with {num_exceptions} exceptions caught.")
+    logger.info(
+        f"Structural evaluation loop completed in {eval_time:.2f} seconds with {num_exceptions} exceptions caught.")
 
     # --- Aggregate Structural Evaluation Results (Revised Logic) ---
-    aggregated_evaluation_results["num_graphs_structurally_evaluated"] = len(graphs_for_struct_eval)
+    aggregated_evaluation_results["num_graphs_structurally_evaluated"] = len(processed_graphs)
     aggregated_evaluation_results["num_structural_evaluation_exceptions"] = num_exceptions
+
+    # Add isolated node removal statistics to aggregated results
+    aggregated_evaluation_results["total_isolated_nodes_removed"] = total_isolated_nodes_removed
+    aggregated_evaluation_results["graphs_with_isolated_nodes"] = graphs_with_isolated_nodes
+    if len(processed_graphs) > 0:
+        aggregated_evaluation_results["avg_isolated_nodes_per_graph"] = round(
+            total_isolated_nodes_removed / len(processed_graphs), 2)
 
     # --- Calculate stats based on results WITHOUT exceptions ---
     evals_without_exception = [r for r in evaluation_results_list if 'evaluation_exception' not in r]
@@ -585,35 +633,50 @@ def get_evaluation(
     if num_evals_without_exception > 0:
         # Calculate basic counts and SEADAG validity based on all non-exception results
         # These don't strictly require the graph to be a DAG
-        aggregated_evaluation_results["avg_nodes_eval"] = round(np.mean([r.get('num_nodes', 0) for r in evals_without_exception]), 2)
-        aggregated_evaluation_results["avg_pi_eval"] = round(np.mean([r.get('num_pi', 0) for r in evals_without_exception]), 2)
-        aggregated_evaluation_results["avg_po_eval"] = round(np.mean([r.get('num_po', 0) for r in evals_without_exception]), 2)
-        aggregated_evaluation_results["avg_and_eval"] = round(np.mean([r.get('num_and', 0) for r in evals_without_exception]), 2)
-        aggregated_evaluation_results["avg_unknown_eval"] = round(np.mean([r.get('num_unknown', 0) for r in evals_without_exception]), 2)
-        aggregated_evaluation_results["avg_invalid_fanin_eval"] = round(np.mean([r.get('num_invalid_fanin', 0) for r in evals_without_exception]), 2)
-        aggregated_evaluation_results["avg_seadag_validity"] = round(np.mean([r.get('seadag_validity', 0.0) for r in evals_without_exception]), 4) # SEADAG validity doesn't require DAG check itself
+        aggregated_evaluation_results["avg_nodes_eval"] = round(
+            np.mean([r.get('num_nodes', 0) for r in evals_without_exception]), 2)
+        aggregated_evaluation_results["avg_pi_eval"] = round(
+            np.mean([r.get('num_pi', 0) for r in evals_without_exception]), 2)
+        aggregated_evaluation_results["avg_po_eval"] = round(
+            np.mean([r.get('num_po', 0) for r in evals_without_exception]), 2)
+        aggregated_evaluation_results["avg_and_eval"] = round(
+            np.mean([r.get('num_and', 0) for r in evals_without_exception]), 2)
+        aggregated_evaluation_results["avg_unknown_eval"] = round(
+            np.mean([r.get('num_unknown', 0) for r in evals_without_exception]), 2)
+        aggregated_evaluation_results["avg_invalid_fanin_eval"] = round(
+            np.mean([r.get('num_invalid_fanin', 0) for r in evals_without_exception]), 2)
+        aggregated_evaluation_results["avg_seadag_validity"] = round(
+            np.mean([r.get('seadag_validity', 0.0) for r in evals_without_exception]),
+            4)  # SEADAG validity doesn't require DAG check itself
 
         # --- Calculate DAG-dependent stats based ONLY on non-exception AND DAG results ---
         valid_dag_evals = [r for r in evals_without_exception if r.get('is_dag', False)]
         num_valid_dag_evals = len(valid_dag_evals)
         aggregated_evaluation_results["num_valid_dag_evals"] = num_valid_dag_evals
 
-        if num_evals_without_exception > 0: # Calculate rate based on attempts without exceptions
-             aggregated_evaluation_results["evaluated_dag_rate"] = num_valid_dag_evals / num_evals_without_exception
+        if num_evals_without_exception > 0:  # Calculate rate based on attempts without exceptions
+            aggregated_evaluation_results["evaluated_dag_rate"] = num_valid_dag_evals / num_evals_without_exception
         else:
-             aggregated_evaluation_results["evaluated_dag_rate"] = 0.0
+            aggregated_evaluation_results["evaluated_dag_rate"] = 0.0
 
         if num_valid_dag_evals > 0:
             # Structural validity score relies on being a DAG
-            aggregated_evaluation_results["avg_structural_validity_score"] = round(np.mean([r.get('validity_score', 0.0) for r in valid_dag_evals]), 4)
-            aggregated_evaluation_results["num_perfect_structural_validity"] = sum(1 for r in valid_dag_evals if r.get('validity_score') == 1.0)
+            aggregated_evaluation_results["avg_structural_validity_score"] = round(
+                np.mean([r.get('validity_score', 0.0) for r in valid_dag_evals]), 4)
+            aggregated_evaluation_results["num_perfect_structural_validity"] = sum(
+                1 for r in valid_dag_evals if r.get('validity_score') == 1.0)
             # Path statistics also rely on being a DAG
-            aggregated_evaluation_results["avg_fraction_pis_connected"] = round(np.mean([r.get('fraction_pis_connected', 0.0) for r in valid_dag_evals]), 4)
-            aggregated_evaluation_results["avg_fraction_pos_connected"] = round(np.mean([r.get('fraction_pos_connected', 0.0) for r in valid_dag_evals]), 4)
-            aggregated_evaluation_results["avg_pis_reaching_po"] = round(np.mean([r.get('num_pis_reaching_po', 0) for r in valid_dag_evals]), 2)
-            aggregated_evaluation_results["avg_pos_reachable_from_pi"] = round(np.mean([r.get('num_pos_reachable_from_pi', 0) for r in valid_dag_evals]), 2)
+            aggregated_evaluation_results["avg_fraction_pis_connected"] = round(
+                np.mean([r.get('fraction_pis_connected', 0.0) for r in valid_dag_evals]), 4)
+            aggregated_evaluation_results["avg_fraction_pos_connected"] = round(
+                np.mean([r.get('fraction_pos_connected', 0.0) for r in valid_dag_evals]), 4)
+            aggregated_evaluation_results["avg_pis_reaching_po"] = round(
+                np.mean([r.get('num_pis_reaching_po', 0) for r in valid_dag_evals]), 2)
+            aggregated_evaluation_results["avg_pos_reachable_from_pi"] = round(
+                np.mean([r.get('num_pos_reachable_from_pi', 0) for r in valid_dag_evals]), 2)
             # Perfect SEADAG might only be meaningful if also a DAG
-            aggregated_evaluation_results["num_perfect_seadag_validity"] = sum(1 for r in valid_dag_evals if r.get('seadag_validity') == 1.0)
+            aggregated_evaluation_results["num_perfect_seadag_validity"] = sum(
+                1 for r in valid_dag_evals if r.get('seadag_validity') == 1.0)
         else:
             logger.warning("No valid DAGs found among successful evaluations to calculate DAG-dependent averages.")
             # Add placeholder keys if desired
@@ -621,104 +684,54 @@ def get_evaluation(
             # ... add placeholders for other DAG-dependent metrics ...
 
     else:
-         logger.warning("No evaluations completed without exceptions.")
-         # Add placeholder keys if desired
-         aggregated_evaluation_results["evaluated_dag_rate"] = 0.0
-         aggregated_evaluation_results["avg_structural_validity_score"] = 0.0
-         # ... add placeholders for other metrics ...
-
-    #
-    # # --- Comparison Metrics (MMD, Averages vs Test Set) ---
-    # # This part should remain unchanged as it seemed to be working
-    # if not test_graphs:
-    #     logger.warning("Test dataset is empty or failed to load. Skipping comparison metrics.")
-    # elif not generated_graphs:
-    #     logger.warning("Generated graph list is empty. Skipping comparison metrics.")
-    # else:
-    #     logger.info(
-    #         f"Calculating comparison metrics between {len(generated_graphs)} generated and {len(test_graphs)} test graphs...")
-    #     comp_metric_start_time = time.time()
-    #     try:
-    #         # Define MMD functions
-    #         mmd_stanford_fn_is_hist = lambda x, y: compute_mmd(x, y, kernel=gaussian_emd, is_hist=True, sigma=1.0)
-    #         mmd_stanford_fn_is_hist_clustering_settings = lambda x, y: compute_mmd(x, y, kernel=gaussian_emd, is_hist=True, sigma=1.0/10, distance_scaling=100.0)
-    #         mmd_stanford_fn_orbit_settings = lambda x, y: compute_mmd(x, y, kernel=gaussian, is_hist=False, sigma=30.0) # Requires Orca
-    #
-    #         # Calculate MMD Metrics (keep try-except blocks)
-    #         try:
-    #             mmd_deg = compare_graphs_mmd_degree(generated_graphs, test_graphs, mmd_stanford_fn_is_hist)
-    #             aggregated_evaluation_results["mmd_degree_distribution"] = round(mmd_deg, 6)
-    #         except Exception as e: logger.error(f"Error calculating MMD Degree: {e}", exc_info=False)
-    #         try:
-    #             mmd_clus = compare_graphs_mmd_clustering_coeff(generated_graphs, test_graphs, mmd_stanford_fn_is_hist_clustering_settings)
-    #             aggregated_evaluation_results["mmd_clustering_coeff"] = round(mmd_clus, 6)
-    #         except Exception as e: logger.error(f"Error calculating MMD Clustering Coeff: {e}", exc_info=False)
-    #         try:
-    #             mmd_orbit = compare_graphs_mmd_orbit_stats(generated_graphs, test_graphs, mmd_stanford_fn_orbit_settings)
-    #             aggregated_evaluation_results["mmd_orbit_stats"] = round(mmd_orbit, 6)
-    #         except FileNotFoundError: logger.error("Orca executable not found. Skipping MMD Orbit Stats.")
-    #         except Exception as e: logger.error(f"Error calculating MMD Orbit Stats: {e}", exc_info=False)
-    #
-    #         # Calculate Average Metrics (keep helper and calls)
-    #         def calculate_avg_metric(graph_list, metric_func, metric_name):
-    #             # ... (keep implementation from previous versions) ...
-    #             values = []
-    #             for g_idx, g in enumerate(graph_list):
-    #                  if not isinstance(g, nx.Graph) or g.number_of_nodes() == 0: continue
-    #                  try:
-    #                      metric_val = metric_func(g)
-    #                      if isinstance(metric_val, dict):
-    #                          dict_vals = list(metric_val.values())
-    #                          if dict_vals: values.append(statistics.mean(dict_vals))
-    #                      else: values.append(metric_val)
-    #                  except Exception as e: logger.warning(f"Could not calculate {metric_name} for graph index {g_idx}: {e}")
-    #             return round(statistics.mean(values), 4) if values else 0.0
-    #
-    #         from graph_metrics import average_degree # Ensure import
-    #         aggregated_evaluation_results["avg_degree_gen"] = calculate_avg_metric(generated_graphs, average_degree, "Avg Degree (Gen)")
-    #         aggregated_evaluation_results["avg_clustering_coeff_gen"] = calculate_avg_metric(generated_graphs, nx.average_clustering, "Avg Clustering (Gen)")
-    #         aggregated_evaluation_results["avg_density_gen"] = calculate_avg_metric(generated_graphs, nx.density, "Density (Gen)")
-    #         aggregated_evaluation_results["avg_transitivity_gen"] = calculate_avg_metric(generated_graphs, nx.transitivity, "Transitivity (Gen)")
-    #         aggregated_evaluation_results["avg_degree_test"] = calculate_avg_metric(test_graphs, average_degree, "Avg Degree (Test)")
-    #         aggregated_evaluation_results["avg_clustering_coeff_test"] = calculate_avg_metric(test_graphs, nx.average_clustering, "Avg Clustering (Test)")
-    #         aggregated_evaluation_results["avg_density_test"] = calculate_avg_metric(test_graphs, nx.density, "Density (Test)")
-    #         aggregated_evaluation_results["avg_transitivity_test"] = calculate_avg_metric(test_graphs, nx.transitivity, "Transitivity (Test)")
-    #
-    #         comp_metric_time = time.time() - comp_metric_start_time
-    #         logger.info(f"Comparison metrics calculated in {comp_metric_time:.2f} seconds.")
-    #
-    #     except Exception as e:
-    #         logger.error(f"General error during comparison metric calculation: {e}", exc_info=True)
-    # # --- END: Comparison Metrics ---
+        logger.warning("No evaluations completed without exceptions.")
+        # Add placeholder keys if desired
+        aggregated_evaluation_results["evaluated_dag_rate"] = 0.0
+        aggregated_evaluation_results["avg_structural_validity_score"] = 0.0
+        # ... add placeholders for other metrics ...
 
     # Log summary (Combined)
     logger.info("--- Aggregated Evaluation Summary (Structural & Comparison) ---")
-    for key in sorted(aggregated_evaluation_results.keys()): # Sort for consistency
+    for key in sorted(aggregated_evaluation_results.keys()):  # Sort for consistency
         value = aggregated_evaluation_results[key]
-        if isinstance(value, float): logger.info(f"  {key}: {value:.4f}")
-        else: logger.info(f"  {key}: {value}")
+        if isinstance(value, float):
+            logger.info(f"  {key}: {value:.4f}")
+        else:
+            logger.info(f"  {key}: {value}")
     logger.info("---------------------------------------------------------------")
 
     # Return the aggregated dictionary and the list of detailed per-graph results
     return aggregated_evaluation_results, evaluation_results_list
 
 
-
-
 def aig_control(
-    model_checkpoint_path: str,
-    output_dir: str,
-    gen_params: Dict[str, Any],
-    graph_file: str, # <<< Correct placement
-    num_graphs_to_generate: int = 500,
-    evaluate: bool = True,
-    visualize: bool = True,
-    num_graphs_to_visualize: int = 5,
-num_test_graphs: Optional[int] = None # <<< ADD THIS LINE
+        model_checkpoint_path: str,
+        output_dir: str,
+        gen_params: Dict[str, Any],
+        graph_file: str,
+        num_graphs_to_generate: int = 500,
+        evaluate: bool = True,
+        visualize: bool = True,
+        num_graphs_to_visualize: int = 5,
+        num_test_graphs: Optional[int] = None
 ) -> Dict[str, Any]:
     """
     Main control function to load model, generate, evaluate, and visualize AIGs.
-    Orchestrates calls to helper functions.
+    Orchestrates calls to helper functions. Always removes isolated nodes during evaluation.
+
+    Args:
+        model_checkpoint_path: Path to model checkpoint
+        output_dir: Directory to save results
+        gen_params: Generation parameters dictionary
+        graph_file: Path to the graph dataset file
+        num_graphs_to_generate: Number of graphs to generate
+        evaluate: Whether to evaluate the generated graphs
+        visualize: Whether to visualize the generated graphs
+        num_graphs_to_visualize: Number of graphs to visualize
+        num_test_graphs: Number of test graphs to use (if None, use all)
+
+    Returns:
+        Dictionary of aggregated results
     """
     start_time = time.time()
     os.makedirs(output_dir, exist_ok=True)
@@ -727,10 +740,11 @@ num_test_graphs: Optional[int] = None # <<< ADD THIS LINE
         os.makedirs(viz_dir, exist_ok=True)
 
     logger.info(f"Starting AIG control process. Output dir: {output_dir}")
-    logger.info(f"Graph file: {graph_file}") # Log the graph file being used
+    logger.info(f"Graph file: {graph_file}")
     logger.info(f"Requested Generations: {num_graphs_to_generate}, Evaluate: {'Yes' if evaluate else 'No'}, "
                 f"Visualize: {'Yes' if visualize else 'No'}, Num Visualize: {num_graphs_to_visualize if visualize else 'N/A'}")
     logger.info(f"Base Generation Parameters: {gen_params}")
+    logger.info("Isolated nodes will be removed before evaluation")
 
     # --- Initialize Aggregated Results ---
     aggregated_results: Dict[str, Any] = {
@@ -746,80 +760,29 @@ num_test_graphs: Optional[int] = None # <<< ADD THIS LINE
 
     # 1. Load Model
     logger.info(f"Loading model from {model_checkpoint_path}...")
-    config = {} # Initialize config dict
+    config = {}  # Initialize config dict
     try:
         models_tuple = load_model_from_config(model_checkpoint_path)
         logger.info("Model loaded successfully.")
         # Try to get config from loaded state for dataset params
         try:
-             state = torch.load(model_checkpoint_path, map_location='cpu')
-             config = state.get('config', {})
-             state = None # Free memory
+            state = torch.load(model_checkpoint_path, map_location='cpu')
+            config = state.get('config', {})
+            state = None  # Free memory
         except Exception as config_e:
-             logger.warning(f"Could not load config from checkpoint for dataset parameters: {config_e}")
-             config = {} # Default if config loading fails
+            logger.warning(f"Could not load config from checkpoint for dataset parameters: {config_e}")
+            config = {}  # Default if config loading fails
 
     except FileNotFoundError:
-         logger.error(f"Model checkpoint not found: {model_checkpoint_path}")
-         aggregated_results["error"] = "Model checkpoint not found."
-         # Optionally save partial results before returning
-         # save_results_json(aggregated_results, output_dir, "aig_summary.json") # Example helper
-         return aggregated_results # Exit early
+        logger.error(f"Model checkpoint not found: {model_checkpoint_path}")
+        aggregated_results["error"] = "Model checkpoint not found."
+        return aggregated_results  # Exit early
     except Exception as e:
         logger.error(f"Failed to load model: {e}", exc_info=True)
         aggregated_results["error"] = f"Model loading failed: {e}"
-        # save_results_json(aggregated_results, output_dir, "aig_summary.json") # Example helper
-        return aggregated_results # Exit early
+        return aggregated_results  # Exit early
 
-
-    # # 2. Load Test Dataset (if evaluating)
-    # test_graphs = []
-    # if evaluate:
-    #     try:
-    #         logger.info(f"Loading test dataset from: {graph_file}")
-    #         # Use train_split from the loaded config if possible, else default
-    #         train_split_from_config = config.get('data', {}).get('train_split', 0.9) # Default 0.9
-    #
-    #         test_dataset = AIGDataset(
-    #             graph_file=graph_file,
-    #             training=False, # Load the test split
-    #             train_split=train_split_from_config,
-    #             # Add other relevant AIGDataset params if needed (e.g., max_graphs from config?)
-    #             # max_graphs=config.get('data', {}).get('max_graphs'), # Example
-    #         )
-    #         # Retrieve the actual graph objects for the test split
-    #         if hasattr(test_dataset, 'graphs') and test_dataset.graphs is not None:
-    #              test_graphs = [g for g in test_dataset.graphs if isinstance(g, nx.DiGraph)] # Ensure they are graphs
-    #              if num_test_graphs is not None and 0 < num_test_graphs < len(test_graphs):
-    #                  logger.info(f"Randomly sampling {num_test_graphs} graphs from the test set for evaluation...")
-    #                  try:
-    #                      test_graphs = random.sample(test_graphs, num_test_graphs)
-    #                      logger.info(f"Using {len(test_graphs)} sampled test graphs.")
-    #                  except ValueError as e:
-    #                      logger.error(f"Error during random sampling: {e}. Using full test set.")
-    #              elif num_test_graphs is not None:
-    #                  logger.warning(
-    #                      f"--num-test-graphs value ({num_test_graphs}) is invalid or >= total test graphs. Using all {len(test_graphs)} test graphs.")
-    #              else:
-    #                  logger.info(f"Using all {len(test_graphs)} loaded test graphs for evaluation.")
-    #         else:
-    #              test_graphs = []
-    #
-    #         logger.info(f"Loaded {len(test_graphs)} graphs for test set.")
-    #         if not test_graphs:
-    #              logger.warning("Test dataset is empty. Comparison metrics will be skipped.")
-    #              # Decide if this should be a fatal error or just skip comparisons
-    #              # evaluate = False # Option: Disable evaluation if test set empty
-    #
-    #     except FileNotFoundError:
-    #         logger.error(f"Test dataset file not found: {graph_file}. Comparison metrics will be skipped.")
-    #         test_graphs = []
-    #     except Exception as e:
-    #         logger.error(f"Error loading test dataset: {e}. Comparison metrics will be skipped.", exc_info=True)
-    #         test_graphs = []
-
-
-    # 3. Generate Graphs
+    # 2. Generate Graphs
     generated_graphs, num_successfully_generated = get_generation(
         num_graphs_to_generate=num_graphs_to_generate,
         models_tuple=models_tuple,
@@ -836,70 +799,88 @@ num_test_graphs: Optional[int] = None # <<< ADD THIS LINE
         try:
             # Use a helper or inline the save logic
             def convert_numpy(obj):
-                if isinstance(obj, np.integer): return int(obj)
-                elif isinstance(obj, np.floating): return float(obj)
-                elif isinstance(obj, np.ndarray): return obj.tolist()
+                if isinstance(obj, np.integer):
+                    return int(obj)
+                elif isinstance(obj, np.floating):
+                    return float(obj)
+                elif isinstance(obj, np.ndarray):
+                    return obj.tolist()
                 return obj
+
             serializable_results = json.loads(json.dumps(aggregated_results, default=convert_numpy))
-            with open(results_file, "w") as f: json.dump(serializable_results, f, indent=2)
+            with open(results_file, "w") as f:
+                json.dump(serializable_results, f, indent=2)
             logger.info(f"Partial results saved to {results_file}")
-        except Exception as e: logger.error(f"Failed to save partial results file: {e}")
+        except Exception as e:
+            logger.error(f"Failed to save partial results file: {e}")
         return aggregated_results
     # --- End Early Exit ---
 
-    # 4. Evaluate Generated Graphs (if requested)
-    aggregated_evaluation_results = {}
-    evaluation_details_list = [] # Keep this if you want detailed per-graph results later
+    # 3. Evaluate Generated Graphs (if requested)
     aggregated_evaluation_results = {}
     evaluation_details_list = []
-    if evaluate:  # Check if evaluation is enabled (via args.evaluate)
+    if evaluate:
         logger.info(
             f"Evaluation flag is set, preparing to evaluate all {num_successfully_generated} generated graphs structurally.")
-        # <<< CHANGE HERE: Pass num_successfully_generated as the count to evaluate >>>
+
         aggregated_evaluation_results, evaluation_details_list = get_evaluation(
             generated_graphs=generated_graphs,
-            #test_graphs=test_graphs,
-            # Use the actual number generated for structural evaluation count
-            num_graphs_to_evaluate=num_successfully_generated,  # <<< Use this value
+            num_graphs_to_evaluate=num_successfully_generated,
             num_successfully_generated=num_successfully_generated
         )
-        # <<< END CHANGE >>>
 
         # Merge evaluation results into main results dict
         aggregated_results.update(aggregated_evaluation_results)
-        # Optionally add the detailed list if saving it
-        # aggregated_results["evaluation_details_per_graph"] = evaluation_details_list
     else:
         logger.info("Evaluation step skipped as per request.")
-        # You might want to explicitly add keys indicating skipped eval to results
         aggregated_results["num_graphs_structurally_evaluated"] = 0
         aggregated_results["num_structural_evaluation_exceptions"] = 0
 
-
-    # 5. Visualize Generated Graphs (if requested)
+    # 4. Visualize Generated Graphs (if requested)
     num_visualized = 0
     if visualize:
+        # If we evaluated them, use the processed graphs (with isolated nodes removed) for visualization
+        if evaluate:
+            # The graphs should have been updated in-place during evaluation
+            # so we'll use the same graph objects which now have isolated nodes removed
+            graphs_to_visualize = generated_graphs
+            logger.info("Using processed graphs (with isolated nodes removed) for visualization")
+        else:
+            # If no evaluation was done, we need to remove isolated nodes here for visualization
+            logger.info("Removing isolated nodes from graphs before visualization...")
+            graphs_to_visualize = []
+            for g in generated_graphs:
+                if isinstance(g, nx.DiGraph):
+                    # Remove isolated nodes before visualization
+                    processed_g = remove_isolated_nodes(g)
+                    graphs_to_visualize.append(processed_g)
+                else:
+                    graphs_to_visualize.append(g)
+
         num_visualized = get_visualization(
-            generated_graphs=generated_graphs,
+            generated_graphs=graphs_to_visualize,
             num_graphs_to_visualize=num_graphs_to_visualize,
             viz_dir=viz_dir,
             num_successfully_generated=num_successfully_generated
         )
         aggregated_results["num_graphs_visualized"] = num_visualized
     else:
-         logger.info("Visualization step skipped as per request.")
-         aggregated_results["num_graphs_visualized"] = 0
+        logger.info("Visualization step skipped as per request.")
+        aggregated_results["num_graphs_visualized"] = 0
 
-
-    # 6. Save Final Aggregated Results
+    # 5. Save Final Aggregated Results
     results_file = os.path.join(output_dir, "aig_summary.json")
     try:
         # Convert numpy types for JSON serialization
         def convert_numpy(obj):
-            if isinstance(obj, np.integer): return int(obj)
-            elif isinstance(obj, np.floating): return float(obj)
-            elif isinstance(obj, np.ndarray): return obj.tolist()
+            if isinstance(obj, np.integer):
+                return int(obj)
+            elif isinstance(obj, np.floating):
+                return float(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
             return obj
+
         serializable_results = json.loads(json.dumps(aggregated_results, default=convert_numpy))
 
         with open(results_file, "w") as f:
@@ -908,7 +889,7 @@ num_test_graphs: Optional[int] = None # <<< ADD THIS LINE
     except Exception as e:
         logger.error(f"Failed to save results JSON file: {e}")
 
-    # 7. Return Results
+    # 6. Return Results
     total_time = time.time() - start_time
     logger.info(f"AIG control process finished in {total_time:.2f} seconds.")
     aggregated_results['total_time_seconds'] = round(total_time, 2)
@@ -916,6 +897,7 @@ num_test_graphs: Optional[int] = None # <<< ADD THIS LINE
     return aggregated_results
 
 # --- Main Execution Guard (Update to use new evaluate argument) ---
+# --- Main Execution Guard ---
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate, Evaluate, and Visualize AIGs using a trained model.")
 
@@ -924,18 +906,16 @@ if __name__ == "__main__":
                         help="Path to the trained model checkpoint (.pth file).")
     parser.add_argument("--output-dir", type=str, required=True,
                         help="Directory to save generated graphs, evaluations, and visualizations.")
-    # --- ENSURE graph-file argument is correctly defined ---
-    # It was graph_file in the previous response, ensure consistency or fix here
-    parser.add_argument("--graph-file", type=str, default="./dataset/final_data.pkl", # Changed from graph_file
+    parser.add_argument("--graph-file", type=str, default="./dataset/final_data.pkl",
                         help="Path to the dataset pickle file (e.g., ./dataset/final_data.pkl)")
 
     # Generation and Evaluation Control
-    parser.add_argument("--num-generate", type=int, default=500, # Renamed from num-graphs
+    parser.add_argument("--num-generate", type=int, default=500,
                         help="Number of AIGs to attempt generating.")
     parser.add_argument("--num-test-graphs", type=int, default=500,
                         help="Number of test graphs to randomly sample for evaluation (default: use all).")
-    parser.add_argument("--evaluate", action='store_true', # Added flag
-                        help="Evaluate structural and comparison metrics for generated graphs.") # Updated help text
+    parser.add_argument("--evaluate", action='store_true',
+                        help="Evaluate structural and comparison metrics for generated graphs.")
 
     # Visualization Control
     parser.add_argument("--visualize", action='store_true',
@@ -947,31 +927,29 @@ if __name__ == "__main__":
 
     # --- Base Generation Config Dictionary ---
     GENERATION_CONFIG = {
-        'max_nodes': 80, # Example, adjust as needed
-        'min_nodes': 8,   # Example
-        'patience': 16,   # Example
+        'max_nodes': 80,
+        'min_nodes': 8,
+        'patience': 16,
         'temperature': 1.2,
         'top_k': 0,
         'top_p': 0.0,
         'edge_sample_attempts': 3,
     }
-    # You could override GENERATION_CONFIG with args here if needed
 
     logger.info("Starting AIG generation/evaluation script with command line arguments...")
 
-    # --- CORRECTED Call to aig_control ---
+    # --- Call to aig_control (simplified) ---
     final_results = aig_control(
         model_checkpoint_path=args.model_path,
         output_dir=args.output_dir,
         gen_params=GENERATION_CONFIG,
-        graph_file=args.graph_file,           # <<< Pass args.graph_file here
+        graph_file=args.graph_file,
         num_graphs_to_generate=args.num_generate,
-        evaluate=args.evaluate,                  # Pass the evaluate flag
+        evaluate=args.evaluate,
         visualize=args.visualize,
         num_graphs_to_visualize=args.num_visualize,
         num_test_graphs=args.num_test_graphs
     )
-    # --- End Correction ---
 
     logger.info("--- Final Control Function Summary ---")
     # Use default=str to handle potential non-serializable types like numpy numbers

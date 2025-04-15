@@ -1,233 +1,488 @@
 #!/usr/bin/env python3
 """
-AIG File Processor
+AIG Graph Dataset Statistics Analyzer
 
-This script processes all .aig files in a specified directory by:
-1. Removing some output signals
-2. Cleaning up dangling nodes
-3. Ensuring each AIG has exactly 2 primary outputs (POs)
-4. Writing the modified AIG back to the original file
+This script loads a pickle file containing graph representations of AIGs and
+analyzes the dataset to provide detailed statistics, including node types,
+edge types, and structural properties.
 """
 
 import os
-import random
-from typing import List, Dict, Optional, Set
-from aigverse import Aig, read_aiger_into_aig, write_aiger
+import pickle
+import networkx as nx
+import numpy as np
+from typing import List, Dict, Any, Tuple
+from collections import Counter
+import time
+import argparse
+import matplotlib.pyplot as plt
+
+# =============================================================================
+# CONFIGURATION CONSTANTS
+# =============================================================================
+
+# Node and edge type encodings (must match what was used to create the dataset)
+NODE_TYPE_ENCODING = {
+    "0": [0, 0, 0],
+    "PI": [1, 0, 0],
+    "AND": [0, 1, 0],
+    "PO": [0, 0, 1]
+}
+
+EDGE_LABEL_ENCODING = {
+    "INV": [1, 0],  # Inverted edge
+    "REG": [0, 1]  # Regular edge
+}
+
+# Reverse mappings for easier identification
+NODE_TYPE_MAPPING = {tuple(v): k for k, v in NODE_TYPE_ENCODING.items()}
+EDGE_TYPE_MAPPING = {tuple(v): k for k, v in EDGE_LABEL_ENCODING.items()}
 
 
-def topological_sort(aig: Aig) -> List[int]:
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+def load_graphs(pickle_file: str) -> List[nx.DiGraph]:
     """
-    Perform a topological sort of the nodes in the AIG.
+    Load graphs from a pickle file.
 
     Args:
-        aig: The AIG network
+        pickle_file: Path to the pickle file containing the graphs
 
     Returns:
-        A list of node indices in topological order
+        List of NetworkX DiGraph objects
     """
-    visited: Set[int] = set()
-    topo_order: List[int] = []
+    start_time = time.time()
+    print(f"Loading graphs from {pickle_file}...")
 
-    def visit(node_idx: int) -> None:
-        if node_idx in visited:
-            return
+    with open(pickle_file, "rb") as f:
+        graphs = pickle.load(f)
 
-        visited.add(node_idx)
-        node = aig.index_to_node(node_idx)
+    load_time = time.time() - start_time
+    print(f"Loaded {len(graphs)} graphs in {load_time:.2f} seconds")
 
-        # Visit fanins first
-        if not aig.is_constant(node) and not aig.is_pi(node):
-            for fanin in aig.fanins(node):
-                fanin_node = aig.get_node(fanin)
-                fanin_idx = int(fanin_node)
-                visit(fanin_idx)
-
-        topo_order.append(node_idx)
-
-    # Visit all nodes
-    for node in aig.nodes():
-        node_idx = int(node)
-        visit(node_idx)
-
-    return topo_order
+    return graphs
 
 
-def process_aig_file(file_path: str) -> None:
+def get_node_type(node_attrs: Dict) -> str:
     """
-    Process a single AIG file according to the requirements.
+    Determine node type from its attributes.
 
     Args:
-        file_path: Path to the .aig file to process
+        node_attrs: Node attributes dictionary
 
     Returns:
-        None. The original file is replaced with the modified AIG.
+        String identifier of the node type
     """
-    try:
-        # Read the original AIG file
-        original_aig = read_aiger_into_aig(file_path)
-        print(f"Processing {file_path}: Original AIG has {original_aig.num_pos()} POs")
+    if "type" not in node_attrs:
+        return "UNKNOWN"
 
-        # Create a new empty AIG
-        new_aig = Aig()
+    node_type = tuple(node_attrs["type"])
+    return NODE_TYPE_MAPPING.get(node_type, "UNKNOWN")
 
-        # Map to track correspondence between original nodes and new nodes
-        node_map: Dict[int, int] = {}
 
-        # Add constant node (typically at index 0)
-        node_map[0] = 0
+def get_edge_type(edge_attrs: Dict) -> str:
+    """
+    Determine edge type from its attributes.
 
-        # Create primary inputs in the new AIG
-        pi_signals = []
-        for i, pi in enumerate(original_aig.pis()):
-            new_pi = new_aig.create_pi()
-            pi_signals.append(new_pi)
-            node_map[int(pi)] = int(new_aig.get_node(new_pi))
+    Args:
+        edge_attrs: Edge attributes dictionary
 
-        # Get topologically sorted nodes to ensure we process nodes in the correct order
-        topo_order = topological_sort(original_aig)
+    Returns:
+        String identifier of the edge type
+    """
+    if "type" not in edge_attrs:
+        return "UNKNOWN"
 
-        # Process nodes in topological order
-        for node_idx in topo_order:
-            node = original_aig.index_to_node(node_idx)
+    # Convert numpy array to tuple for dictionary lookup
+    if hasattr(edge_attrs["type"], "tolist"):
+        edge_type = tuple(edge_attrs["type"].tolist())
+    else:
+        edge_type = tuple(edge_attrs["type"])
 
-            # Skip constants and PIs (already handled)
-            if original_aig.is_constant(node) or original_aig.is_pi(node):
-                continue
+    return EDGE_TYPE_MAPPING.get(edge_type, "UNKNOWN")
 
-            # Process AND gates
-            if original_aig.is_and(node):
-                fanins = original_aig.fanins(node)
 
-                if len(fanins) != 2:
-                    print(f"Warning: AND gate with {len(fanins)} fanins encountered. Skipping.")
-                    continue
+def collect_node_type_stats(graphs: List[nx.DiGraph]) -> Dict[str, List[int]]:
+    """
+    Collect statistics about node types for each graph.
 
-                new_fanins = []
-                all_fanins_found = True
+    Args:
+        graphs: List of NetworkX DiGraph objects
 
-                for fanin in fanins:
-                    fanin_node = original_aig.get_node(fanin)
-                    fanin_idx = int(fanin_node)
+    Returns:
+        Dictionary containing counts of each node type per graph
+    """
+    stats = {
+        "0_nodes": [],
+        "PI_nodes": [],
+        "AND_nodes": [],
+        "PO_nodes": [],
+        "UNKNOWN_nodes": []
+    }
 
-                    if fanin_idx in node_map:
-                        new_node = new_aig.index_to_node(node_map[fanin_idx])
-                        new_signal = new_aig.make_signal(new_node)
+    for G in graphs:
+        type_counts = {"0": 0, "PI": 0, "AND": 0, "PO": 0, "UNKNOWN": 0}
 
-                        # Handle complement
-                        if original_aig.is_complemented(fanin):
-                            new_signal = ~new_signal
+        for _, attrs in G.nodes(data=True):
+            node_type = get_node_type(attrs)
+            type_counts[node_type] += 1
 
-                        new_fanins.append(new_signal)
-                    else:
-                        print(f"Error: Fanin node {fanin_idx} not found in node_map")
-                        all_fanins_found = False
-                        break
+        for node_type, count in type_counts.items():
+            stats[f"{node_type}_nodes"].append(count)
 
-                if all_fanins_found and len(new_fanins) == 2:
-                    new_signal = new_aig.create_and(new_fanins[0], new_fanins[1])
-                    node_map[node_idx] = int(new_aig.get_node(new_signal))
+    return stats
 
-        # Handle primary outputs
-        original_pos = []
-        for i in range(original_aig.num_pos()):
-            original_pos.append(original_aig.po_at(i))
 
-        # Decide how many POs to add based on requirements
-        pos_to_add: List[Optional[int]] = []
+def collect_edge_type_stats(graphs: List[nx.DiGraph]) -> Dict[str, List[int]]:
+    """
+    Collect statistics about edge types for each graph.
 
-        if original_aig.num_pos() == 2:
-            # Keep both original POs
-            pos_to_add = list(range(2))
-        elif original_aig.num_pos() > 2:
-            # Randomly select 2 POs
-            pos_to_add = random.sample(range(original_aig.num_pos()), 2)
-        else:  # original_aig.num_pos() < 2
-            # Add all original POs
-            pos_to_add = list(range(original_aig.num_pos()))
-            # Add random nodes as POs until we have 2
-            while len(pos_to_add) < 2:
-                pos_to_add.append(None)  # Placeholder for a random node
+    Args:
+        graphs: List of NetworkX DiGraph objects
 
-        # Add the selected POs to the new AIG
-        added_pos = 0
-        for po_idx in pos_to_add:
-            if po_idx is not None:
-                # Use an original PO
-                original_po = original_pos[po_idx]
-                original_node = original_aig.get_node(original_po)
-                idx = int(original_node)
+    Returns:
+        Dictionary containing counts of each edge type per graph
+    """
+    stats = {
+        "INV_edges": [],
+        "REG_edges": [],
+        "UNKNOWN_edges": []
+    }
 
-                if idx in node_map:
-                    new_node = new_aig.index_to_node(node_map[idx])
-                    new_signal = new_aig.make_signal(new_node)
-                    if original_aig.is_complemented(original_po):
-                        new_signal = ~new_signal
-                    new_aig.create_po(new_signal)
-                    added_pos += 1
+    for G in graphs:
+        type_counts = {"INV": 0, "REG": 0, "UNKNOWN": 0}
+
+        for _, _, attrs in G.edges(data=True):
+            edge_type = get_edge_type(attrs)
+            type_counts[edge_type] += 1
+
+        for edge_type, count in type_counts.items():
+            stats[f"{edge_type}_edges"].append(count)
+
+    return stats
+
+
+def collect_graph_stats(graphs: List[nx.DiGraph]) -> Dict[str, Any]:
+    """
+    Collect comprehensive statistics about the graph dataset.
+
+    Args:
+        graphs: List of NetworkX DiGraph objects
+
+    Returns:
+        Dictionary containing various statistics about the graphs
+    """
+    # Basic graph statistics
+    stats = {
+        "num_graphs": len(graphs),
+        "input_sizes": [],
+        "output_sizes": [],
+        "node_counts": [],
+        "edge_counts": [],
+        "graph_depths": [],
+        "graph_density": [],
+        "avg_degree": [],
+        "edge_to_node_ratio": []
+    }
+
+    # Collect node type statistics
+    node_type_stats = collect_node_type_stats(graphs)
+    stats.update(node_type_stats)
+
+    # Collect edge type statistics
+    edge_type_stats = collect_edge_type_stats(graphs)
+    stats.update(edge_type_stats)
+
+    for G in graphs:
+        # Basic properties
+        stats["input_sizes"].append(G.graph.get("inputs", 0))
+        stats["output_sizes"].append(G.graph.get("outputs", 0))
+        stats["node_counts"].append(G.number_of_nodes())
+        stats["edge_counts"].append(G.number_of_edges())
+
+        # Graph density (ratio of actual edges to possible edges)
+        n = G.number_of_nodes()
+        possible_edges = n * (n - 1)  # Directed graph
+        if possible_edges > 0:
+            density = G.number_of_edges() / possible_edges
+        else:
+            density = 0
+        stats["graph_density"].append(density)
+
+        # Average degree
+        if n > 0:
+            avg_degree = 2 * G.number_of_edges() / n  # For directed graph
+        else:
+            avg_degree = 0
+        stats["avg_degree"].append(avg_degree)
+
+        # Edge to node ratio
+        if n > 0:
+            edge_node_ratio = G.number_of_edges() / n
+        else:
+            edge_node_ratio = 0
+        stats["edge_to_node_ratio"].append(edge_node_ratio)
+
+        # Try to estimate graph depth (longest path)
+        try:
+            # Find source nodes (those with no predecessors)
+            sources = [n for n, d in G.in_degree() if d == 0]
+
+            # Find sink nodes (those with no successors)
+            sinks = [n for n, d in G.out_degree() if d == 0]
+
+            # If we have both sources and sinks, calculate longest path
+            if sources and sinks:
+                # For each source-sink pair, find the longest path
+                max_path_length = 0
+                for source in sources:
+                    for sink in sinks:
+                        try:
+                            # Try to find all simple paths
+                            paths = list(nx.all_simple_paths(G, source, sink))
+                            if paths:
+                                max_path_length = max(max_path_length, max(len(p) for p in paths))
+                        except nx.NetworkXNoPath:
+                            continue
+
+                # If we found any paths, record the depth
+                if max_path_length > 0:
+                    stats["graph_depths"].append(max_path_length - 1)  # Depth = edges, not nodes
                 else:
-                    # If we can't find the node, use a random PI instead
-                    print(f"Warning: PO node {idx} not found in node_map, using random PI instead")
-                    random_pi = random.choice(pi_signals)
-                    new_aig.create_po(random_pi)
-                    added_pos += 1
+                    stats["graph_depths"].append(0)
             else:
-                # Add a random PI as PO
-                random_pi = random.choice(pi_signals)
-                new_aig.create_po(random_pi)
-                added_pos += 1
+                stats["graph_depths"].append(0)
+        except Exception:
+            # If there's any issue calculating depth, just use 0
+            stats["graph_depths"].append(0)
 
-        # Clean up dangling nodes
-        new_aig.cleanup_dangling()
-
-        # Write the modified AIG back to the original file
-        write_aiger(new_aig, file_path)
-        print(f"Finished processing {file_path}: New AIG has {new_aig.num_pos()} POs")
-
-    except Exception as e:
-        print(f"Error processing {file_path}: {e}")
+    return stats
 
 
-def process_all_aig_files(directory: str) -> None:
+def print_stats_summary(stats: Dict[str, Any]) -> None:
     """
-    Process all .aig files in the specified directory.
+    Print a summary of graph statistics.
 
     Args:
-        directory: Path to the directory containing .aig files
-
-    Returns:
-        None
+        stats: Dictionary of graph statistics
     """
-    if not os.path.isdir(directory):
-        print(f"Error: {directory} is not a valid directory")
+
+    # Helper function to get statistics from a list
+    def get_stats(values):
+        if not values:
+            return {"min": 0, "max": 0, "avg": 0, "median": 0, "std": 0}
+        return {
+            "min": min(values),
+            "max": max(values),
+            "avg": np.mean(values),
+            "median": np.median(values),
+            "std": np.std(values)
+        }
+
+    # Print basic statistics
+    print("\n===== GRAPH DATASET STATISTICS =====")
+    print(f"Total graphs: {stats['num_graphs']}")
+
+    # Print node type statistics
+    print("\n----- NODE TYPE STATISTICS -----")
+    for node_type in ["0", "PI", "AND", "PO", "UNKNOWN"]:
+        key = f"{node_type}_nodes"
+        if key in stats:
+            node_stats = get_stats(stats[key])
+            print(f"\n{node_type} Nodes:")
+            print(f"  Count: {sum(stats[key])}")
+            print(f"  Min: {node_stats['min']}, Max: {node_stats['max']}")
+            print(f"  Avg: {node_stats['avg']:.2f}, Median: {node_stats['median']:.1f}")
+            print(f"  Std Dev: {node_stats['std']:.2f}")
+
+    # Print edge type statistics
+    print("\n----- EDGE TYPE STATISTICS -----")
+    for edge_type in ["INV", "REG", "UNKNOWN"]:
+        key = f"{edge_type}_edges"
+        if key in stats:
+            edge_stats = get_stats(stats[key])
+            print(f"\n{edge_type} Edges:")
+            print(f"  Count: {sum(stats[key])}")
+            print(f"  Min: {edge_stats['min']}, Max: {edge_stats['max']}")
+            print(f"  Avg: {edge_stats['avg']:.2f}, Median: {edge_stats['median']:.1f}")
+            print(f"  Std Dev: {edge_stats['std']:.2f}")
+
+    # Print structural statistics
+    print("\n----- STRUCTURAL STATISTICS -----")
+
+    input_stats = get_stats(stats["input_sizes"])
+    print("\nInput size distribution:")
+    print(f"  Min: {input_stats['min']}, Max: {input_stats['max']}")
+    print(f"  Avg: {input_stats['avg']:.2f}, Median: {input_stats['median']:.1f}")
+    print(f"  Std Dev: {input_stats['std']:.2f}")
+
+    output_stats = get_stats(stats["output_sizes"])
+    print("\nOutput size distribution:")
+    print(f"  Min: {output_stats['min']}, Max: {output_stats['max']}")
+    print(f"  Avg: {output_stats['avg']:.2f}, Median: {output_stats['median']:.1f}")
+    print(f"  Std Dev: {output_stats['std']:.2f}")
+
+    node_stats = get_stats(stats["node_counts"])
+    print("\nNode count distribution:")
+    print(f"  Min: {node_stats['min']}, Max: {node_stats['max']}")
+    print(f"  Avg: {node_stats['avg']:.2f}, Median: {node_stats['median']:.1f}")
+    print(f"  Std Dev: {node_stats['std']:.2f}")
+
+    edge_stats = get_stats(stats["edge_counts"])
+    print("\nEdge count distribution:")
+    print(f"  Min: {edge_stats['min']}, Max: {edge_stats['max']}")
+    print(f"  Avg: {edge_stats['avg']:.2f}, Median: {edge_stats['median']:.1f}")
+    print(f"  Std Dev: {edge_stats['std']:.2f}")
+
+    if stats["graph_depths"]:
+        depth_stats = get_stats(stats["graph_depths"])
+        print("\nGraph depth distribution:")
+        print(f"  Min: {depth_stats['min']}, Max: {depth_stats['max']}")
+        print(f"  Avg: {depth_stats['avg']:.2f}, Median: {depth_stats['median']:.1f}")
+        print(f"  Std Dev: {depth_stats['std']:.2f}")
+
+    density_stats = get_stats(stats["graph_density"])
+    print("\nGraph density distribution:")
+    print(f"  Min: {density_stats['min']:.4f}, Max: {density_stats['max']:.4f}")
+    print(f"  Avg: {density_stats['avg']:.4f}, Median: {density_stats['median']:.4f}")
+    print(f"  Std Dev: {density_stats['std']:.4f}")
+
+    degree_stats = get_stats(stats["avg_degree"])
+    print("\nAverage degree distribution:")
+    print(f"  Min: {degree_stats['min']:.2f}, Max: {degree_stats['max']:.2f}")
+    print(f"  Avg: {degree_stats['avg']:.2f}, Median: {degree_stats['median']:.2f}")
+    print(f"  Std Dev: {degree_stats['std']:.2f}")
+
+    ratio_stats = get_stats(stats["edge_to_node_ratio"])
+    print("\nEdge-to-Node ratio distribution:")
+    print(f"  Min: {ratio_stats['min']:.2f}, Max: {ratio_stats['max']:.2f}")
+    print(f"  Avg: {ratio_stats['avg']:.2f}, Median: {ratio_stats['median']:.2f}")
+    print(f"  Std Dev: {ratio_stats['std']:.2f}")
+
+
+def visualize_statistics(stats: Dict[str, Any], output_dir: str = None) -> None:
+    """
+    Generate visualizations of key statistics.
+
+    Args:
+        stats: Dictionary of graph statistics
+        output_dir: Directory to save visualization files (if None, just display)
+    """
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    plt.figure(figsize=(12, 8))
+
+    # 1. Node Type Distribution
+    node_types = ["0", "PI", "AND", "PO"]
+    avg_counts = [np.mean(stats[f"{t}_nodes"]) for t in node_types]
+
+    plt.subplot(2, 2, 1)
+    plt.bar(node_types, avg_counts)
+    plt.title("Average Node Type Distribution")
+    plt.ylabel("Average Count per Graph")
+
+    # 2. Edge Type Distribution
+    edge_types = ["REG", "INV"]
+    avg_edge_counts = [np.mean(stats[f"{t}_edges"]) for t in edge_types]
+
+    plt.subplot(2, 2, 2)
+    plt.bar(edge_types, avg_edge_counts)
+    plt.title("Average Edge Type Distribution")
+    plt.ylabel("Average Count per Graph")
+
+    # 3. Node Count Histogram
+    plt.subplot(2, 2, 3)
+    plt.hist(stats["node_counts"], bins=30, alpha=0.7)
+    plt.title("Node Count Distribution")
+    plt.xlabel("Number of Nodes")
+    plt.ylabel("Frequency")
+
+    # 4. Input/Output Size Distribution
+    plt.subplot(2, 2, 4)
+    plt.hist(stats["input_sizes"], bins=np.arange(max(stats["input_sizes"]) + 2) - 0.5,
+             alpha=0.6, label="Inputs")
+    plt.hist(stats["output_sizes"], bins=np.arange(max(stats["output_sizes"]) + 2) - 0.5,
+             alpha=0.6, label="Outputs")
+    plt.title("Input/Output Size Distribution")
+    plt.xlabel("Number of Inputs/Outputs")
+    plt.ylabel("Frequency")
+    plt.legend()
+
+    plt.tight_layout()
+
+    if output_dir:
+        plt.savefig(os.path.join(output_dir, "graph_stats_overview.png"), dpi=300)
+    else:
+        plt.show()
+
+    # Additional visualizations
+
+    # 5. Edge-to-Node Ratio
+    plt.figure(figsize=(10, 6))
+    plt.hist(stats["edge_to_node_ratio"], bins=30, alpha=0.7)
+    plt.title("Edge-to-Node Ratio Distribution")
+    plt.xlabel("Edge-to-Node Ratio")
+    plt.ylabel("Frequency")
+
+    if output_dir:
+        plt.savefig(os.path.join(output_dir, "edge_node_ratio.png"), dpi=300)
+    else:
+        plt.show()
+
+    # 6. Graph Depth Distribution
+    if stats["graph_depths"]:
+        plt.figure(figsize=(10, 6))
+        plt.hist(stats["graph_depths"], bins=np.arange(max(stats["graph_depths"]) + 2) - 0.5, alpha=0.7)
+        plt.title("Graph Depth Distribution")
+        plt.xlabel("Graph Depth (Longest Path)")
+        plt.ylabel("Frequency")
+
+        if output_dir:
+            plt.savefig(os.path.join(output_dir, "graph_depth.png"), dpi=300)
+        else:
+            plt.show()
+
+
+def main():
+    """Main function to analyze an existing AIG graph dataset."""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Analyze statistics of AIG graph dataset")
+    parser.add_argument("--pickle_file", type=str, default="final_data.pkl", help="Path to the pickle file containing graphs")
+    parser.add_argument("--visualize", action="store_true", help="Generate visualizations")
+    parser.add_argument("--output", type=str, default=None, help="Directory to save visualizations")
+    args = parser.parse_args()
+
+    # Check if input file exists
+    if not os.path.exists(args.pickle_file):
+        print(f"Error: Input file {args.pickle_file} does not exist.")
         return
 
-    # Get all .aig files in the directory
-    aig_files = [os.path.join(directory, f) for f in os.listdir(directory)
-                 if f.endswith('.aig') and os.path.isfile(os.path.join(directory, f))]
+    # Load the graphs
+    graphs = load_graphs(args.pickle_file)
 
-    if not aig_files:
-        print(f"No .aig files found in {directory}")
+    if not graphs:
+        print("No graphs found in the pickle file.")
         return
 
-    print(f"Found {len(aig_files)} .aig files in {directory}")
+    print(f"Starting analysis of {len(graphs)} graphs...")
+    start_time = time.time()
 
-    # Process each file
-    for file_path in aig_files:
-        process_aig_file(file_path)
+    # Collect comprehensive statistics
+    stats = collect_graph_stats(graphs)
 
+    # Print the statistics summary
+    print_stats_summary(stats)
 
-def main() -> None:
-    """
-    Main function to parse command line arguments and process AIG files.
-    """
-    import argparse
+    # Generate visualizations if requested
+    if args.visualize:
+        print("\nGenerating visualizations...")
+        visualize_statistics(stats, args.output)
 
-    # parser = argparse.ArgumentParser(description='Process AIG files to ensure each has exactly 2 POs.')
-    # parser.add_argument('directory', help='Directory containing .aig files to process')
-    #
-    # args = parser.parse_args()
-
-    process_all_aig_files("./aiger")
+    end_time = time.time()
+    print(f"\nAnalysis completed in {end_time - start_time:.2f} seconds")
 
 
 if __name__ == "__main__":
