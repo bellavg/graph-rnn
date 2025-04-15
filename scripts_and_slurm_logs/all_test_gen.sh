@@ -12,7 +12,7 @@ cd ..
 
 PYTHON_SCRIPT="src/get_aigs.py"      # Path to your main Python script
 BASE_CHECKPOINT_DIR="./checkpoints" # Directory containing model subdirectories
-BASE_OUTPUT_DIR="./evaluation_results_final" # Base directory for results
+BASE_OUTPUT_DIR="./evaluation_results_all" # Base directory for results
 GRAPH_DATA_FILE="./dataset/final_data.pkl" # Path to the graph dataset for evaluation
 
 # === PARAMETERS for get_aigs.py ===

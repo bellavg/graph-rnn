@@ -3,6 +3,8 @@ import numpy as np
 import torch
 import logging
 from typing import Optional, Tuple, Callable, Any, Dict, List
+from model import *
+import networkx as nx
 
 # --- Constants ---
 # Define necessary constants here if not imported from elsewhere
@@ -87,7 +89,7 @@ def sample_softmax(logits: torch.Tensor,
 
 # --- Edge Generation Helper Functions ---
 def rnn_edge_gen(edge_rnn,
-                 node_output_context, # <<< Argument now holds the node output sequence 'h'
+                 node_output_context,  # <<< Argument now holds the node output sequence 'h'
                  num_edges, adj_vec_size, sample_fun, mode,
                  temperature=1.0, top_k=0, top_p=0.0, attempts=None):
     """ Generates edge indices using an RNN edge model, using node output context (if model uses it). """
@@ -97,9 +99,11 @@ def rnn_edge_gen(edge_rnn,
         # node_output_context shape is likely [batch=1, seq=1, node_output_size=256]
         device = node_output_context.device
     except AttributeError as e:
-         logger.error(f"Could not get device from node_output_context (type: {type(node_output_context)}). Error: {e}")
-         try: device = next(edge_rnn.parameters()).device; logger.warning("Falling back to edge_rnn device.")
-         except Exception: raise RuntimeError("Cannot determine device for rnn_edge_gen.") from e
+        logger.error(f"Could not get device from node_output_context (type: {type(node_output_context)}). Error: {e}")
+        try:
+            device = next(edge_rnn.parameters()).device; logger.warning("Falling back to edge_rnn device.")
+        except Exception:
+            raise RuntimeError("Cannot determine device for rnn_edge_gen.") from e
 
     adj_indices_vec = torch.full((1, 1, adj_vec_size), EDGE_TYPES["NONE"], dtype=torch.long, device=device)
 
@@ -107,7 +111,69 @@ def rnn_edge_gen(edge_rnn,
     x = torch.zeros([1, 1, edge_rnn.edge_feature_len], device=device)
     x[0, 0, EDGE_TYPES["NONE"]] = 1
 
+    # Check if hidden state is set and initialize it if not
+    if hasattr(edge_rnn, 'hidden') and edge_rnn.hidden is None:
+        # Determine the model type and initialize accordingly
+        if isinstance(edge_rnn, EdgeLevelRNN) or isinstance(edge_rnn, EdgeLevelAttentionRNN):
+            # Initialize for RNN/GRU based models
+            batch_size = 1
+            num_layers = edge_rnn.num_layers
+            hidden_size = edge_rnn.hidden_size
+            edge_rnn.hidden = torch.zeros(num_layers, batch_size, hidden_size, device=device)
+            logger.debug(f"RNN edge_gen: Initialized edge model hidden state with zeros")
+        elif isinstance(edge_rnn, EdgeLevelLSTM) or isinstance(edge_rnn, EdgeLevelAttentionLSTM) or hasattr(edge_rnn,
+                                                                                                            'lstm'):
+            # Initialize for LSTM-based models
+            batch_size = 1
+            num_layers = edge_rnn.num_layers
+            hidden_size = edge_rnn.hidden_size
+            h_0 = torch.zeros(num_layers, batch_size, hidden_size, device=device)
+            c_0 = torch.zeros(num_layers, batch_size, hidden_size, device=device)
+            edge_rnn.hidden = (h_0, c_0)
+            logger.debug(f"RNN edge_gen: Initialized LSTM edge model hidden state with zeros")
+
+    # Try to use set_first_layer_hidden if available, but only if hidden is still None
+    if hasattr(edge_rnn, 'hidden') and edge_rnn.hidden is None and hasattr(edge_rnn, 'set_first_layer_hidden'):
+        try:
+            edge_rnn.set_first_layer_hidden(node_output_context)
+            logger.debug("RNN edge_gen: Set first layer hidden state from node output context")
+        except Exception as e:
+            logger.error(f"RNN edge_gen: Error setting first layer hidden: {e}")
+            # Fallback initialization
+            if isinstance(edge_rnn, EdgeLevelRNN) or isinstance(edge_rnn, EdgeLevelAttentionRNN):
+                batch_size = 1
+                num_layers = edge_rnn.num_layers
+                hidden_size = edge_rnn.hidden_size
+                edge_rnn.hidden = torch.zeros(num_layers, batch_size, hidden_size, device=device)
+            elif isinstance(edge_rnn, EdgeLevelLSTM) or isinstance(edge_rnn, EdgeLevelAttentionLSTM) or hasattr(
+                    edge_rnn, 'lstm'):
+                batch_size = 1
+                num_layers = edge_rnn.num_layers
+                hidden_size = edge_rnn.hidden_size
+                h_0 = torch.zeros(num_layers, batch_size, hidden_size, device=device)
+                c_0 = torch.zeros(num_layers, batch_size, hidden_size, device=device)
+                edge_rnn.hidden = (h_0, c_0)
+
     for i in range(num_edges):
+        # Double-check that hidden state is still set before each edge generation
+        if not hasattr(edge_rnn, 'hidden') or edge_rnn.hidden is None:
+            logger.warning(
+                f"RNN edge_gen: Hidden state not set before forward pass for edge {i}. Initializing with zeros.")
+            # Emergency initialization
+            if isinstance(edge_rnn, EdgeLevelRNN) or isinstance(edge_rnn, EdgeLevelAttentionRNN):
+                batch_size = 1
+                num_layers = edge_rnn.num_layers
+                hidden_size = edge_rnn.hidden_size
+                edge_rnn.hidden = torch.zeros(num_layers, batch_size, hidden_size, device=device)
+            elif isinstance(edge_rnn, EdgeLevelLSTM) or isinstance(edge_rnn, EdgeLevelAttentionLSTM) or hasattr(
+                    edge_rnn, 'lstm'):
+                batch_size = 1
+                num_layers = edge_rnn.num_layers
+                hidden_size = edge_rnn.hidden_size
+                h_0 = torch.zeros(num_layers, batch_size, hidden_size, device=device)
+                c_0 = torch.zeros(num_layers, batch_size, hidden_size, device=device)
+                edge_rnn.hidden = (h_0, c_0)
+
         # Ensure edge_rnn can return logits
         try:
             # Use return_logits=True if the model supports it
@@ -115,9 +181,27 @@ def rnn_edge_gen(edge_rnn,
         except TypeError:
             # Fallback if return_logits is not supported
             logger.debug("Edge RNN forward doesn't accept return_logits, assuming output is logits.")
-            raw_output = edge_rnn(x)
+            try:
+                raw_output = edge_rnn(x)
+            except Exception as e:
+                logger.error(f"Error during edge_rnn forward pass: {e}")
+                # If forward pass fails, try reinitializing hidden state and retry
+                if hasattr(edge_rnn, 'hidden'):
+                    if isinstance(edge_rnn, EdgeLevelRNN) or isinstance(edge_rnn, EdgeLevelAttentionRNN):
+                        edge_rnn.hidden = torch.zeros(edge_rnn.num_layers, 1, edge_rnn.hidden_size, device=device)
+                    elif isinstance(edge_rnn, EdgeLevelLSTM) or isinstance(edge_rnn, EdgeLevelAttentionLSTM) or hasattr(
+                            edge_rnn, 'lstm'):
+                        h_0 = torch.zeros(edge_rnn.num_layers, 1, edge_rnn.hidden_size, device=device)
+                        c_0 = torch.zeros(edge_rnn.num_layers, 1, edge_rnn.hidden_size, device=device)
+                        edge_rnn.hidden = (h_0, c_0)
+                    try:
+                        raw_output = edge_rnn(x, return_logits=True)
+                    except:
+                        raw_output = edge_rnn(x)
+                else:
+                    raise RuntimeError(f"Edge RNN forward failed and no hidden state to reinitialize: {e}")
 
-        logits = raw_output[0, 0, :] # Assuming [batch=1, seq=1, features] output
+        logits = raw_output[0, 0, :]  # Assuming [batch=1, seq=1, features] output
 
         sampled_class_index = sample_fun(logits, temperature=temperature, top_k=top_k, top_p=top_p)
         adj_indices_vec[0, 0, i] = sampled_class_index
@@ -133,6 +217,39 @@ def rnn_edge_gen(edge_rnn,
 
     return adj_indices_vec
 
+
+def remove_isolated_nodes(G: nx.DiGraph) -> nx.DiGraph:
+    """
+    Removes isolated nodes from a graph and returns a new graph without them.
+    An isolated node has both in_degree and out_degree equal to zero.
+
+    Args:
+        G: NetworkX DiGraph to process
+
+    Returns:
+        A new DiGraph with isolated nodes removed
+    """
+    if G is None or G.number_of_nodes() == 0:
+        return G
+
+    # Create a copy of the graph
+    G_copy = G.copy()
+
+    # Find isolated nodes (nodes with no incoming or outgoing edges)
+    isolated_nodes = list(nx.isolates(G_copy))
+
+    if isolated_nodes:
+        # Remove the isolated nodes
+        G_copy.remove_nodes_from(isolated_nodes)
+
+        # Log the removal
+        logger.info(f"Removed {len(isolated_nodes)} isolated nodes from graph: {isolated_nodes}")
+
+        # Store the removed nodes in the graph metadata for reference
+        G_copy.graph['_removed_isolated_nodes'] = isolated_nodes
+        G_copy.graph['_num_removed_isolated_nodes'] = len(isolated_nodes)
+
+    return G_copy
 
 def mlp_edge_gen(edge_mlp, h, num_edges, adj_vec_size, sample_fun, mode,
                  temperature=1.0, top_k=0, top_p=0.0, attempts=1):
@@ -222,23 +339,22 @@ def build_aig_matrices(list_adj_indices: List[np.ndarray], m: int, final_num_nod
     return adj_conn, adj_inv
 
 
-# --- Main Generation Function ---
 def generate(
-    node_model: torch.nn.Module,
-    edge_model: torch.nn.Module,
-    input_size: int, # This is 'm'
-    edge_gen_function: Callable,
-    mode: str,
-    edge_feature_len: int,
-    # Generation parameters
-    max_nodes: int,
-    min_nodes: int,
-    patience: int,
-    temperature: float = 1.0,
-    top_k: int = 0,
-    top_p: float = 0.0,
-    edge_sample_attempts: int = 1
-    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        node_model: torch.nn.Module,
+        edge_model: torch.nn.Module,
+        input_size: int,  # This is 'm'
+        edge_gen_function: Callable,
+        mode: str,
+        edge_feature_len: int,
+        # Generation parameters
+        max_nodes: int,
+        min_nodes: int,
+        patience: int,
+        temperature: float = 1.0,
+        top_k: int = 0,
+        top_p: float = 0.0,
+        edge_sample_attempts: int = 1
+) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
     """
     Generates a DAG (like an AIG) using the provided models and parameters.
     Uses dynamic stopping based on patience mechanism.
@@ -258,15 +374,15 @@ def generate(
     except StopIteration:
         logger.warning("Could not determine device from node_model parameters. Using CPU.")
         device = torch.device('cpu')
-        if hasattr(node_model, 'to'): node_model.to(device) # Try moving to CPU if empty
+        if hasattr(node_model, 'to'): node_model.to(device)  # Try moving to CPU if empty
 
     # Ensure edge model is on the same device
     try:
         if hasattr(edge_model, 'to'): edge_model.to(device)
     except Exception as e:
-         logger.error(f"Failed to move edge_model to device {device}: {e}")
-         # Decide if fatal or try to continue
-         # return None, None # Option to make it fatal
+        logger.error(f"Failed to move edge_model to device {device}: {e}")
+        # Decide if fatal or try to continue
+        # return None, None # Option to make it fatal
 
     sample_fun = sample_softmax
 
@@ -287,44 +403,105 @@ def generate(
     adj_vec_input[:, :, :, EDGE_TYPES["NONE"]] = 1
 
     list_adj_indices = []
-    # Reset hidden state if the method exists
+    # Reset hidden state for both models if the method exists
     if hasattr(node_model, 'reset_hidden') and callable(node_model.reset_hidden):
-         node_model.reset_hidden()
-         logger.debug("Node model hidden state reset.")
+        node_model.reset_hidden()
+        logger.debug("Node model hidden state reset.")
+
+    if hasattr(edge_model, 'reset_hidden') and callable(edge_model.reset_hidden):
+        edge_model.reset_hidden()
+        logger.debug("Edge model hidden state reset.")
 
     generated_nodes_count = 0
     no_edge_streak = 0
 
-    #logger.info(f"Starting generation: max_nodes={max_nodes}, min_nodes={min_nodes}, patience={patience}, temp={temperature}, top_k={top_k}, top_p={top_p}")
+    # Initialize edge model hidden state if still None after reset (or no reset method)
+    if hasattr(edge_model, 'hidden') and edge_model.hidden is None:
+        batch_size = 1
+
+        # Handle GRU or RNN-based edge models
+        if isinstance(edge_model, EdgeLevelRNN) or isinstance(edge_model, EdgeLevelAttentionRNN):
+            num_layers = edge_model.num_layers
+            hidden_size = edge_model.hidden_size
+            edge_model.hidden = torch.zeros(num_layers, batch_size, hidden_size, device=device)
+            logger.debug(f"Initialized GRU edge model hidden state with zeros: shape={edge_model.hidden.shape}")
+
+        # Handle LSTM-based edge models that need (h_0, c_0) tuple
+        elif hasattr(edge_model, 'lstm') or isinstance(edge_model, EdgeLevelLSTM) or isinstance(edge_model,
+                                                                                                EdgeLevelAttentionLSTM):
+            num_layers = edge_model.num_layers
+            hidden_size = edge_model.hidden_size
+            h_0 = torch.zeros(num_layers, batch_size, hidden_size, device=device)
+            c_0 = torch.zeros(num_layers, batch_size, hidden_size, device=device)
+            edge_model.hidden = (h_0, c_0)
+            logger.debug(f"Initialized LSTM edge model hidden state with zeros")
+
+    logger.info(
+        f"Starting generation: max_nodes={max_nodes}, min_nodes={min_nodes}, patience={patience}, temp={temperature}, top_k={top_k}, top_p={top_p}")
 
     with torch.no_grad():
-        for i in range(max_nodes): # Loop up to the maximum allowed nodes
+        for i in range(max_nodes):  # Loop up to the maximum allowed nodes
             current_node_idx = i
             logger.debug(f"Generating node {current_node_idx}...")
 
             # --- Step 1: Get OUTPUT SEQUENCE from node model ---
             try:
-                 # h is the OUTPUT SEQUENCE tensor, e.g., [1, 1, 256]
-                 # The node model manages its internal hidden state (self.hidden)
-                 h = node_model(adj_vec_input)
+                # h is the OUTPUT SEQUENCE tensor, e.g., [1, 1, 256]
+                # The node model manages its internal hidden state (self.hidden)
+                h = node_model(adj_vec_input)
+
+                # Set edge model's first layer hidden state from node model's output
+                if hasattr(edge_model, 'set_first_layer_hidden') and callable(edge_model.set_first_layer_hidden):
+                    try:
+                        edge_model.set_first_layer_hidden(h)
+                        logger.debug(f"Edge model hidden state initialized from node model output")
+                    except Exception as e:
+                        logger.error(f"Error setting edge model hidden state: {e}", exc_info=True)
+                        # Initialize with zeros as fallback
+                        if isinstance(edge_model, EdgeLevelRNN) or isinstance(edge_model, EdgeLevelAttentionRNN):
+                            batch_size = h.shape[1] if h.dim() > 1 else 1
+                            num_layers = edge_model.num_layers
+                            hidden_size = edge_model.hidden_size
+                            edge_model.hidden = torch.zeros(num_layers, batch_size, hidden_size, device=device)
+                        # For LSTM-based models
+                        elif hasattr(edge_model, 'lstm') or isinstance(edge_model, EdgeLevelLSTM) or isinstance(
+                                edge_model, EdgeLevelAttentionLSTM):
+                            batch_size = h.shape[1] if h.dim() > 1 else 1
+                            num_layers = edge_model.num_layers
+                            hidden_size = edge_model.hidden_size
+                            h_0 = torch.zeros(num_layers, batch_size, hidden_size, device=device)
+                            c_0 = torch.zeros(num_layers, batch_size, hidden_size, device=device)
+                            edge_model.hidden = (h_0, c_0)
 
             except Exception as e:
-                 logger.error(f"Error during NodeModel forward pass for node {i}: {e}", exc_info=True)
-                 return None, None
+                logger.error(f"Error during NodeModel forward pass for node {i}: {e}", exc_info=True)
+                return None, None
 
             # --- Step 2: Generate edge indices using the node output 'h' ---
-            num_edges_to_generate = min(i, input_size) # How many predecessors exist/fit in m
+            num_edges_to_generate = min(i, input_size)  # How many predecessors exist/fit in m
             current_indices = np.array([], dtype=int)  # Default for node 0
 
             if num_edges_to_generate > 0:
                 logger.debug(f"  Generating {num_edges_to_generate} potential edges into node {i}...")
                 try:
-                     # Pass 'h' (the node output tensor) to the edge generator function
-                     # The edge generator function (e.g., rnn_edge_gen) should NOT call
-                     # set_first_layer_hidden anymore.
-                     adj_indices_vec = edge_gen_function(
+                    # Check if edge model's hidden state is still None (safety check)
+                    if hasattr(edge_model, 'hidden') and edge_model.hidden is None:
+                        logger.warning(
+                            f"Edge model hidden state is None before generation for node {i}. Reinitializing.")
+                        # Reinitialize based on model type
+                        if isinstance(edge_model, EdgeLevelRNN) or isinstance(edge_model, EdgeLevelAttentionRNN):
+                            edge_model.hidden = torch.zeros(edge_model.num_layers, 1, edge_model.hidden_size,
+                                                            device=device)
+                        elif hasattr(edge_model, 'lstm') or isinstance(edge_model, EdgeLevelLSTM) or isinstance(
+                                edge_model, EdgeLevelAttentionLSTM):
+                            h_0 = torch.zeros(edge_model.num_layers, 1, edge_model.hidden_size, device=device)
+                            c_0 = torch.zeros(edge_model.num_layers, 1, edge_model.hidden_size, device=device)
+                            edge_model.hidden = (h_0, c_0)
+
+                    # Pass 'h' (the node output tensor) to the edge generator function
+                    adj_indices_vec = edge_gen_function(
                         edge_model,
-                        h, # Pass the actual node output sequence tensor
+                        h,  # Pass the actual node output sequence tensor
                         num_edges=num_edges_to_generate,
                         adj_vec_size=input_size,
                         sample_fun=sample_fun,
@@ -333,12 +510,14 @@ def generate(
                         top_k=top_k,
                         top_p=top_p,
                         attempts=edge_sample_attempts
-                     )
-                     # Extract the sampled indices
-                     current_indices = adj_indices_vec[0, 0, :num_edges_to_generate].cpu().numpy()
+                    )
+                    # Extract the sampled indices
+                    current_indices = adj_indices_vec[0, 0, :num_edges_to_generate].cpu().numpy()
                 except Exception as e:
-                     logger.error(f"Error during EdgeModel generation for node {i} using context shape {h.shape if isinstance(h, torch.Tensor) else 'N/A'}: {e}", exc_info=True)
-                     return None, None # Stop generation if edge model fails
+                    logger.error(
+                        f"Error during EdgeModel generation for node {i} using context shape {h.shape if isinstance(h, torch.Tensor) else 'N/A'}: {e}",
+                        exc_info=True)
+                    return None, None  # Stop generation if edge model fails
 
             # Store the sampled indices for building the matrix later
             list_adj_indices.append(current_indices)
@@ -347,7 +526,8 @@ def generate(
             # --- Step 3: Patience Stopping Check ---
             num_nodes_generated_so_far = generated_nodes_count
             if num_nodes_generated_so_far >= min_nodes:
-                only_no_edge_predicted = np.all(current_indices <= EDGE_TYPES["NONE"]) if current_indices.size > 0 else True
+                only_no_edge_predicted = np.all(
+                    current_indices <= EDGE_TYPES["NONE"]) if current_indices.size > 0 else True
                 if only_no_edge_predicted:
                     no_edge_streak += 1
                     logger.debug(f"  Node {i}: No edge > NONE predicted. Streak: {no_edge_streak}/{patience}")
@@ -355,8 +535,9 @@ def generate(
                     if no_edge_streak > 0: logger.debug(f"  Node {i}: Edge > NONE predicted. Resetting streak.")
                     no_edge_streak = 0
                 if no_edge_streak >= patience:
-                    logger.debug(f"Stopping early at node {i} (total {num_nodes_generated_so_far}): reached patience={patience}.")
-                    break # Exit the generation loop
+                    logger.debug(
+                        f"Stopping early at node {i} (total {num_nodes_generated_so_far}): reached patience={patience}.")
+                    break  # Exit the generation loop
 
             # --- Step 4: Prepare input for the NEXT iteration ---
             # (This part correctly uses current_indices to build next_adj_vec_input)
@@ -365,27 +546,28 @@ def generate(
             num_indices = len(current_indices)
             len_slice = min(num_indices, input_size)
             for k in range(len_slice):
-                 class_idx = current_indices[k]
-                 if 0 <= k < input_size:
-                     if 0 <= class_idx < edge_feature_len:
-                         next_adj_vec_input[0, 0, k, EDGE_TYPES["NONE"]] = 0
-                         next_adj_vec_input[0, 0, k, class_idx] = 1
-                     else: # Should not happen if index validation is correct
-                         next_adj_vec_input[0, 0, k, :] = 0
-                         next_adj_vec_input[0, 0, k, EDGE_TYPES["NONE"]] = 1
+                class_idx = current_indices[k]
+                if 0 <= k < input_size:
+                    if 0 <= class_idx < edge_feature_len:
+                        next_adj_vec_input[0, 0, k, EDGE_TYPES["NONE"]] = 0
+                        next_adj_vec_input[0, 0, k, class_idx] = 1
+                    else:  # Should not happen if index validation is correct
+                        next_adj_vec_input[0, 0, k, :] = 0
+                        next_adj_vec_input[0, 0, k, EDGE_TYPES["NONE"]] = 1
 
-            adj_vec_input = next_adj_vec_input # Update input for the next loop iteration
+            adj_vec_input = next_adj_vec_input  # Update input for the next loop iteration
 
     # --- Post-processing After Loop ---
     if generated_nodes_count == 0:
-         logger.warning("Generation resulted in 0 nodes.")
-         return None, None
+        logger.warning("Generation resulted in 0 nodes.")
+        return None, None
     elif generated_nodes_count < min_nodes and generated_nodes_count < max_nodes:
-         logger.warning(f"Generation stopped early before min_nodes ({min_nodes}) was reached. Generated: {generated_nodes_count}")
-         # Decide if this is acceptable or should return None
-         # return None, None # Option to return None if min_nodes not met
+        logger.warning(
+            f"Generation stopped early before min_nodes ({min_nodes}) was reached. Generated: {generated_nodes_count}")
+        # Decide if this is acceptable or should return None
+        # return None, None # Option to return None if min_nodes not met
 
-    #logger.info(f"Building AIG matrices for {generated_nodes_count} generated nodes...")
+    logger.info(f"Building AIG matrices for {generated_nodes_count} generated nodes...")
     try:
         adj_conn_final, adj_inv_final = build_aig_matrices(list_adj_indices, input_size, generated_nodes_count)
     except Exception as e:
