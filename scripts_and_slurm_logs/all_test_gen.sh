@@ -125,7 +125,7 @@ for MODEL_DIR_PATH in "${MODEL_DIRS[@]}"; do
             --model-path "$CKPT_FILE_PATH" \
             --output-dir "$OUTPUT_DIR" \
             --num-generate "$NUM_GENERATE" \
-            --graph-file "$GRAPH_DATA_FILE" \ # Pass the graph data file path
+            --graph-file "$GRAPH_DATA_FILE" \
             $VISUALIZE_FLAG \
             --num-visualize "$NUM_VISUALIZE"\
             --evaluate # Evaluate all generated graphs structurally
