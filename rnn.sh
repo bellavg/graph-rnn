@@ -7,7 +7,7 @@
 
 
 # --- Configuration ---
-CONFIG_FILE=${1:-"config_aig_base.yaml"} # Config file path (pass as arg or default)
+CONFIG_FILE=${1:-"src/config_aig_base.yaml"} # Config file path (pass as arg or default)
 NUM_GENERATE=${2:-1000}                         # Number of graphs to generate (pass as arg or default)
 BASE_OUTPUT_DIR="aig_run_${SLURM_JOB_ID}"       # Unique output directory for this run
 
@@ -52,7 +52,7 @@ source activate aig-rnn # Replace with your actual environment name
 echo "--------------------------------------------------------"
 echo "Step 1: Starting Training (src/main.py)..."
 echo "--------------------------------------------------------"
-srun python -u main.py \
+srun python -u src/main.py \
     --config_file="${CONFIG_FILE}" \
     --save_dir="${CHECKPOINT_DIR}" \
     # Add --restore argument here if needed, e.g.:
