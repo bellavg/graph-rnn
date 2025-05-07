@@ -1,489 +1,613 @@
 # evaluate_aigs.py
+import pickle
 import networkx as nx
-import numpy as np
-import matplotlib.pyplot as plt
+import argparse
 import os
 import logging
-import warnings
+from collections import Counter, defaultdict
 from typing import Dict, Any, List, Optional, Set, Tuple
+import numpy as np
+import sys
+from tqdm import tqdm
+import json # Added for loading metadata
+# Removed torch import as it's not needed after removing bin loading
 
-# --- Constants ---
-# Define necessary constants here if not imported from elsewhere
-EDGE_TYPES = {"NONE": 0, "REGULAR": 1, "INVERTED": 2}
-# NODE_TYPES might be needed if visualization uses predefined types, but inference is preferred
-NODE_TYPES_INFERRED = {"PI": 1, "AND": 2, "PO": 3, "UNKNOWN": -1, "INVALID_FANIN": -2}
+# --- Logger Setup ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("evaluate_aigs_pkl") # Changed logger name slightly
 
-# AIG constraint constants
-MAX_PI_COUNT = 14
-MIN_PI_COUNT = 2
-MIN_AND_COUNT = 1
-MIN_PO_COUNT = 1
-MAX_PO_COUNT = 30
+# --- Import the AIG configuration ---
+# Ensure aig_config.py is in the same directory or Python path
+try:
+    import aig_config as aig_config
+except ImportError:
+    # Attempt relative import if run from src/
+    try:
+        from . import aig_config
+        logger.info("Imported aig_config using relative path.")
+    except ImportError:
+        logger.error("Failed to import AIG configuration from 'aig_config.py' or '.aig_config'. Ensure it's accessible.")
+        sys.exit(1)
+# Derive constants from config (Ensure these match your aig_config.py)
+# It's safer to access them via the imported module
+VALID_AIG_NODE_TYPES = set(aig_config.NODE_TYPE_KEYS)
+VALID_AIG_EDGE_TYPES = set(aig_config.EDGE_TYPE_KEYS)
+NODE_CONST0 = aig_config.NODE_TYPE_KEYS[0] # Example: "NODE_CONST0"
+NODE_PI = aig_config.NODE_TYPE_KEYS[1]     # Example: "NODE_PI"
+NODE_AND = aig_config.NODE_TYPE_KEYS[2]    # Example: "NODE_AND"
+NODE_PO = aig_config.NODE_TYPE_KEYS[3]     # Example: "NODE_PO"
+MIN_AND_COUNT_CONFIG = aig_config.MIN_AND_COUNT
+MIN_PO_COUNT_CONFIG = aig_config.MIN_PO_COUNT
+# PAD_VALUE is likely not needed here anymore as we don't unpad bin files
+# PAD_VALUE = aig_config.PAD_VALUE
 
-# --- Logger ---
-logger = logging.getLogger("evaluate_aigs")
-# Basic config if run standalone, but usually configured by the main script
-if not logger.hasHandlers():
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-
-# --- AIG Conversion ---
-def aig_to_networkx(adj_conn: np.ndarray, adj_inv: np.ndarray) -> nx.DiGraph:
+# --- Structural Metrics Calculation (Unchanged) ---
+def calculate_structural_aig_metrics(G: nx.DiGraph) -> Dict[str, Any]:
     """
-    Converts AIG connectivity and inversion matrices into a NetworkX DiGraph.
-    Edges have an 'type' attribute (1 for regular, 2 for inverted).
+    Calculates structural AIG validity metrics based on assigned types.
+    Counts violations across the graph instead of breaking early.
+    Uses constants derived from aig_config.
+    Returns a dictionary of detailed metrics and violation counts.
     """
-    G = nx.DiGraph()
-    if adj_conn.ndim != 2 or adj_conn.shape[0] != adj_conn.shape[1]:
-        logger.error("Invalid adjacency matrix shape for AIG conversion.")
-        return G
-    if adj_conn.shape != adj_inv.shape:
-        logger.error("Connectivity and inversion matrices shapes mismatch.")
-        return G
-
-    num_nodes = adj_conn.shape[0]
-    if num_nodes == 0:
-        return G  # Return empty graph if 0 nodes
-
-    G.add_nodes_from(range(num_nodes))
-
-    sources, targets = np.where(adj_conn > 0)
-    for u, v in zip(sources, targets):
-        if 0 <= u < num_nodes and 0 <= v < num_nodes:
-            # Determine edge type based on inversion matrix
-            edge_type = EDGE_TYPES["INVERTED"] if adj_inv[u, v] > 0 else EDGE_TYPES["REGULAR"]
-            G.add_edge(u, v, type=edge_type)  # Store type (1 or 2)
-        else:
-            logger.warning(f"Edge index ({u}, {v}) out of bounds for {num_nodes} nodes during conversion.")
-
-    return G
-
-
-# --- Node Type Inference ---
-def infer_node_types(g: nx.DiGraph) -> Dict[Any, str]:
-    """
-    Infers node types (PI, AND, PO, UNKNOWN, INVALID_FANIN) based on degrees.
-    Special case for node 0, which is assumed to be a constant zero (PI).
-    """
-    types = {}
-    if not isinstance(g, nx.DiGraph) or g.number_of_nodes() == 0:
-        return types
-
-    # Handle node 0 specially - assumed to be a constant zero input (treating as PI)
-    if 0 in g.nodes():
-        types[0] = "PI"
-
-    # Process other nodes based on their connectivity
-    for n in g.nodes():
-        # Skip node 0 as it's already handled
-        if n == 0 and 0 in types:
-            continue
-
-        in_deg = g.in_degree(n)
-        out_deg = g.out_degree(n)
-
-        if in_deg == 0:
-            types[n] = "PI"
-        elif in_deg > 2:
-            types[n] = "INVALID_FANIN"
-        elif in_deg == 2:
-            # If it's a sink node (out_deg=0) with fanin 2, could be PO or AND. Prioritize AND.
-            # If it's not a sink, it's an AND gate.
-            types[n] = "AND"  # Assume AND, PO check below might override for sinks
-        elif in_deg == 1:
-            # If fanin 1 and sink -> PO. If not sink -> Unknown/Buffer.
-            if out_deg == 0:
-                types[n] = "PO"
-            else:
-                types[n] = "UNKNOWN"  # Treat non-sink fanin-1 nodes as unknown
-        else:  # Should not happen if graph is connected from PIs
-            types[n] = "UNKNOWN"
-
-        # Refine PO definition: any sink node (out_deg 0) with valid fan-in (1 or 2) is a PO
-        if out_deg == 0:
-            if in_deg == 1 or in_deg == 2:
-                types[n] = "PO"
-            # If in_deg == 0 and out_deg == 0 (isolated node), it was already marked PI. Keep as PI.
-            # If in_deg > 2, already marked INVALID_FANIN.
-
-    # Ensure all nodes have a type assigned (fallback)
-    for n in g.nodes():
-        if n not in types:
-            logger.warning(f"Node {n} had no inferred type, marking UNKNOWN.")
-            types[n] = "UNKNOWN"
-
-    return types
-
-
-# --- Structural Evaluation Metrics ---
-def calculate_seadag_validity(G: nx.DiGraph) -> float:
-    """
-    Calculates SEADAG-like validity based on fan-in of inferred AND/PO nodes.
-    Returns 1.0 if all inferred AND nodes have fan-in 2 and inferred PO nodes have fan-in 1 or 2.
-    Returns 1.0 for empty graphs or graphs with no inferred AND/PO nodes.
-    """
-    if G.number_of_nodes() == 0:
-        return 1.0
-
-    node_types = infer_node_types(G)
-    relevant_gates = 0
-    correct_fanin_gates = 0
-
-    for node, node_type in node_types.items():
-        fan_in = G.in_degree(node)
-        if node_type == "AND":
-            relevant_gates += 1
-            if fan_in == 2:
-                correct_fanin_gates += 1
-        elif node_type == "PO":
-            relevant_gates += 1
-            if fan_in == 1 or fan_in == 2:  # Allow fan-in 1 or 2 for POs
-                correct_fanin_gates += 1
-        # Ignore PI, UNKNOWN, INVALID_FANIN for this specific metric
-
-    if relevant_gates == 0:
-        return 1.0  # Vacuously valid if no relevant gates found
-    else:
-        validity = correct_fanin_gates / relevant_gates
-        return validity
-
-
-def calculate_structural_aig_validity(G: nx.DiGraph) -> Dict[str, Any]:
-    """
-    Calculates broader structural AIG validity based on AIG constraints:
-    - Must be a DAG
-    - First node (0) is assumed to be a constant zero
-    - PI count should be between MIN_PI_COUNT and MAX_PI_COUNT
-    - Must have at least MIN_AND_COUNT AND gates
-    - Must have between MIN_PO_COUNT and MAX_PO_COUNT primary outputs
-    - No isolated nodes
-    - No ANDs with fewer than 2 incoming edges or no outgoing edges
-    """
-    results = {
-        'is_dag': False,
-        'validity_score': 0.0,
-        'has_pi': False,
-        'has_po': False,
-        'has_and': False,
-        'has_unknown': False,
-        'has_invalid_fanin': False,
+    metrics = {
         'num_nodes': 0,
-        'num_pi': 0,
-        'num_po': 0,
-        'num_and': 0,
-        'num_unknown': 0,
-        'num_invalid_fanin': 0,
-        'is_valid_pi_count': False,
-        'is_valid_po_count': False,
-        'is_valid_and_count': False,
-        'isolated_nodes': 0,
-        'invalid_and_gates': 0,
-        'constraint_violations': []
+        'is_dag': False,
+        'num_pi': 0, 'num_po': 0, 'num_and': 0, 'num_const0': 0,
+        'num_unknown_nodes': 0,
+        'num_unknown_edges': 0,
+        'pi_indegree_violations': 0,
+        'const0_indegree_violations': 0,
+        'and_indegree_violations': 0,
+        'po_outdegree_violations': 0,
+        'po_indegree_violations': 0,
+        'isolated_nodes': 0, # Still counts relevant isolates for reporting
+        'is_structurally_valid': False, # The key flag indicating validity
+        'constraints_failed': [] # List to store reasons for failure
     }
 
     num_nodes = G.number_of_nodes()
-    results['num_nodes'] = num_nodes
+    metrics['num_nodes'] = num_nodes
 
-    if num_nodes == 0:
-        results['is_dag'] = True
-        results['validity_score'] = 0.0
-        results['constraint_violations'].append("Empty graph")
-        return results
+    if not isinstance(G, nx.DiGraph) or num_nodes == 0:
+        metrics['constraints_failed'].append("Empty or Invalid Graph Object")
+        metrics['is_structurally_valid'] = False # Explicitly set invalid
+        return metrics # Return early for invalid input
 
-    # 1. Check DAG property
-    try:
-        is_dag = nx.is_directed_acyclic_graph(G)
+    # 1. Check DAG property (Critical)
+    try: # Add try-except for robustness
+        metrics['is_dag'] = nx.is_directed_acyclic_graph(G)
+        if not metrics['is_dag']:
+            metrics['constraints_failed'].append("Not a DAG")
     except Exception as e:
-        logger.error(f"Error checking DAG property: {e}")
-        is_dag = False  # Assume not DAG if check fails
-    results['is_dag'] = is_dag
+         logger.warning(f"DAG check failed for a graph: {e}")
+         metrics['is_dag'] = False # Assume not DAG if check fails
+         metrics['constraints_failed'].append(f"DAG Check Error: {e}")
 
-    if not is_dag:
-        results['constraint_violations'].append("Not a DAG (contains cycles)")
 
-    # 2. Infer Node Types
-    node_types = infer_node_types(G)
-    if not node_types:
-        results['constraint_violations'].append("Failed to infer node types")
-        return results  # Return defaults if inference failed
+    # 2. Check Node Types and Basic Degrees
+    node_type_counts = Counter()
+    unknown_node_indices = []
+    for node, data in G.nodes(data=True):
+        # Handle cases where node data might not be a dictionary
+        # Assume the PKL file stores node types as strings under the 'type' key
+        if isinstance(data, dict):
+             node_type = data.get('type')
+             # --- Type Validation ---
+             # Check if the type string is one of the expected keys
+             if node_type not in VALID_AIG_NODE_TYPES:
+                 logger.debug(f"Node {node} has unexpected type '{node_type}'. Treating as unknown.")
+                 metrics['num_unknown_nodes'] += 1
+                 unknown_node_indices.append(node)
+                 node_type = "UNKNOWN_NODE" # Mark internally as unknown
+             # --- End Validation ---
+        else:
+             node_type = "Error: Node data not dict"
+             logger.warning(f"Node {node} data is not a dictionary: {data}")
+             metrics['num_unknown_nodes'] += 1
+             unknown_node_indices.append(node)
 
-    # 3. Check for isolated nodes
-    isolated_nodes = list(nx.isolates(G))
-    results['isolated_nodes'] = len(isolated_nodes)
-    if isolated_nodes:
-        results['constraint_violations'].append(f"Contains {len(isolated_nodes)} isolated nodes")
+        node_type_counts[node_type] += 1
 
-    # 4. Iterate, Count Types, and Check Validity
-    valid_structural_node_count = 0
-    pis = set()
-    pos = set()
-    ands = set()
-    invalid_ands = set()
+        # Skip degree checks for unknown nodes or nodes with data errors
+        if node_type in ["UNKNOWN_NODE", "Error: Node data not dict"]:
+            continue
 
-    for node, node_type in node_types.items():
-        if node_type == "PI":
-            results['num_pi'] += 1
-            results['has_pi'] = True
-            valid_structural_node_count += 1
-            pis.add(node)
-        elif node_type == "AND":
-            results['num_and'] += 1
-            results['has_and'] = True
-            valid_structural_node_count += 1
-            ands.add(node)
-
-            # Check if AND gate has proper connectivity
+        # Check degrees - Add try-except for robustness
+        try:
             in_deg = G.in_degree(node)
             out_deg = G.out_degree(node)
-            if in_deg < 2 or out_deg == 0:
-                invalid_ands.add(node)
-        elif node_type == "PO":
-            results['num_po'] += 1
-            results['has_po'] = True
-            valid_structural_node_count += 1
-            pos.add(node)
-        elif node_type == "UNKNOWN":
-            results['num_unknown'] += 1
-            results['has_unknown'] = True
-        elif node_type == "INVALID_FANIN":
-            results['num_invalid_fanin'] += 1
-            results['has_invalid_fanin'] = True
+        except Exception as e:
+             logger.warning(f"Could not get degree for node {node}: {e}")
+             # Mark as violation? Or just skip checks? Let's add a general violation count later if invalid.
+             metrics['constraints_failed'].append(f"Degree Check Error for node {node}")
+             continue
 
-    # 5. Check for node 0 (should be PI)
-    if 0 in G.nodes() and node_types.get(0) != "PI":
-        results['constraint_violations'].append("Node 0 is not a PI (assumed to be constant zero)")
-
-    # 6. Check PI count constraints
-    results['is_valid_pi_count'] = MIN_PI_COUNT <= results['num_pi'] <= MAX_PI_COUNT
-    if not results['is_valid_pi_count']:
-        if results['num_pi'] < MIN_PI_COUNT:
-            results['constraint_violations'].append(f"Too few PIs: {results['num_pi']} (min: {MIN_PI_COUNT})")
-        elif results['num_pi'] > MAX_PI_COUNT:
-            results['constraint_violations'].append(f"Too many PIs: {results['num_pi']} (max: {MAX_PI_COUNT})")
-
-    # 7. Check PO count constraints
-    results['is_valid_po_count'] = MIN_PO_COUNT <= results['num_po'] <= MAX_PO_COUNT
-    if not results['is_valid_po_count']:
-        if results['num_po'] < MIN_PO_COUNT:
-            results['constraint_violations'].append(f"Too few POs: {results['num_po']} (min: {MIN_PO_COUNT})")
-        elif results['num_po'] > MAX_PO_COUNT:
-            results['constraint_violations'].append(f"Too many POs: {results['num_po']} (max: {MAX_PO_COUNT})")
-
-    # 8. Check AND gate constraints
-    results['is_valid_and_count'] = results['num_and'] >= MIN_AND_COUNT
-    if not results['is_valid_and_count']:
-        results['constraint_violations'].append(f"Insufficient AND gates: {results['num_and']} (min: {MIN_AND_COUNT})")
-
-    # 9. Check invalid AND gates
-    results['invalid_and_gates'] = len(invalid_ands)
-    if invalid_ands:
-        results['constraint_violations'].append(
-            f"Invalid AND gates: {len(invalid_ands)} (should have 2 inputs and at least 1 output)")
-
-    # 10. Calculate validity score
-    # Base score is ratio of valid nodes
-    base_score = valid_structural_node_count / num_nodes if num_nodes > 0 else 0.0
-
-    # Adjust score based on constraint violations
-    constraint_penalty = 0.0
-
-    # Most severe: not a DAG (makes everything else irrelevant)
-    if not is_dag:
-        base_score = 0.0
-    # Otherwise penalize based on violations count
-    elif results['constraint_violations']:
-        constraint_penalty = min(0.9, len(results['constraint_violations']) * 0.1)
-
-    results['validity_score'] = max(0.0, base_score * (1.0 - constraint_penalty))
-
-    return results
+        # Check degrees based on assigned type (using defined type strings)
+        if node_type == NODE_CONST0:
+            metrics['num_const0'] += 1
+            if in_deg != 0: metrics['const0_indegree_violations'] += 1
+        elif node_type == NODE_PI:
+            metrics['num_pi'] += 1
+            if in_deg != 0: metrics['pi_indegree_violations'] += 1
+        elif node_type == NODE_AND:
+            metrics['num_and'] += 1
+            if in_deg != 2: metrics['and_indegree_violations'] += 1
+        elif node_type == NODE_PO:
+            metrics['num_po'] += 1
+            if out_deg != 0: metrics['po_outdegree_violations'] += 1
+            # PO must have inputs.
+            if in_deg == 0: metrics['po_indegree_violations'] += 1 # Keep check for in_degree == 0
 
 
+    # Add failure reasons based on type/degree checks to the list
+    if metrics['num_unknown_nodes'] > 0:
+        metrics['constraints_failed'].append(f"Found {metrics['num_unknown_nodes']} unknown node types")
+    if metrics['const0_indegree_violations'] > 0:
+        metrics['constraints_failed'].append(f"Found {metrics['const0_indegree_violations']} CONST0 nodes with incorrect in-degree")
+    if metrics['pi_indegree_violations'] > 0:
+        metrics['constraints_failed'].append(f"Found {metrics['pi_indegree_violations']} PI nodes with incorrect in-degree")
+    if metrics['and_indegree_violations'] > 0:
+        metrics['constraints_failed'].append(f"Found {metrics['and_indegree_violations']} AND nodes with incorrect in-degree")
+    if metrics['po_outdegree_violations'] > 0:
+        metrics['constraints_failed'].append(f"Found {metrics['po_outdegree_violations']} PO nodes with incorrect out-degree")
+    if metrics['po_indegree_violations'] > 0:
+        metrics['constraints_failed'].append(f"Found {metrics['po_indegree_violations']} PO nodes with incorrect in-degree (0)")
+
+
+    # 3. Check Edge Types
+    for u, v, data in G.edges(data=True):
+        # Assume PKL file stores edge types as strings under the 'type' key
+        if isinstance(data, dict):
+             edge_type = data.get('type')
+             # --- Type Validation ---
+             if edge_type not in VALID_AIG_EDGE_TYPES:
+                 logger.debug(f"Edge ({u}-{v}) has unexpected type '{edge_type}'. Treating as unknown.")
+                 metrics['num_unknown_edges'] += 1
+             # --- End Validation ---
+        else:
+             edge_type = "Error: Edge data not dict"
+             logger.warning(f"Edge ({u},{v}) data is not a dictionary: {data}")
+             metrics['num_unknown_edges'] += 1
+
+    if metrics['num_unknown_edges'] > 0:
+        # Add failure reason to the list
+        metrics['constraints_failed'].append(f"Found {metrics['num_unknown_edges']} unknown edge types")
+
+    # 4. Check Basic AIG Requirements (Using config values)
+    if metrics['num_pi'] == 0 and metrics['num_const0'] == 0 :
+         metrics['constraints_failed'].append("No Primary Inputs or Const0 found")
+    # Use MIN_AND_COUNT_CONFIG and MIN_PO_COUNT_CONFIG safely
+    min_and = MIN_AND_COUNT_CONFIG if 'MIN_AND_COUNT_CONFIG' in globals() else 1
+    min_po = MIN_PO_COUNT_CONFIG if 'MIN_PO_COUNT_CONFIG' in globals() else 1
+    if metrics['num_and'] < min_and :
+        metrics['constraints_failed'].append(f"Insufficient AND gates ({metrics['num_and']} < {min_and})")
+    if metrics['num_po'] < min_po:
+        metrics['constraints_failed'].append(f"Insufficient POs ({metrics['num_po']} < {min_po})")
+
+    # --- 5. Check isolated nodes (Keep calculation, but don't add to constraints_failed) ---
+    try: # Add try-except for isolates calculation
+        all_isolates = list(nx.isolates(G))
+        relevant_isolates = []
+        for node_idx in all_isolates:
+             if node_idx not in G: continue # Check if node exists
+             node_data = G.nodes[node_idx]
+             isolated_node_type = node_data.get('type', None) if isinstance(node_data, dict) else None
+             if isolated_node_type != NODE_CONST0: # Only count non-CONST0 nodes
+                 relevant_isolates.append(node_idx)
+        metrics['isolated_nodes'] = len(relevant_isolates) # Count relevant isolates for reporting
+    except Exception as e:
+         logger.warning(f"Isolate check failed for a graph: {e}")
+         metrics['isolated_nodes'] = -1 # Indicate error
+
+
+    # --- Final Validity Check ---
+    # A graph is structurally valid IFF it passes ALL *critical* checks:
+    is_valid = (
+        metrics['is_dag'] and
+        metrics['num_unknown_nodes'] == 0 and
+        metrics['num_unknown_edges'] == 0 and
+        metrics['const0_indegree_violations'] == 0 and
+        metrics['pi_indegree_violations'] == 0 and
+        metrics['and_indegree_violations'] == 0 and
+        metrics['po_outdegree_violations'] == 0 and
+        metrics['po_indegree_violations'] == 0 and
+        (metrics['num_pi'] > 0 or metrics['num_const0'] > 0) and # At least one input source
+        metrics['num_and'] >= min_and and # Use safe min_and
+        metrics['num_po'] >= min_po # Use safe min_po
+    )
+    metrics['is_structurally_valid'] = is_valid
+    # If invalid, ensure constraints_failed has at least one entry
+    if not is_valid and not metrics['constraints_failed']:
+         metrics['constraints_failed'].append("General Validity Check Failed")
+    # --- End Final Validity Check ---
+
+    return metrics
+
+# --- Path Counting Function (Unchanged) ---
 def count_pi_po_paths(G: nx.DiGraph) -> Dict[str, Any]:
     """
     Counts PIs reaching POs and POs reachable from PIs based on reachability.
-    NOTE: Does NOT explicitly check for DAG property first.
+    Uses assigned node types (defined globally from config). Assumes graph object is valid.
     """
     results = {
-        'error': None,  # Will only be set by specific exceptions now
-        'num_pis': 0, 'num_pos': 0,
+        'num_pi': 0, 'num_po': 0, 'num_const0': 0,
         'num_pis_reaching_po': 0, 'num_pos_reachable_from_pi': 0,
-        'fraction_pis_connected': 0.0, 'fraction_pos_connected': 0.0
+        'fraction_pis_connected': 0.0, 'fraction_pos_connected': 0.0,
+        'error': None
     }
     if G.number_of_nodes() == 0:
         return results
 
-    # Proceed with PI/PO identification and reachability calculation
     try:
-        node_types = infer_node_types(G)
-        pis = {n for n, t in node_types.items() if t == "PI"}
-        pos = {n for n, t in node_types.items() if t == "PO"}
-        results['num_pis'] = len(pis)
-        results['num_pos'] = len(pos)
+        # Get nodes by assigned type (using defined type strings)
+        pis = set()
+        pos = set()
+        const0_nodes = set()
+        for node, data in G.nodes(data=True):
+             # Ensure data is a dictionary before using .get()
+             if isinstance(data, dict):
+                  node_type = data.get('type')
+                  if node_type == NODE_PI: pis.add(node)
+                  elif node_type == NODE_PO: pos.add(node)
+                  elif node_type == NODE_CONST0: const0_nodes.add(node)
+             # else: logger.warning(f"Node {node} data is not a dictionary in count_pi_po_paths.")
 
-        if not pis or not pos:
-            return results  # No paths possible
+        # Source nodes for path checking are PIs and Const0
+        source_nodes = pis.union(const0_nodes)
 
-        connected_pis: Set[Any] = set()
-        connected_pos: Set[Any] = set()
+        results['num_pi'] = len(pis) # Report actual PIs separately
+        results['num_po'] = len(pos)
+        results['num_const0'] = len(const0_nodes)
 
-        # Efficiently find all nodes reachable from any PI
-        all_reachable_from_pis = set()
-        for pi_node in pis:
-            try:
-                # nx.descendants works even with cycles
-                all_reachable_from_pis.update(nx.descendants(G, pi_node))
-                all_reachable_from_pis.add(pi_node)  # Include the PI itself
-            except nx.NodeNotFound:
-                logger.warning(f"PI node {pi_node} not found in graph during descendant search.")
-                continue
-            except Exception as e:  # Catch other potential NetworkX errors
-                logger.warning(f"Error finding descendants from PI {pi_node}: {e}")
+        if not source_nodes or not pos: # No paths possible if no sources or no POs
+            return results
 
-        # Efficiently find all nodes that can reach any PO
-        all_ancestors_of_pos = set()
+        connected_sources = set()
+        connected_pos = set()
+
+        # --- Perform Reachability Checks ---
+        # Optimization: Precompute reachability from all sources and to all POs if needed frequently
+        # For now, calculate individually
+
+        # Find sources that can reach at least one PO
+        for source_node in source_nodes:
+             try:
+                 if source_node not in G: continue
+                 # Check reachability to ANY PO node
+                 for po_node in pos:
+                      if po_node not in G: continue
+                      if nx.has_path(G, source_node, po_node):
+                           connected_sources.add(source_node)
+                           break # Source is connected, no need to check other POs for this source
+             except nx.NodeNotFound: continue # Should not happen due to 'in G' check, but safe
+             except Exception as e:
+                  logger.warning(f"Path check failed for source {source_node}: {e}")
+                  results['error'] = "Path check error" # Flag error
+
+
+        # Find POs that are reachable from at least one source
         for po_node in pos:
-            try:
-                # nx.ancestors works even with cycles
-                all_ancestors_of_pos.update(nx.ancestors(G, po_node))
-                all_ancestors_of_pos.add(po_node)  # Include the PO itself
-            except nx.NodeNotFound:
-                logger.warning(f"PO node {po_node} not found in graph during ancestor search.")
-                continue
-            except Exception as e:
-                logger.warning(f"Error finding ancestors for PO {po_node}: {e}")
+             try:
+                 if po_node not in G: continue
+                 # Check reachability from ANY source node
+                 for source_node in source_nodes:
+                      if source_node not in G: continue
+                      if nx.has_path(G, source_node, po_node):
+                           connected_pos.add(po_node)
+                           break # PO is connected, no need to check other sources for this PO
+             except nx.NodeNotFound: continue
+             except Exception as e:
+                  logger.warning(f"Path check failed for PO {po_node}: {e}")
+                  results['error'] = "Path check error" # Flag error
 
-        # Find PIs that can reach at least one PO
-        connected_pis = pis.intersection(all_ancestors_of_pos)
-        # Find POs that are reachable from at least one PI
-        connected_pos = pos.intersection(all_reachable_from_pis)
+        # --- End Reachability Checks ---
 
-        results['num_pis_reaching_po'] = len(connected_pis)
+
+        num_sources_total = len(source_nodes)
+        results['num_pis_reaching_po'] = len(connected_sources) # Count includes const0 if connected
         results['num_pos_reachable_from_pi'] = len(connected_pos)
 
         # Calculate fractions
-        if results['num_pis'] > 0:
-            results['fraction_pis_connected'] = results['num_pis_reaching_po'] / results['num_pis']
-        if results['num_pos'] > 0:
-            results['fraction_pos_connected'] = results['num_pos_reachable_from_pi'] / results['num_pos']
+        if num_sources_total > 0: results['fraction_pis_connected'] = results['num_pis_reaching_po'] / num_sources_total
+        if results['num_po'] > 0: results['fraction_pos_connected'] = results['num_pos_reachable_from_pi'] / results['num_po']
 
     except Exception as e:
-        # Catch any unexpected errors during the main processing
         logger.error(f"Unexpected error during count_pi_po_paths execution: {e}", exc_info=True)
         results['error'] = f"Processing error: {e}"
 
-    # Clean up error message if it only contains separators
-    if results['error'] and not results['error'].strip().replace(';', ''):
-        results['error'] = None
-
     return results
 
+# --- Structure Validation Function (Unchanged) ---
+def validate_aig_structures(graphs: List[nx.DiGraph]) -> float:
+    """
+    Validates a list of NetworkX DiGraphs based on structural AIG rules.
 
-# --- Visualization ---
-def visualize_aig_structure(G: nx.DiGraph, output_file='generated_aig_structure.png'):
-    """ Visualize the generated AIG structure, using inferred types and edge types. """
-    if G is None or not isinstance(G, nx.DiGraph) or G.number_of_nodes() == 0:
-        logger.info(f"Skipping visualization for empty/invalid graph: {output_file}")
-        return
+    Args:
+        graphs: A list of NetworkX DiGraph objects representing AIGs.
 
-    plt.figure(figsize=(16, 14))  # Slightly larger figure
-    pos = None
+    Returns:
+        The fraction (0.0 to 1.0) of graphs that are structurally valid.
+        Returns 0.0 if the input list is empty.
+    """
+    num_total = len(graphs)
+    if num_total == 0:
+        logger.warning("validate_aig_structures received an empty list of graphs.")
+        return 0.0
+
+    num_valid_structurally = 0
+    for i, graph in enumerate(graphs):
+        if not isinstance(graph, nx.DiGraph):
+            logger.warning(f"Item {i} in list is not a NetworkX DiGraph, counting as invalid.")
+            continue
+        struct_metrics = calculate_structural_aig_metrics(graph)
+        if struct_metrics.get('is_structurally_valid', False):
+            num_valid_structurally += 1
+        # else: logger.debug(f"Graph {i} failed validation: {struct_metrics.get('constraints_failed', [])}")
+
+    validity_fraction = (num_valid_structurally / num_total) if num_total > 0 else 0.0
+    logger.info(f"Validated {num_total} graphs. Structurally Valid: {num_valid_structurally} ({validity_fraction*100:.2f}%)")
+    return validity_fraction
+
+# --- Isomorphism Helpers (Unchanged) ---
+# Match node 'type' attribute (string expected)
+node_matcher = nx.isomorphism.categorical_node_match('type', 'UNKNOWN_NODE')
+# Match edge 'type' attribute (string expected)
+edge_matcher = nx.isomorphism.categorical_edge_match('type', 'UNKNOWN_EDGE')
+
+def are_graphs_isomorphic(G1: nx.DiGraph, G2: nx.DiGraph) -> bool:
+    """Checks isomorphism considering node/edge 'type' attributes."""
     try:
-        # Try graphviz layout first (requires pygraphviz or pydot)
-        pos = nx.nx_agraph.graphviz_layout(G, prog='dot')
-        logger.debug("Using graphviz 'dot' layout for visualization.")
-    except ImportError:
-        logger.warning("pygraphviz/pydot not found. Using spring_layout (less structured).")
-        pos = nx.spring_layout(G, k=0.3, iterations=50, seed=42)  # Adjust spring layout params
-    except Exception as e:  # Catch other layout errors (e.g., Graphviz not installed)
-        logger.warning(f"Graphviz layout failed ({e}). Using spring_layout.")
-        pos = nx.spring_layout(G, k=0.3, iterations=50, seed=42)
-
-    # Get inferred types (use pre-computed if available, otherwise compute)
-    node_types = G.graph.get('_inferred_types_cleaned', None)
-    if not node_types:
-        logger.debug("Inferring node types for visualization.")
-        node_types = infer_node_types(G)
-        G.graph['_inferred_types_cleaned'] = node_types  # Store for potential reuse
-
-    # Node colors and labels based on inferred types
-    node_colors = []
-    node_labels = {}
-    color_map = {
-        "PI": 'palegreen',
-        "AND": 'lightskyblue',
-        "PO": 'lightcoral',
-        "UNKNOWN": 'lightgrey',
-        "INVALID_FANIN": 'orange',
-        "DEFAULT": 'white'
-    }
-
-    # Special color for node 0 (constant zero)
-    if 0 in G.nodes():
-        zero_color = 'gold'
-    else:
-        zero_color = color_map["PI"]
-
-    for node in sorted(G.nodes()):  # Sort nodes for potentially more consistent layouts
-        node_type = node_types.get(node, "UNKNOWN")
-        # Special case for node 0
-        if node == 0:
-            node_colors.append(zero_color)
-            node_labels[node] = f"{node}\n(ZERO)"
-        else:
-            node_colors.append(color_map.get(node_type, color_map["DEFAULT"]))
-            node_labels[node] = f"{node}\n({node_type})"
-
-    # Draw nodes
-    nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=700, alpha=0.9)
-
-    # Separate edges by type (regular/inverted)
-    regular_edges = []
-    inverted_edges = []
-    for u, v, data in G.edges(data=True):
-        edge_type = data.get('type', EDGE_TYPES["REGULAR"])  # Default if missing
-        if edge_type == EDGE_TYPES["INVERTED"]:
-            inverted_edges.append((u, v))
-        else:  # Treat NONE or REGULAR as regular for drawing
-            regular_edges.append((u, v))
-
-    # Draw edges
-    nx.draw_networkx_edges(G, pos, edgelist=regular_edges,
-                           width=1.5, edge_color='black', style='solid',
-                           arrows=True, arrowsize=12, node_size=700,
-                           connectionstyle='arc3,rad=0.1')  # Use curved edges slightly
-    nx.draw_networkx_edges(G, pos, edgelist=inverted_edges,
-                           width=1.5, edge_color='red', style='dashed',
-                           arrows=True, arrowsize=12, node_size=700,
-                           connectionstyle='arc3,rad=0.1')
-
-    # Draw labels
-    nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=8, font_weight='bold')
-
-    # Create legend
-    legend_elements = [
-        plt.Line2D([0], [0], color='black', lw=1.5, linestyle='solid', label=f'Regular Edge'),
-        plt.Line2D([0], [0], color='red', lw=1.5, linestyle='dashed', label=f'Inverted Edge'),
-        plt.scatter([], [], s=80, color=zero_color, label='Constant Zero'),
-        plt.scatter([], [], s=80, color=color_map["PI"], label='Primary Input'),
-        plt.scatter([], [], s=80, color=color_map["AND"], label='AND Gate'),
-        plt.scatter([], [], s=80, color=color_map["PO"], label='Primary Output'),
-        plt.scatter([], [], s=80, color=color_map["INVALID_FANIN"], label='Invalid Fan-in'),
-        plt.scatter([], [], s=80, color=color_map["UNKNOWN"], label='Unknown/Other')
-    ]
-    plt.legend(handles=legend_elements, loc='upper right', fontsize='small',
-               bbox_to_anchor=(1.1, 1.1), frameon=True, facecolor='white', framealpha=0.8)
-
-    plt.title(f'Generated AIG Structure - {os.path.basename(output_file)}', fontsize=14)
-    plt.axis('off')
-    plt.tight_layout(rect=[0, 0, 0.9, 1])  # Adjust layout to make space for legend
-    try:
-        plt.savefig(output_file, dpi=300, bbox_inches='tight')
-        logger.info(f"Visualization saved to {output_file}")
+        # Ensure both graphs have the 'type' attribute on nodes/edges
+        # This assumes the graphs loaded from PKL and generated graphs have consistent string types
+        return nx.is_isomorphic(G1, G2, node_match=node_matcher, edge_match=edge_matcher)
     except Exception as e:
-        logger.error(f"Error saving visualization {output_file}: {e}")
-    finally:
-        plt.close()  # Close the figure
+        logger.warning(f"Isomorphism check failed between two graphs: {e}")
+        return False
+
+# --- Uniqueness Calculation (Unchanged) ---
+def calculate_uniqueness(valid_graphs: List[nx.DiGraph]) -> Tuple[float, int]:
+    """Calculates uniqueness among valid graphs."""
+    num_valid = len(valid_graphs)
+    if num_valid <= 1: return (1.0, num_valid)
+
+    unique_graph_indices = []
+    logger.info(f"Calculating uniqueness for {num_valid} valid graphs...")
+    for i in tqdm(range(num_valid), desc="Checking Uniqueness", leave=False):
+        is_unique = True
+        G1 = valid_graphs[i]
+        for unique_idx in unique_graph_indices:
+            G2 = valid_graphs[unique_idx]
+            if are_graphs_isomorphic(G1, G2):
+                is_unique = False; break
+        if is_unique: unique_graph_indices.append(i)
+
+    num_unique = len(unique_graph_indices)
+    uniqueness_score = num_unique / num_valid if num_valid > 0 else 0.0
+    logger.info(f"Found {num_unique} unique graphs out of {num_valid} valid graphs.")
+    return uniqueness_score, num_unique
+
+# --- Novelty Calculation (Unchanged) ---
+def calculate_novelty(valid_graphs: List[nx.DiGraph], train_graphs: List[nx.DiGraph]) -> Tuple[float, int]:
+    """Calculates novelty against a training set."""
+    num_valid = len(valid_graphs)
+    num_train = len(train_graphs)
+    if num_valid == 0: return (0.0, 0)
+    if num_train == 0:
+        logger.warning("Training set is empty, novelty will be 100%.")
+        return (1.0, num_valid)
+
+    num_novel = 0
+    logger.info(f"Calculating novelty for {num_valid} valid graphs against {num_train} training graphs...")
+    for gen_graph in tqdm(valid_graphs, desc="Checking Novelty", leave=False):
+        is_novel = True
+        for train_graph in train_graphs:
+            if are_graphs_isomorphic(gen_graph, train_graph):
+                is_novel = False; break
+        if is_novel: num_novel += 1
+
+    novelty_score = num_novel / num_valid if num_valid > 0 else 0.0
+    logger.info(f"Found {num_novel} novel graphs out of {num_valid} valid graphs.")
+    return novelty_score, num_novel
+
+# --- REMOVED: bin_data_to_nx function ---
+# --- REMOVED: load_training_graphs_from_bin function ---
+
+# +++ NEW: Training Graph Loader for PKL Files +++
+def load_training_graphs_from_pkl(train_pkl_files: List[str]) -> Optional[List[nx.DiGraph]]:
+    """
+    Loads training graphs directly from a list of PKL files.
+
+    Args:
+        train_pkl_files: A list of paths to the .pkl files containing lists of NetworkX graphs.
+
+    Returns:
+        A list of NetworkX DiGraphs, or None if loading fails or no files are provided.
+    """
+    if not train_pkl_files:
+        logger.warning("No training PKL files provided.")
+        return None
+
+    all_train_graphs = []
+    logger.info(f"Attempting to load training graphs from {len(train_pkl_files)} PKL file(s)...")
+
+    for file_path in train_pkl_files:
+        if not os.path.exists(file_path):
+            logger.warning(f"Training PKL file not found: {file_path}. Skipping.")
+            continue
+
+        logger.info(f" Loading training graphs from: {file_path}")
+        try:
+            with open(file_path, 'rb') as f:
+                graphs_in_file = pickle.load(f)
+            if isinstance(graphs_in_file, list):
+                # Basic check if items seem like graphs
+                valid_graphs_in_file = [g for g in graphs_in_file if isinstance(g, nx.Graph)]
+                num_loaded = len(graphs_in_file)
+                num_valid = len(valid_graphs_in_file)
+                if num_loaded != num_valid:
+                    logger.warning(f"  -> Loaded {num_valid} NetworkX graphs from {file_path} ({num_loaded - num_valid} items were not graphs).")
+                else:
+                    logger.info(f"  -> Successfully loaded {num_valid} graphs from {file_path}.")
+                all_train_graphs.extend(valid_graphs_in_file)
+            else:
+                logger.warning(f" Expected a list of graphs in {file_path}, got {type(graphs_in_file)}. Skipping file.")
+        except (pickle.UnpicklingError, EOFError, MemoryError) as e:
+            logger.error(f"Error reading pickle file {file_path}: {e}. Skipping.")
+        except Exception as e:
+            logger.error(f"An unexpected error occurred while loading {file_path}: {e}")
+
+    if not all_train_graphs:
+        logger.error("Failed to load any valid training graphs from the specified PKL files.")
+        return None
+
+    logger.info(f"Finished loading training graphs. Total loaded: {len(all_train_graphs)}")
+    return all_train_graphs
+# +++ END NEW FUNCTION +++
 
 
-# Example of how to use if run standalone (for testing)
+# --- MODIFIED: Main Evaluation Logic ---
+def run_standalone_evaluation(args):
+    """Runs the evaluation including Validity, Uniqueness, and Novelty."""
+    logger.info(f"Loading generated AIGs from: {args.input_pickle_file}")
+    try:
+        with open(args.input_pickle_file, 'rb') as f: generated_graphs = pickle.load(f)
+        if not isinstance(generated_graphs, list):
+             logger.error(f"Pickle file {args.input_pickle_file} does not contain a list."); return
+        # Optional: Filter generated graphs if needed
+        # generated_graphs = [g for g in generated_graphs if isinstance(g, nx.Graph)]
+        logger.info(f"Loaded {len(generated_graphs)} generated graphs.")
+    except FileNotFoundError: logger.error(f"Input pickle file not found: {args.input_pickle_file}"); return
+    except Exception as e: logger.error(f"Error loading generated graphs pickle file: {e}"); return
+
+    if not generated_graphs: logger.warning("No generated graphs found in the pickle file. Exiting."); return
+
+    # --- MODIFIED: Load Training Data from PKL ---
+    train_graphs = None
+    if args.train_pkl_files: # Check the new argument
+        train_graphs = load_training_graphs_from_pkl(args.train_pkl_files) # Call the new function
+        if train_graphs is None:
+             logger.warning(f"Could not load training graphs from specified PKL files. Novelty will not be calculated.")
+    else:
+        logger.info("No training PKL files provided via --train_pkl_files. Novelty will not be calculated.")
+    # --- END MODIFIED ---
+
+    num_total = len(generated_graphs)
+    valid_graphs = [] # Store the actual valid graph objects
+    aggregate_metrics = defaultdict(list)
+    aggregate_path_metrics = defaultdict(list)
+    failed_constraints_summary = Counter()
+
+    logger.info("Starting evaluation (Pass 1: Validity and Metrics)...")
+    for i, graph in enumerate(tqdm(generated_graphs, desc="Evaluating Validity")):
+        if not isinstance(graph, nx.DiGraph):
+            logger.warning(f"Item {i} is not a NetworkX DiGraph, skipping.")
+            failed_constraints_summary["Invalid Graph Object"] += 1; continue
+
+        # --- Run Structural Checks ---
+        # This function now expects string types ('NODE_PI', etc.)
+        struct_metrics = calculate_structural_aig_metrics(graph)
+        # --- End Checks ---
+
+        # Aggregate structural metrics for all graphs
+        for key, value in struct_metrics.items():
+             # Ensure value is serializable and correct type before appending
+             if isinstance(value, (int, float, bool)):
+                aggregate_metrics[key].append(float(value))
+             elif isinstance(value, list) and key == 'constraints_failed':
+                 # Don't aggregate the list itself, handle summary later
+                 pass
+
+        # Store valid graphs and calculate path metrics for them
+        if struct_metrics.get('is_structurally_valid', False): # Use .get for safety
+            valid_graphs.append(graph) # Store the valid graph object
+            try: # Add try-except for path metrics
+                 path_metrics = count_pi_po_paths(graph)
+                 if path_metrics.get('error') is None:
+                    for key, value in path_metrics.items():
+                        if isinstance(value, (int, float)): aggregate_path_metrics[key].append(value)
+                 else: logger.warning(f"Skipping path metrics for valid graph {i} due to error: {path_metrics['error']}")
+            except Exception as e:
+                 logger.error(f"Error calculating path metrics for valid graph {i}: {e}")
+        else:
+            # Collect failure reasons only for invalid graphs
+            for reason in struct_metrics.get('constraints_failed', ["Unknown Failure"]):
+                failed_constraints_summary[reason] += 1
+
+    logger.info("Evaluation (Pass 1) finished.")
+
+    num_valid_structurally = len(valid_graphs)
+
+    # --- Calculate Uniqueness ---
+    uniqueness_score, num_unique = calculate_uniqueness(valid_graphs)
+    # --- End Uniqueness ---
+
+    # --- Calculate Novelty (if training data loaded) ---
+    novelty_score, num_novel = (-1.0, -1) # Default values if not calculated
+    if train_graphs is not None:
+        novelty_score, num_novel = calculate_novelty(valid_graphs, train_graphs)
+    # --- End Novelty ---
+
+    # --- Reporting (Unchanged) ---
+    validity_fraction = (num_valid_structurally / num_total) if num_total > 0 else 0.0
+    validity_percentage = validity_fraction * 100
+
+    print("\n--- AIG Evaluation Summary (PKL Loaded) ---") # Updated Title
+    print(f"Total Generated Graphs Loaded   : {num_total}")
+    print(f"Structurally Valid AIGs (V)     : {num_valid_structurally} ({validity_percentage:.2f}%)")
+    if num_valid_structurally > 0:
+         print(f"Unique Valid AIGs             : {num_unique}")
+         print(f"Uniqueness (U) among valid    : {uniqueness_score:.4f} ({uniqueness_score*100:.2f}%)")
+         if train_graphs is not None:
+             print(f"Novel Valid AIGs vs Train Set : {num_novel}")
+             print(f"Novelty (N) among valid       : {novelty_score:.4f} ({novelty_score*100:.2f}%)")
+         else:
+             print(f"Novelty (N) among valid       : Not calculated (no training PKL files provided)")
+    else:
+         print(f"Uniqueness (U) among valid    : N/A (0 valid graphs)")
+         print(f"Novelty (N) among valid       : N/A (0 valid graphs)")
+
+    print("\n--- Average Structural Metrics (All Generated Graphs) ---")
+    for key, values in sorted(aggregate_metrics.items()):
+        if key == 'is_structurally_valid': continue
+        if not values: continue
+        avg_value = np.mean(values)
+        if key == 'is_dag': print(f"  - Avg {key:<27}: {avg_value*100:.2f}%")
+        else: print(f"  - Avg {key:<27}: {avg_value:.3f}")
+
+    print("\n--- Constraint Violation Summary (Across Invalid Graphs) ---")
+    num_invalid_graphs = num_total - num_valid_structurally
+    if num_invalid_graphs == 0: print("  No structural violations detected.")
+    else:
+        sorted_reasons = sorted(failed_constraints_summary.items(), key=lambda item: item[1], reverse=True)
+        print(f"  (Violations summarized across {num_invalid_graphs} invalid graphs)")
+        total_violation_instances = sum(failed_constraints_summary.values())
+        print(f"  (Total violation instances logged: {total_violation_instances})")
+        for reason, count in sorted_reasons:
+            reason_percentage_of_invalid = (count / num_invalid_graphs) * 100 if num_invalid_graphs > 0 else 0
+            print(f"  - {reason:<45}: {count:<6} graphs ({reason_percentage_of_invalid:.1f}% of invalid)")
+
+    print("\n--- Average Path Connectivity Metrics (Valid Graphs Only) ---")
+    num_graphs_for_path_metrics = len(aggregate_path_metrics.get('num_pi', []))
+    if num_graphs_for_path_metrics == 0: print("  No structurally valid graphs to calculate path metrics for.")
+    else:
+        print(f"  (Based on {num_graphs_for_path_metrics} structurally valid graphs)")
+        for key, values in sorted(aggregate_path_metrics.items()):
+             if key == 'error' or not values: continue
+             avg_value = np.mean(values)
+             print(f"  - Avg {key:<27}: {avg_value:.3f}")
+
+    print("------------------------------------")
+
+
+# --- MODIFIED: Main Execution Block ---
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Evaluate generated AIGs for Validity, Uniqueness, and Novelty.')
+    parser.add_argument('input_pickle_file', type=str,
+                        help='Path to the pickle file containing the list of generated NetworkX DiGraphs (e.g., generated_aigs.pkl).')
+    # --- MODIFIED ARGUMENT ---
+    parser.add_argument('--train_pkl_files', type=str, default=None, nargs='+', # Accept one or more paths
+                        help='(Optional) Path(s) to the training dataset PKL file(s) for Novelty calculation.')
+    # --- END MODIFIED ARGUMENT ---
+
+    parsed_args = parser.parse_args()
+    run_standalone_evaluation(parsed_args)

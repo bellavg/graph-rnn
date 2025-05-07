@@ -1,0 +1,50 @@
+# Config: GRU Node + RNN Edge
+data:
+  dataset_type: 'aig-directed-multiclass'
+  # graph_file: 'dataset/final_data.pkl' # OLD - Single file path
+  graph_files: # NEW - List of file paths
+    - '../aigs/real_aigs_part_1_of_6.pkl' # Assuming files are in 'aigs' subfolder
+#    - '../aigs/real_aigs_part_2_of_6.pkl'
+#    - '../aigs/real_aigs_part_3_of_6.pkl'
+#    - '../aigs/real_aigs_part_4_of_6.pkl'
+    # Add paths to all your generated .pkl files here
+  use_bfs: false # Keep false for topological sort used by AIGDataset
+  max_graphs: null # Set to null to use all graphs from the listed files
+  # 'm' is calculated internally by AIGDataset based on max_node_count.
+  # Keep this value roughly correct (max_node_count - 1) for potential use elsewhere,
+  # but the dataset class will use the precise value.
+  # Update this if your new dataset's max_node_count is significantly different.
+  m: 63
+  max_level: 22
+
+model:
+  mode: 'directed-multiclass'
+  use_lstm: false         # GRU Node
+  use_attention: false    # No Node Attention
+  edge_model: 'rnn'       # RNN Edge
+
+  GraphRNN:
+    embedding_size: 384
+    hidden_size: 768
+    num_layers: 4
+    # IMPORTANT: This must be 3 for the 3-class edge representation
+    # (NONE, REGULAR, INVERTED) used internally and output by AIGDataset
+    edge_feature_len: 3
+    output_size: 384      # MUST match EdgeRNN.hidden_size
+
+  EdgeRNN:
+    embedding_size: 192
+    hidden_size: 384      # MUST match GraphRNN.output_size
+    num_layers: 4
+    # IMPORTANT: This must also be 3
+    edge_feature_len: 3
+
+train:
+  batch_size: 64
+  lr: 0.001              # Initial Learning Rate
+  steps: 75000            # Total training steps
+  print_iter: 100
+  checkpoint_iter: 7500
+  checkpoint_dir: 'checkpoints/checkpoints_gru_rnn' # Specific directory
+  log_file: 'train_results/logs_gru_rnn'               # Specific directory
+  # lr_schedule_* removed; code uses CosineAnnealingLR

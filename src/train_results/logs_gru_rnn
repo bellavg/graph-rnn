@@ -1,0 +1,5 @@
+timestamp,model_name,global_step,epoch,total_loss,edge_loss,lr_node,lr_edge,time_per_iter,avg_epoch_loss,dataset_size
+# New training run started at 2025-05-07 23:50:02
+# Model: GRU_RNN_h768_384
+# Config: {"data": {"dataset_type": "aig-directed-multiclass", "graph_files": ["../aigs/real_aigs_part_1_of_6.pkl"], "use_bfs": false, "max_graphs": null, "m": 63, "max_level": 22}, "model": {"mode": "directed-multiclass", "use_lstm": false, "use_attention": false, "edge_model": "rnn", "GraphRNN": {"embedding_size": 384, "hidden_size": 768, "num_layers": 4, "edge_feature_len": 3, "output_size": 384}, "EdgeRNN": {"embedding_size": 192, "hidden_size": 384, "num_layers": 4, "edge_feature_len": 3}}, "train": {"batch_size": 64, "lr": 0.001, "steps": 75000, "print_iter": 100, "checkpoint_iter": 7500, "checkpoint_dir": "checkpoints/checkpoints_gru_rnn", "log_file": "train_results/logs_gru_rnn"}}
+2025-05-08 00:04:32,GRU_RNN_h768_384,100,1,0.7515910863876343,0.7515910863876343,0.0009999956135155691,0.0009999956135155691,8.70394713640213,0.8395997136831284,23406

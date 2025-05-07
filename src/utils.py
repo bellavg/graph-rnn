@@ -4,7 +4,7 @@ Combines functions from multiple sources for a unified interface.
 """
 
 import torch
-from aig_dataset import NUM_EDGE_FEATURES
+from .aig_dataset import NUM_EDGE_FEATURES_RNN
 
 
 def setup_models(config, device, max_node_count, max_level):
@@ -86,19 +86,19 @@ def setup_models(config, device, max_node_count, max_level):
     # --- Instantiate Node Model ---
     if use_lstm:
         if use_node_attention:
-            from model import GraphLevelAttentionLSTM
+            from .model import GraphLevelAttentionLSTM
             node_model = GraphLevelAttentionLSTM(**node_params).to(device)
             print(f"INFO: Using GraphLevelAttentionLSTM for node level.")
         else:
             # Ensure attention keys aren't accidentally passed
             node_params.pop('attention_heads', None)
             node_params.pop('attention_dropout', None)
-            from model import GraphLevelLSTM
+            from .model import GraphLevelLSTM
             node_model = GraphLevelLSTM(**node_params).to(device)
             print(f"INFO: Using GraphLevelLSTM for node level.")
     else:  # GRU
         if use_node_attention:
-            from model import GraphLevelAttentionRNN
+            from .model import GraphLevelAttentionRNN
             node_model = GraphLevelAttentionRNN(**node_params).to(device)
             print(f"INFO: Using GraphLevelAttentionRNN for node level.")
         else:
@@ -106,7 +106,7 @@ def setup_models(config, device, max_node_count, max_level):
             node_params.pop('attention_heads', None)
             node_params.pop('attention_dropout', None)
             node_params.pop('use_attention', None)  # Remove the flag itself if it exists
-            from model import GraphLevelRNN
+            from .model import GraphLevelRNN
             node_model = GraphLevelRNN(**node_params).to(device)
             print(f"INFO: Using standard GraphLevelRNN for node level.")
 
@@ -128,9 +128,9 @@ def setup_models(config, device, max_node_count, max_level):
         # Ensure EdgeMLP config has its own edge_feature_len
         if 'edge_feature_len' not in edge_params: edge_params['edge_feature_len'] = node_edge_feature_len
 
-        from model import EdgeLevelMLP
+        from .model import EdgeLevelMLP
         edge_model = EdgeLevelMLP(**edge_params).to(device)
-        from train import train_mlp_step
+        from .train import train_mlp_step
         step_fn = train_mlp_step
         print("Selected EdgeLevelMLP model.")
 
@@ -145,16 +145,16 @@ def setup_models(config, device, max_node_count, max_level):
         if is_edge_lstm:
             if is_edge_attention:
                 config_section = 'EdgeAttentionLSTM'
-                from model import EdgeLevelAttentionLSTM
+                from .model import EdgeLevelAttentionLSTM
                 EdgeModelClass = EdgeLevelAttentionLSTM
-                from train import train_rnn_step
+                from .train import train_rnn_step
                 step_fn = train_rnn_step  # Assumes train_rnn_step handles LSTM state tuple
                 # Or: step_fn = train_lstm_step
             else:
                 config_section = 'EdgeLSTM'
-                from model import EdgeLevelLSTM
+                from .model import EdgeLevelLSTM
                 EdgeModelClass = EdgeLevelLSTM
-                from train import train_rnn_step
+                from .train import train_rnn_step
                 step_fn = train_rnn_step  # Or train_lstm_step
         else:  # GRU Edge Model
             if is_edge_attention:
@@ -164,15 +164,15 @@ def setup_models(config, device, max_node_count, max_level):
                     print(
                         f"Warning: Config section 'model.{config_section}' not found, using 'EdgeRNN'. Add 'attention_heads/dropout' there if needed.")
                     config_section = 'EdgeRNN'
-                from model import EdgeLevelAttentionRNN
+                from .model import EdgeLevelAttentionRNN
                 EdgeModelClass = EdgeLevelAttentionRNN
-                from train import train_rnn_step
+                from .train import train_rnn_step
                 step_fn = train_rnn_step
             else:
                 config_section = 'EdgeRNN'
-                from model import EdgeLevelRNN
+                from .model import EdgeLevelRNN
                 EdgeModelClass = EdgeLevelRNN
-                from train import train_rnn_step
+                from .train import train_rnn_step
                 step_fn = train_rnn_step
 
         # Load edge config and instantiate
@@ -235,7 +235,7 @@ def setup_criteria(config, device, dataset):
         # Fallback or error if primary section not found (should have been caught in setup_models)
         # Using NUM_EDGE_FEATURES as a last resort default
         print(f"Warning: Could not find section {node_config_section} in setup_criteria. Defaulting edge_feature_len.")
-        edge_feature_len = NUM_EDGE_FEATURES
+        edge_feature_len = NUM_EDGE_FEATURES_RNN
     else:
         # Get edge_feature_len from the correct node model's config section
         edge_feature_len = config['model'][node_config_section].get('edge_feature_len')
