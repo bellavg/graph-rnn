@@ -4,9 +4,9 @@ data:
   # graph_file: 'dataset/final_data.pkl' # OLD - Single file path
   graph_files: # NEW - List of file paths
     - '../aigs/real_aigs_part_1_of_6.pkl' # Assuming files are in 'aigs' subfolder
-#    - '../aigs/real_aigs_part_2_of_6.pkl'
-#    - '../aigs/real_aigs_part_3_of_6.pkl'
-#    - '../aigs/real_aigs_part_4_of_6.pkl'
+    - '../aigs/real_aigs_part_2_of_6.pkl'
+    - '../aigs/real_aigs_part_3_of_6.pkl'
+    - '../aigs/real_aigs_part_4_of_6.pkl'
     # Add paths to all your generated .pkl files here
   use_bfs: false # Keep false for topological sort used by AIGDataset
   max_graphs: null # Set to null to use all graphs from the listed files
