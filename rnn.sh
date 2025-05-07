@@ -52,7 +52,7 @@ source activate aig-rnn # Replace with your actual environment name
 echo "--------------------------------------------------------"
 echo "Step 1: Starting Training (src/main.py)..."
 echo "--------------------------------------------------------"
-srun python -u src/main.py \
+srun python -u main.py \
     --config_file="${CONFIG_FILE}" \
     --save_dir="${CHECKPOINT_DIR}" \
     # Add --restore argument here if needed, e.g.:
