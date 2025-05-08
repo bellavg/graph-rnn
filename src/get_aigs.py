@@ -16,7 +16,7 @@ import pickle # Added for saving graphs
 # --- Import from project files ---
 # Model imports
 try:
-    from .model import (GraphLevelRNN, EdgeLevelRNN, EdgeLevelMLP,
+    from src.model import (GraphLevelRNN, EdgeLevelRNN, EdgeLevelMLP,
                        GraphLevelAttentionRNN, EdgeLevelAttentionRNN,
                        GraphLevelLSTM, EdgeLevelLSTM,
                        GraphLevelAttentionLSTM, EdgeLevelAttentionLSTM)
@@ -29,7 +29,7 @@ except ImportError as e:
 # Generation imports (Ensure generate_aigs.py is the updated version)
 try:
     # Import the main generate function and necessary helpers/constants
-    from .generate_aigs import generate, rnn_edge_gen, mlp_edge_gen, EDGE_TYPES, NUM_EDGE_FEATURES
+    from src.generate_aigs import generate, rnn_edge_gen, mlp_edge_gen, EDGE_TYPES, NUM_EDGE_FEATURES
 except ImportError as e:
     print(f"Error importing from generate_aigs.py: {e}. Ensure it exists and is accessible.")
     sys.exit(1)
