@@ -90,7 +90,7 @@ echo "Step 3: Starting Evaluation (src/evaluate_aigs.py)..."
 echo "--------------------------------------------------------"
 # Note: evaluate_aigs.py will output results to stdout
 srun python -u src/evaluate_aigs.py \
-    "aig_run_11640569/generated/generated_aigs.pkl" \
+    "aig_run_11640653/generated/generated_aigs.pkl" \
     --train_pkl_files aigs/real_aigs_part_1_of_6.pkl aigs/real_aigs_part_2_of_6.pkl aigs/real_aigs_part_3_of_6.pkl  aigs/real_aigs_part_4_of_6.pkl
 
 echo "Evaluation finished."
