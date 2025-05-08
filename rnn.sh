@@ -120,7 +120,7 @@ echo "--------------------------------------------------------"
 echo "Step 1: Starting Training (src/main.py)..."
 echo "Saving checkpoints relative to: ${TRAIN_SAVE_DIR}"
 echo "--------------------------------------------------------"
-srun python -u src/main.py \
+srun python -u main.py \
     --config_file="${CONFIG_FILE}" \
     --save_dir="${TRAIN_SAVE_DIR}" \
     # Add --restore argument here if needed, e.g.:
