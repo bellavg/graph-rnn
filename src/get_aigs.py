@@ -22,14 +22,15 @@ try:
                        GraphLevelAttentionLSTM, EdgeLevelAttentionLSTM)
     MODEL_CLASSES_LOADED = True
 except ImportError as e:
-    print(f"Error importing model classes: {e}. Ensure model.py is accessible.")
-    MODEL_CLASSES_LOADED = False
-    sys.exit(1) # Exit if models are critical
+    from model import (GraphLevelRNN, EdgeLevelRNN, EdgeLevelMLP,
+                       GraphLevelAttentionRNN, EdgeLevelAttentionRNN,
+                       GraphLevelLSTM, EdgeLevelLSTM,
+                       GraphLevelAttentionLSTM, EdgeLevelAttentionLSTM)
 
 # Generation imports (Ensure generate_aigs.py is the updated version)
 try:
     # Import the main generate function and necessary helpers/constants
-    from src.generate_aigs import generate, rnn_edge_gen, mlp_edge_gen, EDGE_TYPES, NUM_EDGE_FEATURES
+    from generate_aigs import generate, rnn_edge_gen, mlp_edge_gen, EDGE_TYPES, NUM_EDGE_FEATURES
 except ImportError as e:
     print(f"Error importing from generate_aigs.py: {e}. Ensure it exists and is accessible.")
     sys.exit(1)
