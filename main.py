@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Training script for AIG graph generation models.
+Includes node type prediction loss.
 Uses a simple file logger to track training progress.
 Handles loading data from multiple PKL files specified in the config.
 """
@@ -9,19 +10,23 @@ import argparse
 import os
 import time
 import datetime
+import sys
+import tqdm
 import torch
 from torch.utils.data import DataLoader
-from typing import Dict, Any, List # Added List
+from typing import Dict, Any, List
 
 # Import from our modules
-# Make sure data_utils.py is updated to handle lists of files
-from src.data_utils import load_config, get_max_node_count_from_pkl, get_max_level_from_pkl
+from src.data_utils import load_config # Removed unused get_max_* functions here
 from src.logger import SimpleLogger
-from src.utils import setup_models, setup_criteria
-# Ensure aig_dataset.py contains the updated AIGDataset class
-from src.aig_dataset import AIGDataset # NUM_EDGE_FEATURES is now internal to AIGDataset
-from src.train import train_rnn_step, train_mlp_step
+from src.utils import setup_models, setup_criteria # setup_criteria now returns criterion_node
+from src.aig_dataset import AIGDataset
+from src.train import train_rnn_step # Assuming only RNN step needed
 
+# --- Constants ---
+# Default values if config loading fails or keys are missing
+DEFAULT_MAX_NODE_COUNT = 64
+DEFAULT_MAX_LEVEL = 22
 
 def parse_args():
     """Parse command line arguments."""
@@ -52,41 +57,61 @@ def restore_checkpoint(path, device, node_model, edge_model,
                      "optim_edge_model", "scheduler_node_model", "scheduler_edge_model"]
     for key in required_keys:
         if key not in state:
+            # Allow missing keys if node prediction was added later
+            if key == "node_model" and "predict_node_types" in node_model.state_dict():
+                 print(f"Warning: Checkpoint missing '{key}', likely due to added node prediction head. Initializing node model from scratch.")
+                 continue # Skip loading this specific key
             raise KeyError(f"Checkpoint missing required key: '{key}'")
 
     global_step = state["global_step"]
     try:
-        node_model.load_state_dict(state["node_model"])
-        edge_model.load_state_dict(state["edge_model"])
+        # Use strict=False to handle potentially added node_type_predictor layer
+        node_load_result = node_model.load_state_dict(state["node_model"], strict=False)
+        edge_load_result = edge_model.load_state_dict(state["edge_model"], strict=False) # Edge model unchanged
+
+        # Log missing/unexpected keys for debugging
+        if node_load_result.missing_keys: print(f"Warning: Node model missing keys in checkpoint: {node_load_result.missing_keys}")
+        if node_load_result.unexpected_keys: print(f"Warning: Node model unexpected keys in checkpoint: {node_load_result.unexpected_keys}")
+        if edge_load_result.missing_keys: print(f"Warning: Edge model missing keys in checkpoint: {edge_load_result.missing_keys}")
+        if edge_load_result.unexpected_keys: print(f"Warning: Edge model unexpected keys in checkpoint: {edge_load_result.unexpected_keys}")
+
+
         optim_node_model.load_state_dict(state["optim_node_model"])
         optim_edge_model.load_state_dict(state["optim_edge_model"])
         scheduler_node_model.load_state_dict(state["scheduler_node_model"])
         scheduler_edge_model.load_state_dict(state["scheduler_edge_model"])
         print(f"Successfully restored models and optimizers to step {global_step}.")
     except Exception as e:
-        raise RuntimeError(f"Error loading state dictionaries from checkpoint: {e}")
+        print(f"Error loading state dictionaries from checkpoint: {e}")
+        print("Attempting to proceed with potentially partially loaded models/optimizers.")
+        # Decide whether to raise or just continue from step 0
+        # raise RuntimeError(f"Error loading state dictionaries from checkpoint: {e}")
+        global_step = 0 # Reset step if loading fails significantly
 
     return global_step
 
-
+# --- MODIFIED: train_loop signature ---
 def train_loop(config, node_model, edge_model, step_fn,
-               criterion_edge,
+               criterion_edge, criterion_node, # ADDED criterion_node
                optim_node_model, optim_edge_model, scheduler_node_model, scheduler_edge_model,
                device,
                dataset,
                global_step, logger, base_path):
     """
     Main training loop function that handles the training process.
+    Includes node loss calculation.
     """
-    # Ensure dataset is not empty before creating DataLoader
     if len(dataset) == 0:
         print("Error: Training dataset is empty. Cannot start training loop.")
-        return # Or raise an error
+        return
 
-    data_loader = DataLoader(dataset, batch_size=config['train']['batch_size'], shuffle=True)
+    data_loader = DataLoader(dataset, batch_size=config['train']['batch_size'], shuffle=True, num_workers=4, pin_memory=True) # Added workers/pin_memory
 
-    # Always use edge features (determined by dataset/model setup)
-    use_edge_features = True # Assumes multi-class edge prediction
+    # Determine if edge features and node types are used based on model config
+    # (assuming setup_criteria correctly determined use_edge_features)
+    use_edge_features = config['model'].get('GraphRNN', {}).get('edge_feature_len', 1) > 1
+    predict_node_types = config['train'].get('predict_node_types', config['model'].get('predict_node_types', False))
+    node_loss_weight = config['train'].get('node_loss_weight', 1.0) # Get weight from config
 
     node_model.train()
     edge_model.train()
@@ -98,54 +123,84 @@ def train_loop(config, node_model, edge_model, step_fn,
 
     while not done:
         epoch += 1
-        epoch_loss_sum = 0
+        epoch_loss_sum = 0.0
+        epoch_edge_loss_sum = 0.0
+        epoch_node_loss_sum = 0.0
         epoch_steps = 0
 
-        for batch_idx, data in enumerate(data_loader):
+        pbar = tqdm(data_loader, desc=f"Epoch {epoch}", leave=False) # Add progress bar
+        for batch_idx, data in enumerate(pbar):
             global_step += 1
             if global_step > config['train']['steps']:
                 done = True
                 break
 
-            # Perform one training step
-            loss_dict = step_fn(node_model, edge_model, data,
-                                criterion_edge,
-                                optim_node_model, optim_edge_model,
-                                scheduler_node_model, scheduler_edge_model,
-                                device, use_edge_features)
+            # --- MODIFIED: Perform one training step, passing criterion_node ---
+            loss_dict = step_fn(
+                node_model, edge_model, data,
+                criterion_edge, criterion_node, # Pass both criteria
+                optim_node_model, optim_edge_model,
+                scheduler_node_model, scheduler_edge_model,
+                device, use_edge_features,
+                node_loss_weight=node_loss_weight # Pass weight
+            )
+            # --- END MODIFIED ---
 
-            # Get loss values
+            # --- MODIFIED: Get loss values including node_loss ---
             total_loss = loss_dict.get('total', 0.0)
             edge_loss = loss_dict.get('edge', 0.0)
+            node_loss = loss_dict.get('node', 0.0) # Get node loss
 
+            # Accumulate losses for epoch average
             epoch_loss_sum += total_loss
+            epoch_edge_loss_sum += edge_loss
+            epoch_node_loss_sum += node_loss
             epoch_steps += 1
+            # --- END MODIFIED ---
+
+            # Update progress bar
+            pbar.set_postfix({
+                'loss': f"{total_loss:.4f}",
+                'edge_l': f"{edge_loss:.4f}",
+                'node_l': f"{node_loss:.4f}" if predict_node_types else "N/A",
+                'lr': f"{scheduler_node_model.get_last_lr()[0]:.1E}"
+            })
 
             # Log metrics periodically
             if global_step % config['train']['print_iter'] == 0:
-                avg_loss_since_print = epoch_loss_sum / epoch_steps if epoch_steps > 0 else 0.0
-                time_per_iter = (time.time() - start_time) / (global_step - start_step) if (
-                        global_step - start_step) > 0 else 0.0
+                avg_total_loss_print = epoch_loss_sum / epoch_steps if epoch_steps > 0 else 0.0
+                avg_edge_loss_print = epoch_edge_loss_sum / epoch_steps if epoch_steps > 0 else 0.0
+                avg_node_loss_print = epoch_node_loss_sum / epoch_steps if epoch_steps > 0 else 0.0
+
+                time_per_iter = (time.time() - start_time) / (global_step - start_step) if (global_step - start_step) > 0 else 0.0
                 eta_seconds = (config['train']['steps'] - global_step) * time_per_iter
                 eta_formatted = datetime.timedelta(seconds=int(eta_seconds))
 
                 # Log to console
-                print(f"[{global_step}/{config['train']['steps']}] loss={avg_loss_since_print:.4f} "
-                      f"lr={scheduler_node_model.get_last_lr()[0]:.1E} "
-                      f"time/iter={time_per_iter:.3f}s eta={eta_formatted}")
+                log_str = (f"[{global_step}/{config['train']['steps']}] "
+                           f"Tot Loss={avg_total_loss_print:.4f} "
+                           f"(E:{avg_edge_loss_print:.4f} "
+                           f"N:{avg_node_loss_print:.4f}) " if predict_node_types else f"Loss={avg_total_loss_print:.4f} ")
+                log_str += (f"LR={scheduler_node_model.get_last_lr()[0]:.1E} "
+                            f"IterTime={time_per_iter:.3f}s ETA={eta_formatted}")
+                print(log_str)
 
-                # Log to file
+
+                # --- MODIFIED: Log to file including node_loss ---
+                # Ensure logger.log_step accepts node_loss
                 logger.log_step(
                     global_step=global_step,
                     epoch=epoch,
-                    total_loss=total_loss,
-                    edge_loss=edge_loss,
+                    total_loss=total_loss, # Log current step's loss
+                    edge_loss=edge_loss,   # Log current step's loss
+                    node_loss=node_loss,   # ADDED: Log current step's node loss
                     lr_node_model=scheduler_node_model.get_last_lr()[0],
                     lr_edge_model=scheduler_edge_model.get_last_lr()[0],
                     time_per_iter=time_per_iter,
-                    avg_epoch_loss=avg_loss_since_print,
+                    avg_epoch_loss=avg_total_loss_print, # Log average loss since last print
                     dataset_size=len(dataset)
                 )
+                # --- END MODIFIED ---
 
             # Save checkpoint periodically or at the end
             if global_step % config['train']['checkpoint_iter'] == 0 or global_step >= config['train']['steps']:
@@ -153,10 +208,10 @@ def train_loop(config, node_model, edge_model, step_fn,
                 os.makedirs(checkpoint_dir, exist_ok=True)
 
                 checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint-{global_step}.pth")
-                print(f"Saving checkpoint to {checkpoint_path}...")
+                print(f"\nSaving checkpoint to {checkpoint_path}...")
                 save_state = {
                     "global_step": global_step,
-                    "config": config, # Save the config used for this run
+                    "config": config,
                     "node_model": node_model.state_dict(),
                     "edge_model": edge_model.state_dict(),
                     "optim_node_model": optim_node_model.state_dict(),
@@ -171,16 +226,27 @@ def train_loop(config, node_model, edge_model, step_fn,
                     print(f"Error saving checkpoint: {e}")
 
         # Log epoch summary
+        pbar.close() # Close epoch progress bar
         if epoch_steps > 0:
             avg_epoch_loss = epoch_loss_sum / epoch_steps
+            avg_epoch_edge_loss = epoch_edge_loss_sum / epoch_steps
+            avg_epoch_node_loss = epoch_node_loss_sum / epoch_steps
+            # --- MODIFIED: Log epoch including node_loss ---
+            # Ensure logger.log_epoch accepts node_loss
             logger.log_epoch(
                 epoch=epoch,
                 avg_loss=avg_epoch_loss,
+                avg_edge_loss=avg_epoch_edge_loss, # ADDED
+                avg_node_loss=avg_epoch_node_loss, # ADDED
                 steps=epoch_steps,
                 global_step=global_step,
                 dataset_size=len(dataset)
             )
-            print(f"Epoch {epoch} complete. Average loss: {avg_epoch_loss:.4f}")
+            epoch_summary = (f"Epoch {epoch} complete. Avg Loss: {avg_epoch_loss:.4f} "
+                             f"(E:{avg_epoch_edge_loss:.4f} N:{avg_epoch_node_loss:.4f})" if predict_node_types else
+                             f"Epoch {epoch} complete. Avg Loss: {avg_epoch_loss:.4f}")
+            print(epoch_summary)
+            # --- END MODIFIED ---
 
     print("Training loop finished.")
     logger.close()
@@ -198,92 +264,83 @@ def main():
     base_path = args.save_dir
     os.makedirs(base_path, exist_ok=True)
     device = torch.device(f'cuda:{args.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
 
-    # --- MODIFIED: Get list of graph files from config ---
+    # --- Get graph files list ---
     try:
         graph_files_list = config['data']['graph_files']
         if not isinstance(graph_files_list, list) or not graph_files_list:
-             raise ValueError("Config 'data.graph_files' must be a non-empty list of file paths.")
-        print(f"Using graph files specified in config: {graph_files_list}")
+             raise ValueError("Config 'data.graph_files' must be a non-empty list.")
+        print(f"Using graph files: {graph_files_list}")
     except KeyError:
-        print("FATAL: Config missing 'data.graph_files'. Please update your config YAML.")
+        print("FATAL: Config missing 'data.graph_files'.")
         return 1
     except ValueError as e:
         print(f"FATAL: {e}")
         return 1
-    # --- END MODIFICATION ---
 
-    # --- Determine max_node_count and max_level efficiently ---
-    # --- MODIFIED: Pass list of files to utility functions ---
-    try:
-        print("Computing maximum node count from dataset files...")
-        # IMPORTANT: Assumes get_max_node_count_from_pkl is updated to accept a list
-        max_node_count = 64
-        print(f"Maximum node count: {max_node_count}")
-
-        print("Computing maximum level from dataset files...")
-        # IMPORTANT: Assumes get_max_level_from_pkl is updated to accept a list
-        max_level = 22
-        print(f"Maximum level: {max_level}")
-    except (FileNotFoundError, IOError, ValueError, RuntimeError) as e:
-        print(f"FATAL: Failed to determine dataset statistics: {e}")
-        return 1
-    # --- END MODIFICATION ---
+    # --- Determine max_node_count and max_level from config or defaults ---
+    # Use values from config if present, otherwise use defaults
+    max_node_count = config['data'].get('max_node_count', DEFAULT_MAX_NODE_COUNT)
+    max_level = config['data'].get('max_level', DEFAULT_MAX_LEVEL)
+    print(f"Using Max Node Count: {max_node_count}")
+    print(f"Using Max Level: {max_level}")
+    # We skip calling get_max_node_count_from_pkl and get_max_level_from_pkl
+    # as these values are now expected to be in the config or defaulted.
 
     # --- Initialize Dataset ---
-    # --- MODIFIED: Pass list of files and remove include_node_types ---
     try:
         dataset = AIGDataset(
-            graph_files=graph_files_list, # Pass the list
+            graph_files=graph_files_list,
             training=True,
             train_split=config['data'].get('train_split', 0.9),
-            max_graphs=config['data'].get('max_graphs'), # Pass if defined in config
+            max_graphs=config['data'].get('max_graphs'),
             max_train_graphs=config['data'].get('max_train_graphs')
-            # include_node_types argument removed
         )
-    # --- END MODIFICATION ---
-
-        # Sanity check - ensure our precomputed values match the dataset's computed values
+        # Update max_node_count and max_level based on dataset's computed values
+        # This ensures consistency if the dataset calculation differs from config/defaults
         if dataset.max_node_count != max_node_count:
-            print(
-                f"Warning: Precomputed max_node_count {max_node_count} differs from dataset's {dataset.max_node_count}")
-            max_node_count = dataset.max_node_count # Use the dataset's value
-
+            print(f"Warning: Config/Default max_node_count ({max_node_count}) differs from dataset's ({dataset.max_node_count}). Using dataset value.")
+            max_node_count = dataset.max_node_count
         if dataset.max_level != max_level:
-            print(f"Warning: Precomputed max_level {max_level} differs from dataset's {dataset.max_level}")
-            max_level = dataset.max_level # Use the dataset's value
+             print(f"Warning: Config/Default max_level ({max_level}) differs from dataset's ({dataset.max_level}). Using dataset value.")
+             max_level = dataset.max_level
 
-        print(f"Dataset initialized with {len(dataset)} training graphs")
-        print(f"Final statistics - Max node count: {max_node_count}, Max level: {max_level}")
+        print(f"Dataset initialized with {len(dataset)} training graphs.")
+        print(f"Final Stats - Max Nodes: {max_node_count}, Max Level: {max_level}")
     except Exception as e:
-        print(f"FATAL: Failed to initialize main dataset: {e}. Cannot proceed.")
+        print(f"FATAL: Failed to initialize dataset: {e}. Cannot proceed.", file=sys.stderr)
+        # import traceback
+        # traceback.print_exc() # Print full traceback for debugging
         return 1
+
 
     # --- Setup Models and Criteria ---
     try:
-        # Pass the determined max_node_count and max_level
+        # Pass the potentially updated max_node_count and max_level
         node_model, edge_model, step_fn = setup_models(config, device, max_node_count, max_level)
-        criterion_edge, use_edge_features = setup_criteria(config, device, dataset)
+
+        # --- MODIFIED: Unpack criteria including criterion_node ---
+        criterion_edge, criterion_node, use_edge_features = setup_criteria(config, device, dataset)
+        # --- END MODIFIED ---
+
     except (ValueError, KeyError) as e:
         print(f"Error setting up models or criteria: {e}")
         return 1
 
     # --- Setup Optimizers and Schedulers ---
     try:
-        optim_node_model = torch.optim.AdamW(node_model.parameters(), lr=config['train']['lr'])
-        optim_edge_model = torch.optim.AdamW(edge_model.parameters(), lr=config['train']['lr'])
+        lr = config['train'].get('lr', 0.001) # Default LR if missing
+        optim_node_model = torch.optim.AdamW(node_model.parameters(), lr=lr)
+        optim_edge_model = torch.optim.AdamW(edge_model.parameters(), lr=lr)
         eta_min_value = config['train'].get('eta_min', 0)
         total_steps = config['train']['steps']
 
         scheduler_node_model = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optim_node_model,
-            T_max=total_steps,
-            eta_min=eta_min_value
+            optim_node_model, T_max=total_steps, eta_min=eta_min_value
         )
         scheduler_edge_model = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optim_edge_model,
-            T_max=total_steps,
-            eta_min=eta_min_value
+            optim_edge_model, T_max=total_steps, eta_min=eta_min_value
         )
     except KeyError as e:
         print(f"Error setting up optimizers/schedulers: Missing key {e} in config['train']")
@@ -291,7 +348,8 @@ def main():
 
     # --- Initialize Simple Logger ---
     log_file_path = config['train'].get('log_file', os.path.join(base_path, 'training_log.csv'))
-    os.makedirs(os.path.dirname(log_file_path), exist_ok=True) # Ensure log dir exists
+    os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
+    # Pass the whole config to the logger
     logger = SimpleLogger(log_file_path, config)
     print(f"Logger initialized. Writing to: {log_file_path}")
 
@@ -308,13 +366,15 @@ def main():
             global_step = 0
 
     # --- Start Training Loop ---
+    # --- MODIFIED: Pass criterion_node to train_loop ---
     train_loop(config, node_model, edge_model, step_fn,
-               criterion_edge,
+               criterion_edge, criterion_node, # Pass both criteria
                optim_node_model, optim_edge_model,
                scheduler_node_model, scheduler_edge_model,
                device,
                dataset,
                global_step, logger, base_path)
+    # --- END MODIFIED ---
 
     print("Training completed successfully.")
     return 0

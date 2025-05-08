@@ -2,492 +2,250 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 import math # Needed for positional encoding if used, or sqrt in attention
-
-import torch
-import torch.nn as nn
-from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
-import math
-from typing import Optional
-
-# --- Renamed GraphLevelAttentionRNN ---
-class GraphLevelAttentionRNN(nn.Module):
-    def __init__(self, input_size, embedding_size, hidden_size, num_layers,
-                 output_size=None, edge_feature_len=3,
-                 predict_node_types=False, num_node_types=None, # Kept for flexibility
-                 use_conditioning=False, tt_size=None, # Kept for flexibility
-                 max_level=None,
-                 attention_heads=4, # Default 4 heads
-                 attention_dropout=0.1): # Default 0.1 dropout
-        super().__init__()
-        # --- (Keep the __init__ implementation from the previous response) ---
-        self.input_size = input_size # m or max_nodes-1
-        self.embedding_size = embedding_size
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.edge_feature_len = edge_feature_len
-        self.predict_node_types = predict_node_types
-        self.use_conditioning = use_conditioning
-        self.tt_size = tt_size
-        self.max_level = max_level
-
-        lin_in_features = input_size * edge_feature_len
-        if self.use_conditioning and self.tt_size is not None:
-            lin_in_features += self.tt_size
-        self.linear_in = nn.Linear(lin_in_features, embedding_size)
-        self.relu = nn.ReLU()
-
-        self.level_embedding = None
-        if self.max_level is not None and self.max_level >= 0:
-             self.level_embedding = nn.Embedding(self.max_level + 1, embedding_size)
-             print(f"INFO: GraphLevelAttentionRNN using level embedding up to level {self.max_level}")
-
-        self.self_attention = nn.MultiheadAttention(
-            embed_dim=embedding_size,
-            num_heads=attention_heads,
-            dropout=attention_dropout,
-            batch_first=True
-        )
-        self.attention_norm = nn.LayerNorm(embedding_size)
-        self.attention_dropout_layer = nn.Dropout(attention_dropout)
-
-        self.gru = nn.GRU(input_size=embedding_size, hidden_size=hidden_size,
-                          num_layers=num_layers, batch_first=True)
-
-        self.linear_out1 = None
-        self.linear_out2 = None
-        if output_size:
-            self.linear_out1 = nn.Linear(hidden_size, embedding_size)
-            self.linear_out2 = nn.Linear(embedding_size, output_size)
-
-        self.node_type_predictor = None
-        if self.predict_node_types:
-            if num_node_types is None: raise ValueError("num_node_types must be specified")
-            self.node_type_predictor = nn.Linear(hidden_size, num_node_types)
-
-        self.hidden = None
-
-
-    def reset_hidden(self):
-        self.hidden = None
-
-    def forward(self, x, x_lens=None, truth_table=None, levels=None):
-        # x shape: [batch, seq_len, input_size, edge_feature_len]
-        # x_lens shape: [batch] (tensor of actual lengths)
-        # levels shape: [batch, seq_len]
-
-        batch_size, seq_len, _, _ = x.shape
-        device = x.device # Get device from input tensor
-
-        # 1. Flatten edge features & apply initial embedding
-        x_flat = torch.flatten(x, 2, 3)
-
-        # 2. Concatenate truth table if conditioning
-        if self.use_conditioning and truth_table is not None:
-            tt_expanded = truth_table.unsqueeze(1).expand(-1, seq_len, -1)
-            x_flat = torch.cat((x_flat, tt_expanded), dim=2)
-
-        embedded_input = self.relu(self.linear_in(x_flat)) # [batch, seq_len, embedding_dim]
-
-        # 3. Add Level Embedding
-        if self.level_embedding is not None and levels is not None:
-            if levels.shape[0] == batch_size and levels.shape[1] == seq_len:
-                try:
-                    clamped_levels = torch.clamp(levels, 0, self.max_level)
-                    lvl_emb = self.level_embedding(clamped_levels)
-                    embedded_input = embedded_input + lvl_emb
-                except Exception as e: print(f"Warning: Error adding level embedding: {e}")
-
-        # --- 4. Create Padding Mask ---
-        padding_mask = None
-        if x_lens is not None:
-            if not isinstance(x_lens, torch.Tensor):
-                x_lens_tensor = torch.tensor(x_lens, dtype=torch.long, device=device)
-            else:
-                x_lens_tensor = x_lens.to(device)
-            max_len_pad = seq_len # Use actual sequence length for mask dim
-            indices_pad = torch.arange(max_len_pad, device=device).expand(batch_size, max_len_pad)
-            padding_mask = indices_pad >= x_lens_tensor.unsqueeze(1) # Shape: [batch, seq_len]
-
-        # --- 5. Create Causal (Look-Ahead) Mask ---
-        # Standard square causal mask for sequence length `seq_len`
-        # Shape needs to be (seq_len, seq_len) for nn.MultiheadAttention
-        causal_mask = torch.triu(torch.ones(seq_len, seq_len, device=device, dtype=torch.bool), diagonal=1)
-        # Convert boolean mask to float mask expected by MHA (-inf for masked positions)
-        # Note: MHA automatically handles adding this mask for float types.
-        # If using older PyTorch versions, might need:
-        # causal_mask = causal_mask.float().masked_fill(causal_mask, float('-inf')).masked_fill(~causal_mask, 0.0)
-
-        # --- 6. Apply Multi-Head Self-Attention ---
-        attn_output, attn_weights = self.self_attention(
-            query=embedded_input,
-            key=embedded_input,
-            value=embedded_input,
-            key_padding_mask=padding_mask, # Mask based on sequence lengths
-            attn_mask=causal_mask          # Mask based on sequence position (causality)
-        )
-        # Apply dropout, residual connection, and layer normalization
-        attended_input = embedded_input + self.attention_dropout_layer(attn_output)
-        attended_input_norm = self.attention_norm(attended_input)
-        # --- End Attention ---
-
-        # 7. Pack sequence (if lengths provided)
-        gru_input = attended_input_norm
-        target_padded_length = gru_input.shape[1] # Store length before packing
-
-        if x_lens is not None:
-            x_lens_cpu = x_lens if isinstance(x_lens, torch.Tensor) else torch.tensor(x_lens)
-            x_lens_cpu = x_lens_cpu.cpu()
-            try:
-                gru_input = pack_padded_sequence(gru_input, x_lens_cpu, batch_first=True, enforce_sorted=False)
-            except RuntimeError as e: print(f"Error packing sequence: {e}")
-
-        # 8. Process through GRU
-        gru_output_packed, self.hidden = self.gru(gru_input, self.hidden)
-
-        # 9. Unpack sequence
-        gru_output = gru_output_packed
-        if x_lens is not None:
-             try:
-                gru_output, _ = pad_packed_sequence(gru_output_packed, batch_first=True, total_length=target_padded_length)
-             except RuntimeError as e: print(f"Error unpacking sequence: {e}")
-
-        # 10. Node type prediction (optional)
-        node_type_logits = None
-        if self.predict_node_types and self.node_type_predictor is not None:
-            node_type_logits = self.node_type_predictor(gru_output)
-
-        # 11. Final output projection (optional)
-        final_output = gru_output
-        if self.linear_out1:
-            final_output = self.relu(self.linear_out1(final_output))
-            final_output = self.linear_out2(final_output)
-
-        if self.predict_node_types:
-            return final_output, node_type_logits
-        else:
-            return final_output
-
-
-class EdgeLevelAttentionRNN(nn.Module):
-    def __init__(self, embedding_size, hidden_size, num_layers,
-                 edge_feature_len=3, # Default AIG edge features
-                 attention_heads=4,  # Attention params for this model
-                 attention_dropout=0.1,
-                 use_conditioning=False, # Optional conditioning
-                 tt_size=None,
-                 tt_embedding_size=64):
-        super().__init__()
-        self.num_layers = num_layers
-        self.hidden_size = hidden_size
-        self.edge_feature_len = edge_feature_len
-        self.embedding_size = embedding_size # Store for attention dim
-        self.use_conditioning = use_conditioning and (tt_size is not None)
-
-        # --- Input Embedding for Edge Features ---
-        self.linear_in = nn.Linear(edge_feature_len, embedding_size)
-        self.relu = nn.ReLU()
-
-        # --- Conditioning Setup ---
-        self.tt_embedding = None
-        attn_input_dim = embedding_size # Start with edge embedding dim
-        if self.use_conditioning:
-            self.tt_embedding = nn.Sequential(
-                nn.Linear(tt_size, tt_embedding_size),
-                nn.ReLU(),
-                nn.Linear(tt_embedding_size, tt_embedding_size),
-                nn.ReLU()
-            )
-            # If conditioning, attention input might include TT embedding per step
-            # For simplicity here, we'll apply attention *before* concatenating TT,
-            # but concatenating first is also possible. Let's keep it simpler for now.
-            # gru_input_size will handle TT concatenation later.
-            print(f"INFO: EdgeLevelAttentionRNN optionally using TT conditioning.")
-
-        # --- Multi-Head Self-Attention Layer ---
-        # Applies attention over the sequence length dimension (the edge sequence)
-        self.self_attention = nn.MultiheadAttention(
-            embed_dim=attn_input_dim, # Attention on edge embeddings
-            num_heads=attention_heads,
-            dropout=attention_dropout,
-            batch_first=True
-        )
-        self.attention_norm = nn.LayerNorm(attn_input_dim)
-        self.attention_dropout_layer = nn.Dropout(attention_dropout)
-
-        # --- GRU Layer ---
-        # Input size depends on whether we concat TT *after* attention
-        gru_input_size = attn_input_dim # Start with attention output dim
-        if self.use_conditioning:
-            gru_input_size += tt_embedding_size # Add TT embedding dim
-
-        self.gru = nn.GRU(input_size=gru_input_size, hidden_size=hidden_size,
-                          num_layers=num_layers, batch_first=True)
-
-        # --- Output Layers ---
-        self.linear_out1 = nn.Linear(hidden_size, embedding_size) # Project back down
-        self.linear_out2 = nn.Linear(embedding_size, edge_feature_len)
-        self.sigmoid = nn.Sigmoid()
-        self.hidden = None
-
-    def set_first_layer_hidden(self, h):
-        # (This method remains identical to the one in EdgeLevelRNN)
-        if h.shape[-1] != self.hidden_size:
-             raise ValueError(f"Hidden state dimension mismatch in set_first_layer_hidden. "
-                              f"GraphRNN output ({h.shape[-1]}) != EdgeAttentionRNN hidden ({self.hidden_size})")
-        if len(h.shape) == 3 and h.shape[0] > 1: h_first_layer = h[0:1, :, :]
-        elif len(h.shape) == 2: h_first_layer = h.unsqueeze(0)
-        elif len(h.shape) == 3 and h.shape[0] == 1: h_first_layer = h
-        else: raise ValueError(f"Unexpected shape for hidden state h: {h.shape}")
-        zeros = torch.zeros([self.num_layers-1, h_first_layer.shape[1], h_first_layer.shape[2]], device=h.device)
-        self.hidden = torch.cat([h_first_layer, zeros], dim=0)
-
-    def reset_hidden(self):
-        """Reset the hidden state to None"""
-        self.hidden = None
-
-    def forward(self, x,
-                node_context: Optional[torch.Tensor] = None, # Accept node context (Optional)
-                x_lens=None,
-                return_logits=False,
-                truth_table=None):
-
-        # Initialize hidden state if it's None
-        local_hidden = self.hidden # Use stored state
-        if local_hidden is None:
-            # Initialize GRU state h_0 to zeros
-            batch_size = x.shape[0] if x.dim() > 1 else 1
-            device = x.device
-            print(f"INFO: Initializing hidden state for {type(self).__name__} (Batch: {batch_size}, Device: {device})")
-            local_hidden = torch.zeros(self.num_layers, batch_size, self.hidden_size, device=device)
-            # Store the initialized hidden state
-            self.hidden = local_hidden
-
-        # Remove the assertion and replace with initialization
-        # assert self.hidden is not None, "Hidden state not set for EdgeLevelAttentionRNN!"
-
-        # (Keep embedding, attention, context fusion, tt embedding logic similar to LSTM version)
-        embedded_x = self.relu(self.linear_in(x))
-        attn_input = embedded_x
-
-        padding_mask = None # No padding needed for single step generation
-        attn_output, _ = self.self_attention(query=attn_input, key=attn_input, value=attn_input, key_padding_mask=padding_mask)
-        attended_edges = attn_input + self.attention_dropout_layer(attn_output)
-        attended_edges_norm = self.attention_norm(attended_edges)
-
-        gru_input = attended_edges_norm
-
-        # --- Optional: Use node_context ---
-        if node_context is not None:
-             node_context = node_context.to(x.device)
-             if node_context.shape[0] == gru_input.shape[0] and \
-                node_context.shape[1] == gru_input.shape[1] and \
-                node_context.shape[2] == gru_input.shape[2]:
-                  gru_input = gru_input + node_context
-             else:
-                  pass # Skip fusion
-        # --- End Optional ---
-
-        if self.use_conditioning and truth_table is not None and self.tt_embedding is not None:
-            truth_table = truth_table.to(gru_input.device)
-            tt_emb = self.tt_embedding(truth_table)
-            tt_emb_expanded = tt_emb.unsqueeze(1).expand(-1, gru_input.shape[1], -1)
-            gru_input = torch.cat((gru_input, tt_emb_expanded), dim=2)
-            # Ensure gru_input_size in __init__ accounts for this!
-
-        # --- Use GRU ---
-        gru_output, next_hidden = self.gru(gru_input, local_hidden) # Use local_hidden
-        # --- End GRU ---
-
-        # Update the stored hidden state
-        self.hidden = next_hidden
-
-        # Output layers
-        out = self.relu(self.linear_out1(gru_output))
-        logits = self.linear_out2(out)
-
-        # Return only logits
-        if not return_logits:
-            return self.sigmoid(logits)
-        else:
-            return logits
-
-
+from typing import Optional, Tuple, Union # Added Union
 
 # --- Original GraphLevelRNN (No Attention) ---
 class GraphLevelRNN(nn.Module):
+    """
+    Node-level GRU model for graph generation.
+    Processes the graph sequence step-by-step and optionally predicts node types.
+    """
     def __init__(self, input_size, embedding_size, hidden_size, num_layers,
                  output_size=None, edge_feature_len=1,
-                 predict_node_types=False, num_node_types=None, # Kept for potential future use
-                 use_conditioning=False, tt_size=None, # Kept for potential future use
-                 max_level=None): # For level embedding
+                 predict_node_types=False, num_node_types=None, # Flag to enable node type prediction
+                 use_conditioning=False, tt_size=None,
+                 max_level=None):
+        """
+        Initializes the GraphLevelRNN model.
+
+        Args:
+            input_size (int): Effective input size (m or max_nodes-1).
+            embedding_size (int): Dimension of the node/edge embedding.
+            hidden_size (int): Dimension of the GRU hidden state.
+            num_layers (int): Number of GRU layers.
+            output_size (int, optional): Dimension of the final output projection.
+                                         If None, output is the GRU hidden state.
+                                         Should match EdgeLevelRNN hidden_size if edge model is RNN. Defaults to None.
+            edge_feature_len (int, optional): Number of edge features (e.g., 3 for None/Reg/Inv). Defaults to 1.
+            predict_node_types (bool, optional): If True, add a head to predict node types. Defaults to False.
+            num_node_types (int, optional): Number of node types to predict. Required if predict_node_types is True. Defaults to None.
+            use_conditioning (bool, optional): If True, enable conditioning (e.g., on truth tables). Defaults to False.
+            tt_size (int, optional): Size of the conditioning vector (e.g., truth table size). Defaults to None.
+            max_level (int, optional): Maximum node level for level embedding. Defaults to None.
+        """
         super().__init__()
-        # --- (Keep original __init__ implementation from your code or the previous non-attention version) ---
-        # --- Make sure it includes level embedding logic if you want it in the non-attention version too ---
         self.input_size = input_size
         self.embedding_size = embedding_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.edge_feature_len = edge_feature_len
-        self.predict_node_types = predict_node_types # Store these flags
+        self.predict_node_types = predict_node_types # Store the flag
+        self.num_node_types = num_node_types       # Store number of types
         self.use_conditioning = use_conditioning
         self.tt_size = tt_size
         self.max_level = max_level
 
+        # Calculate input feature dimension for the initial linear layer
         lin_in_features = input_size * edge_feature_len
         if self.use_conditioning and self.tt_size is not None:
             lin_in_features += self.tt_size
 
+        # Initial embedding layer
         self.linear_in = nn.Linear(lin_in_features, embedding_size)
         self.relu = nn.ReLU()
 
+        # Optional level embedding layer
         self.level_embedding = None
         if self.max_level is not None and self.max_level >= 0:
              self.level_embedding = nn.Embedding(self.max_level + 1, embedding_size)
-             print(f"INFO: GraphLevelRNN (No Attention) using level embedding up to level {self.max_level}")
+             print(f"INFO: GraphLevelRNN using level embedding up to level {self.max_level}")
 
-        # Standard GRU (No attention layer here)
+        # Core GRU layer
         self.gru = nn.GRU(input_size=embedding_size, hidden_size=hidden_size,
                           num_layers=num_layers, batch_first=True)
 
+        # Optional output projection layers
         self.linear_out1 = None
         self.linear_out2 = None
         if output_size:
             self.linear_out1 = nn.Linear(hidden_size, embedding_size)
             self.linear_out2 = nn.Linear(embedding_size, output_size)
 
+        # Optional node type predictor head
         self.node_type_predictor = None
         if self.predict_node_types:
-            if num_node_types is None:
-                raise ValueError("num_node_types must be specified if predict_node_types is True")
-            self.node_type_predictor = nn.Linear(hidden_size, num_node_types)
+            if self.num_node_types is None or self.num_node_types <= 0:
+                raise ValueError("num_node_types must be a positive integer if predict_node_types is True")
+            # Predicts node type logits from the GRU hidden state
+            self.node_type_predictor = nn.Linear(hidden_size, self.num_node_types)
+            print(f"INFO: GraphLevelRNN initialized with node type predictor head ({self.num_node_types} types).")
 
+        # Stored hidden state for sequential processing
         self.hidden = None
 
     def reset_hidden(self):
+        """Resets the GRU hidden state to None."""
         self.hidden = None
 
-    def forward(self, x, x_lens=None, truth_table=None, levels=None):
-        # --- (Keep original forward implementation without the attention block) ---
+    def forward(self, x, x_lens=None, truth_table=None, levels=None) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        """
+        Forward pass for the GraphLevelRNN.
+
+        Args:
+            x (torch.Tensor): Input sequence tensor shape [batch, seq_len, input_size, edge_feature_len].
+            x_lens (torch.Tensor or list, optional): Tensor/list of actual sequence lengths [batch]. Defaults to None.
+            truth_table (torch.Tensor, optional): Optional conditioning tensor [batch, tt_size]. Defaults to None.
+            levels (torch.Tensor, optional): Optional node level tensor [batch, seq_len]. Defaults to None.
+
+        Returns:
+            Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+                If predict_node_types is True:
+                    Tuple: (final_output, node_type_logits)
+                        - final_output: Output sequence for edge model [batch, seq_len, output_size or hidden_size].
+                        - node_type_logits: Logits for node type prediction [batch, seq_len, num_node_types].
+                Else:
+                    torch.Tensor: final_output sequence.
+        """
         batch_size, seq_len, _, _ = x.shape
+        device = x.device # Get device from input
+
+        # 1. Flatten edge features
+        # Shape: [batch, seq_len, input_size * edge_feature_len]
         x_flat = torch.flatten(x, 2, 3)
 
+        # 2. Concatenate conditioning vector (if enabled)
         if self.use_conditioning and truth_table is not None:
+            # Expand truth table to match sequence length
             tt_expanded = truth_table.unsqueeze(1).expand(-1, seq_len, -1)
+            # Concatenate along the feature dimension
             x_flat = torch.cat((x_flat, tt_expanded), dim=2)
 
+        # 3. Apply initial embedding
+        # Shape: [batch, seq_len, embedding_size]
         embedded_input = self.relu(self.linear_in(x_flat))
 
+        # 4. Add level embedding (if enabled)
         if self.level_embedding is not None and levels is not None:
-            # Add level embedding (same logic as attention version)
+            # Ensure levels tensor has the correct shape
             if levels.shape[0] == batch_size and levels.shape[1] == seq_len:
                 try:
+                    # Clamp levels to be within the embedding range
                     clamped_levels = torch.clamp(levels, 0, self.max_level)
+                    # Get embeddings and add to the input
                     lvl_emb = self.level_embedding(clamped_levels)
                     embedded_input = embedded_input + lvl_emb
                 except Exception as e:
-                    print(f"Warning: Error adding level embedding in non-attention RNN: {e}")
+                    # Log warning if level embedding fails
+                    print(f"Warning: Error adding level embedding in GraphLevelRNN: {e}")
+            else:
+                print(f"Warning: Levels tensor shape mismatch in GraphLevelRNN. Expected [{batch_size}, {seq_len}], got {levels.shape}. Skipping level embedding.")
 
-        gru_input = embedded_input # Direct input to GRU
-        target_padded_length = gru_input.shape[1]
+
+        # 5. Prepare GRU input and handle padding
+        gru_input = embedded_input
+        target_padded_length = gru_input.shape[1] # Store original sequence length
 
         if x_lens is not None:
-            x_lens_cpu = x_lens if isinstance(x_lens, torch.Tensor) else torch.tensor(x_lens)
-            x_lens_cpu = x_lens_cpu.cpu()
+            # Ensure x_lens is a tensor on the correct device before moving to CPU
+            if not isinstance(x_lens, torch.Tensor):
+                x_lens_tensor = torch.tensor(x_lens, device=device)
+            else:
+                x_lens_tensor = x_lens.to(device)
+
+            x_lens_cpu = x_lens_tensor.cpu() # Move lengths to CPU for packing
             try:
+                # Pack the sequence to handle variable lengths efficiently
                 gru_input = pack_padded_sequence(gru_input, x_lens_cpu, batch_first=True, enforce_sorted=False)
-            except RuntimeError as e: print(f"Error packing sequence in GraphLevelRNN: {e}")
+            except RuntimeError as e:
+                print(f"Error packing sequence in GraphLevelRNN: {e}")
+                raise e # Re-raise error
 
+        # 6. Process through GRU
+        # Initialize hidden state if it's None (first step or reset)
+        if self.hidden is None:
+            # Initialize hidden state with zeros on the correct device
+            h_0 = torch.zeros(self.num_layers, batch_size, self.hidden_size, device=device)
+            self.hidden = h_0
 
+        # Pass input and hidden state to GRU
+        # gru_output_packed contains packed outputs for each time step
+        # self.hidden is updated with the hidden state of the last time step
         gru_output_packed, self.hidden = self.gru(gru_input, self.hidden)
 
+        # 7. Unpack GRU output
         gru_output = gru_output_packed
         if x_lens is not None:
              try:
+                # Pad the packed sequence back to the original length
                 gru_output, _ = pad_packed_sequence(gru_output_packed, batch_first=True, total_length=target_padded_length)
-             except RuntimeError as e: print(f"Error unpacking sequence in GraphLevelRNN: {e}")
+             except RuntimeError as e:
+                 print(f"Error unpacking sequence in GraphLevelRNN: {e}")
+                 raise e # Re-raise error
+        # gru_output shape: [batch, seq_len, hidden_size]
 
-
+        # 8. Predict node types (if enabled)
         node_type_logits = None
         if self.predict_node_types and self.node_type_predictor is not None:
+            # Pass GRU output through the predictor head
             node_type_logits = self.node_type_predictor(gru_output)
+            # node_type_logits shape: [batch, seq_len, num_node_types]
 
-        final_output = gru_output
-        if self.linear_out1:
+        # 9. Apply final output projection (if configured)
+        final_output = gru_output # Start with GRU output
+        if self.linear_out1 and self.linear_out2:
+            # Apply projection layers, often used to match edge model's hidden size
             final_output = self.relu(self.linear_out1(final_output))
             final_output = self.linear_out2(final_output)
+            # final_output shape: [batch, seq_len, output_size]
+        # else: final_output shape remains [batch, seq_len, hidden_size]
 
+        # 10. Return appropriate output based on configuration
         if self.predict_node_types:
+            if node_type_logits is None:
+                # Defensive check: This should not happen if initialized correctly
+                raise RuntimeError("predict_node_types is True, but node_type_logits were not calculated.")
+            # Return both the sequence output (for edge model) and node type predictions
             return final_output, node_type_logits
         else:
+            # Return only the sequence output
             return final_output
 
 
-
-# --- EdgeLevelRNN and EdgeLevelMLP remain unchanged ---
-# (Include their definitions from your src/model.py or the previous response here)
-class EdgeLevelMLP(nn.Module):
-    # --- MODIFIED __init__ ---
-    def __init__(self, input_size, hidden_size, output_size, edge_feature_len=1,
-                 use_conditioning=False, tt_size=None): # NEW args
-        super().__init__()
-        self.edge_feature_len = edge_feature_len
-        self.use_conditioning = use_conditioning
-        self.tt_size = tt_size
-
-        lin1_in_features = input_size # Input is hidden state from GraphLevelRNN
-        # --- NEW: Conditioning Input ---
-        if self.use_conditioning and self.tt_size is not None:
-             lin1_in_features += self.tt_size
-        # --- END NEW ---
-
-        self.linear1 = nn.Linear(lin1_in_features, hidden_size)
-        self.linear2 = nn.Linear(hidden_size, output_size * edge_feature_len)
-        self.relu = nn.ReLU()
-        self.sigmoid = nn.Sigmoid() # Keep for potential BCELoss case
-
-    # --- MODIFIED forward ---
-    def forward(self, x, return_logits=False, truth_table=None): # Add truth_table
-        # x shape: [batch, seq_len, input_size (hidden_size from GraphRNN)]
-        # truth_table shape: [batch, tt_size]
-
-        # --- NEW: Concatenate truth table if conditioning ---
-        if self.use_conditioning and truth_table is not None:
-             tt_expanded = truth_table.unsqueeze(1).expand(-1, x.shape[1], -1)
-             x_conditioned = torch.cat((x, tt_expanded), dim=2)
-        else:
-             x_conditioned = x
-        # --- END NEW ---
-
-        h = self.relu(self.linear1(x_conditioned)) # [batch, seq_len, hidden_size]
-        out = self.linear2(h) # [batch, seq_len, output_size * edge_feature_len] (Logits)
-
-        if not return_logits:
-             # Apply sigmoid only if not returning logits (for BCELoss compatibility)
-             # CrossEntropyLoss expects raw logits
-             out = self.sigmoid(out)
-
-        # Reshape output to separate edge features
-        # [batch, seq_len, output_size, edge_feature_len]
-        out_reshaped = torch.reshape(out, [out.shape[0], out.shape[1], -1, self.edge_feature_len])
-
-        return out_reshaped
-
-
+# --- EdgeLevelRNN ---
 class EdgeLevelRNN(nn.Module):
+    """
+    Edge-level GRU model for graph generation.
+    Predicts the edge type for the current node based on its context
+    (provided by the node-level model's hidden state).
+    """
     def __init__(self, embedding_size, hidden_size, num_layers,
-                 edge_feature_len=3,  # Default AIG edge features
-                 use_conditioning=False,  # Keep for flexibility
-                 tt_size=None,  # Truth table size for conditioning
-                 tt_embedding_size=64):  # Size of TT embedding if used
+                 edge_feature_len=3,  # Number of edge types (e.g., 3 for None/Reg/Inv)
+                 use_conditioning=False,
+                 tt_size=None,
+                 tt_embedding_size=64):
+        """
+        Initializes the EdgeLevelRNN model.
+
+        Args:
+            embedding_size (int): Dimension of the edge input embedding.
+            hidden_size (int): Dimension of the GRU hidden state. Must match the
+                               output size of the node-level model's hidden state
+                               used for initialization via set_first_layer_hidden.
+            num_layers (int): Number of GRU layers.
+            edge_feature_len (int, optional): Number of edge types to predict. Defaults to 3.
+            use_conditioning (bool, optional): If True, enable conditioning. Defaults to False.
+            tt_size (int, optional): Size of the conditioning vector. Defaults to None.
+            tt_embedding_size (int, optional): Dimension for the conditioning embedding. Defaults to 64.
+        """
         super().__init__()
         self.num_layers = num_layers
         self.hidden_size = hidden_size
         self.edge_feature_len = edge_feature_len
         self.use_conditioning = use_conditioning and (tt_size is not None)
 
-        # --- Conditioning Setup ---
+        # Optional conditioning embedding layers
         self.tt_embedding = None
-        gru_input_size = embedding_size
+        gru_input_size = embedding_size # Start with base embedding size
         if self.use_conditioning:
             self.tt_embedding = nn.Sequential(
                 nn.Linear(tt_size, tt_embedding_size),
@@ -495,610 +253,151 @@ class EdgeLevelRNN(nn.Module):
                 nn.Linear(tt_embedding_size, tt_embedding_size),
                 nn.ReLU()
             )
+            # Add conditioning embedding size to GRU input size
             gru_input_size += tt_embedding_size
             print(f"INFO: EdgeLevelRNN using TT conditioning. GRU input size: {gru_input_size}")
-        # --- End Conditioning Setup ---
 
+        # Input embedding layer for edge features
         self.linear_in = nn.Linear(edge_feature_len, embedding_size)
         self.relu = nn.ReLU()
 
+        # Core GRU layer
         self.gru = nn.GRU(input_size=gru_input_size, hidden_size=hidden_size,
                           num_layers=num_layers, batch_first=True)
 
+        # Output projection layers
         self.linear_out1 = nn.Linear(hidden_size, embedding_size)
-        self.linear_out2 = nn.Linear(embedding_size, edge_feature_len)
-        self.sigmoid = nn.Sigmoid()  # Keep for BCELoss compatibility if needed
+        self.linear_out2 = nn.Linear(embedding_size, edge_feature_len) # Output logits for each edge type
+        self.sigmoid = nn.Sigmoid() # Sigmoid for potential binary case (BCELoss)
+
+        # Stored hidden state
         self.hidden = None
 
     def set_first_layer_hidden(self, h):
+        """
+        Initializes the hidden state of the first GRU layer using the output
+        from the node-level model. Assumes h is the relevant context.
+
+        Args:
+            h (torch.Tensor): Hidden state or output from the node-level model.
+                              Expected shape compatible with GRU hidden state initialization.
+        """
+        # Validate input hidden state dimension
         if h.shape[-1] != self.hidden_size:
             raise ValueError(f"Hidden state dimension mismatch in set_first_layer_hidden. "
-                             f"GraphRNN output ({h.shape[-1]}) != EdgeRNN hidden ({self.hidden_size})")
-        if len(h.shape) == 3 and h.shape[0] > 1:
-            h_first_layer = h[0:1, :, :]
-        elif len(h.shape) == 2:
-            h_first_layer = h.unsqueeze(0)
-        elif len(h.shape) == 3 and h.shape[0] == 1:
-            h_first_layer = h
+                             f"Node model output ({h.shape[-1]}) != EdgeRNN hidden ({self.hidden_size})")
+
+        # Handle different possible input shapes for h
+        if len(h.shape) == 3 and h.shape[0] > 1: # Shape [num_layers, batch, hidden_size]
+            h_first_layer = h[0:1, :, :] # Take only the first layer's state
+        elif len(h.shape) == 2: # Shape [batch, hidden_size]
+            h_first_layer = h.unsqueeze(0) # Add layer dimension
+        elif len(h.shape) == 3 and h.shape[0] == 1: # Shape [1, batch, hidden_size]
+            h_first_layer = h # Already correct shape
         else:
             raise ValueError(f"Unexpected shape for hidden state h: {h.shape}")
-        zeros = torch.zeros([self.num_layers - 1, h_first_layer.shape[1], h_first_layer.shape[2]], device=h.device)
-        self.hidden = torch.cat([h_first_layer, zeros], dim=0)
+
+        # Initialize remaining layers' hidden states with zeros if num_layers > 1
+        if self.num_layers > 1:
+            zeros = torch.zeros([self.num_layers - 1, h_first_layer.shape[1], h_first_layer.shape[2]], device=h.device)
+            # Concatenate the first layer state with zeros for other layers
+            self.hidden = torch.cat([h_first_layer, zeros], dim=0)
+        else:
+            self.hidden = h_first_layer # Use directly if only one layer
 
     def reset_hidden(self):
-        """Reset the hidden state to None"""
+        """Resets the GRU hidden state to None."""
         self.hidden = None
 
     def forward(self, x, x_lens=None, return_logits=False, truth_table=None):
-        # Replace assertion with initialization
+        """
+        Forward pass for the EdgeLevelRNN.
+
+        Args:
+            x (torch.Tensor): Input sequence tensor (edge features)
+                              Shape [batch, seq_len, edge_feature_len].
+            x_lens (torch.Tensor or list, optional): Actual sequence lengths [batch]. Defaults to None.
+            return_logits (bool, optional): If True, return raw logits before sigmoid/softmax.
+                                           Required for CrossEntropyLoss. Defaults to False.
+            truth_table (torch.Tensor, optional): Conditioning tensor [batch, tt_size]. Defaults to None.
+
+        Returns:
+            torch.Tensor: Output tensor containing edge predictions (probabilities or logits).
+                          Shape [batch, seq_len, edge_feature_len].
+        """
+        # 1. Initialize hidden state if necessary
         if self.hidden is None:
-            # Initialize to zeros if not already set
+            # Determine batch size from input x
             batch_size = x.shape[0] if x.dim() > 1 else 1
             device = x.device
             print(f"INFO: Initializing hidden state for EdgeLevelRNN (Batch: {batch_size}, Device: {device})")
+            # Initialize hidden state with zeros
             self.hidden = torch.zeros(self.num_layers, batch_size, self.hidden_size, device=device)
 
-        # Use the current hidden state
+        # 2. Embed edge features
+        # Shape: [batch, seq_len, embedding_size]
         embedded_x = self.relu(self.linear_in(x))
         gru_input = embedded_x
 
+        # 3. Add conditioning (if enabled)
         if self.use_conditioning and truth_table is not None and self.tt_embedding is not None:
+            # Ensure truth_table is on the correct device
             truth_table = truth_table.to(embedded_x.device)
+            # Embed the truth table
             tt_emb = self.tt_embedding(truth_table)
+            # Expand embedded truth table to match sequence length
             seq_len_edge = embedded_x.shape[1]
             tt_emb_expanded = tt_emb.unsqueeze(1).expand(-1, seq_len_edge, -1)
+            # Concatenate along the feature dimension
             gru_input = torch.cat((embedded_x, tt_emb_expanded), dim=2)
 
-        target_padded_length = gru_input.shape[1]
+        # 4. Prepare for GRU and handle padding
+        target_padded_length = gru_input.shape[1] # Store original sequence length
         if x_lens is not None:
-            x_lens_cpu = x_lens if isinstance(x_lens, torch.Tensor) else torch.tensor(x_lens)
-            x_lens_cpu = x_lens_cpu.cpu()
+            # Ensure x_lens is a tensor on the correct device before moving to CPU
+            if not isinstance(x_lens, torch.Tensor):
+                x_lens_tensor = torch.tensor(x_lens, device=device)
+            else:
+                x_lens_tensor = x_lens.to(device)
+
+            x_lens_cpu = x_lens_tensor.cpu() # Move to CPU for packing
             try:
+                # Pack the sequence
                 gru_input = pack_padded_sequence(gru_input, x_lens_cpu, batch_first=True, enforce_sorted=False)
             except RuntimeError as e:
                 print(f"Error packing sequence in EdgeLevelRNN: {e}")
+                raise e # Re-raise
 
+        # 5. Process through GRU
+        # Pass input and current hidden state; update hidden state
         gru_output_packed, self.hidden = self.gru(gru_input, self.hidden)
 
+        # 6. Unpack GRU output
         gru_output = gru_output_packed
         if x_lens is not None:
             try:
+                # Pad back to original length
                 gru_output, _ = pad_packed_sequence(gru_output_packed, batch_first=True,
                                                     total_length=target_padded_length)
             except RuntimeError as e:
                 print(f"Error unpacking sequence in EdgeLevelRNN: {e}")
+                raise e # Re-raise
+        # gru_output shape: [batch, seq_len, hidden_size]
 
+        # 7. Apply output projection layers
+        # Shape: [batch, seq_len, embedding_size]
         out = self.relu(self.linear_out1(gru_output))
+        # Shape: [batch, seq_len, edge_feature_len]
         logits = self.linear_out2(out)
 
-        if not return_logits:
-            return self.sigmoid(logits)
-        else:
+        # 8. Return logits or probabilities
+        if return_logits:
+            # Return raw logits (needed for CrossEntropyLoss)
             return logits
-
-# --- NEW LSTM-based Models ---
-
-class GraphLevelLSTM(nn.Module):
-    """ LSTM version of GraphLevelRNN """
-    def __init__(self, input_size, embedding_size, hidden_size, num_layers,
-                 output_size=None, edge_feature_len=1,
-                 predict_node_types=False, num_node_types=None,
-                 use_conditioning=False, tt_size=None,
-                 max_level=None):
-        super().__init__()
-        self.input_size = input_size
-        self.embedding_size = embedding_size
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.edge_feature_len = edge_feature_len
-        self.predict_node_types = predict_node_types
-        self.use_conditioning = use_conditioning
-        self.tt_size = tt_size
-        self.max_level = max_level
-
-        lin_in_features = input_size * edge_feature_len
-        if self.use_conditioning and self.tt_size is not None:
-            lin_in_features += self.tt_size
-        self.linear_in = nn.Linear(lin_in_features, embedding_size)
-        self.relu = nn.ReLU()
-
-        self.level_embedding = None
-        if self.max_level is not None and self.max_level >= 0:
-            self.level_embedding = nn.Embedding(self.max_level + 1, embedding_size)
-            print(f"INFO: GraphLevelLSTM using level embedding up to level {self.max_level}")
-
-        # --- USE LSTM ---
-        self.lstm = nn.LSTM(input_size=embedding_size, hidden_size=hidden_size,
-                            num_layers=num_layers, batch_first=True)
-        # --- END LSTM ---
-
-        self.linear_out1 = None
-        self.linear_out2 = None
-        if output_size:
-            self.linear_out1 = nn.Linear(hidden_size, embedding_size)
-            self.linear_out2 = nn.Linear(embedding_size, output_size)
-
-        self.node_type_predictor = None
-        if self.predict_node_types:
-            if num_node_types is None:
-                raise ValueError("num_node_types must be specified if predict_node_types is True")
-            self.node_type_predictor = nn.Linear(hidden_size, num_node_types)
-
-        self.hidden = None # LSTM hidden is a tuple (h_n, c_n)
-
-    def reset_hidden(self):
-        self.hidden = None
-
-    def forward(self, x, x_lens=None, truth_table=None, levels=None):
-        batch_size, seq_len, _, _ = x.shape
-        x_flat = torch.flatten(x, 2, 3)
-
-        if self.use_conditioning and truth_table is not None:
-            tt_expanded = truth_table.unsqueeze(1).expand(-1, seq_len, -1)
-            x_flat = torch.cat((x_flat, tt_expanded), dim=2)
-
-        embedded_input = self.relu(self.linear_in(x_flat))
-
-        if self.level_embedding is not None and levels is not None:
-            if levels.shape[0] == batch_size and levels.shape[1] == seq_len:
-                try:
-                    clamped_levels = torch.clamp(levels, 0, self.max_level)
-                    lvl_emb = self.level_embedding(clamped_levels)
-                    embedded_input = embedded_input + lvl_emb
-                except Exception as e:
-                    print(f"Warning: Error adding level embedding in GraphLevelLSTM: {e}")
-
-        lstm_input = embedded_input
-        target_padded_length = lstm_input.shape[1]
-
-        if x_lens is not None:
-            x_lens_cpu = x_lens if isinstance(x_lens, torch.Tensor) else torch.tensor(x_lens)
-            x_lens_cpu = x_lens_cpu.cpu()
-            try:
-                lstm_input = pack_padded_sequence(lstm_input, x_lens_cpu, batch_first=True, enforce_sorted=False)
-            except RuntimeError as e: print(f"Error packing sequence in GraphLevelLSTM: {e}")
-
-        # --- Use LSTM ---
-        # Pass self.hidden (which is None initially or the tuple from previous step)
-        lstm_output_packed, self.hidden = self.lstm(lstm_input, self.hidden)
-        # self.hidden is now the tuple (h_n, c_n)
-        # --- End LSTM ---
-
-        lstm_output = lstm_output_packed
-        if x_lens is not None:
-             try:
-                # Unpack only the output sequence, hidden state is managed internally
-                lstm_output, _ = pad_packed_sequence(lstm_output_packed, batch_first=True, total_length=target_padded_length)
-             except RuntimeError as e: print(f"Error unpacking sequence in GraphLevelLSTM: {e}")
-
-        node_type_logits = None
-        if self.predict_node_types and self.node_type_predictor is not None:
-            node_type_logits = self.node_type_predictor(lstm_output)
-
-        final_output = lstm_output
-        if self.linear_out1:
-            final_output = self.relu(self.linear_out1(final_output))
-            # LSTM output needs to feed into EdgeLevel model, so final projection might depend
-            # on whether EdgeLevel model is RNN/LSTM or MLP
-            if self.linear_out2:
-                 final_output = self.linear_out2(final_output)
-
-        if self.predict_node_types:
-            return final_output, node_type_logits
         else:
-            # Return only the output sequence (used as input 'h' to edge models)
-            # LSTM's hidden state (h_n, c_n) is stored in self.hidden
-            return final_output
-
-
-class GraphLevelAttentionLSTM(nn.Module):
-    """ LSTM version of GraphLevelAttentionRNN """
-    def __init__(self, input_size, embedding_size, hidden_size, num_layers,
-                 output_size=None, edge_feature_len=3,
-                 predict_node_types=False, num_node_types=None,
-                 use_conditioning=False, tt_size=None,
-                 max_level=None,
-                 attention_heads=4,
-                 attention_dropout=0.1):
-        super().__init__()
-        self.input_size = input_size
-        self.embedding_size = embedding_size
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.edge_feature_len = edge_feature_len
-        self.predict_node_types = predict_node_types
-        self.use_conditioning = use_conditioning
-        self.tt_size = tt_size
-        self.max_level = max_level
-
-        lin_in_features = input_size * edge_feature_len
-        if self.use_conditioning and self.tt_size is not None:
-            lin_in_features += self.tt_size
-        self.linear_in = nn.Linear(lin_in_features, embedding_size)
-        self.relu = nn.ReLU()
-
-        self.level_embedding = None
-        if self.max_level is not None and self.max_level >= 0:
-            self.level_embedding = nn.Embedding(self.max_level + 1, embedding_size)
-            print(f"INFO: GraphLevelAttentionLSTM using level embedding up to level {self.max_level}")
-
-        # --- Attention Layers (same as RNN version) ---
-        self.self_attention = nn.MultiheadAttention(
-            embed_dim=embedding_size,
-            num_heads=attention_heads,
-            dropout=attention_dropout,
-            batch_first=True
-        )
-        self.attention_norm = nn.LayerNorm(embedding_size)
-        self.attention_dropout_layer = nn.Dropout(attention_dropout)
-        # --- End Attention ---
-
-        # --- USE LSTM ---
-        self.lstm = nn.LSTM(input_size=embedding_size, hidden_size=hidden_size,
-                            num_layers=num_layers, batch_first=True)
-        # --- END LSTM ---
-
-        self.linear_out1 = None
-        self.linear_out2 = None
-        if output_size:
-            self.linear_out1 = nn.Linear(hidden_size, embedding_size)
-            self.linear_out2 = nn.Linear(embedding_size, output_size)
-
-        self.node_type_predictor = None
-        if self.predict_node_types:
-            if num_node_types is None: raise ValueError("num_node_types must be specified")
-            self.node_type_predictor = nn.Linear(hidden_size, num_node_types)
-
-        self.hidden = None # LSTM hidden is a tuple (h_n, c_n)
-
-    def reset_hidden(self):
-        self.hidden = None
-
-    def forward(self, x, x_lens=None, truth_table=None, levels=None):
-        batch_size, seq_len, _, _ = x.shape
-        device = x.device
-
-        x_flat = torch.flatten(x, 2, 3)
-
-        if self.use_conditioning and truth_table is not None:
-            tt_expanded = truth_table.unsqueeze(1).expand(-1, seq_len, -1)
-            x_flat = torch.cat((x_flat, tt_expanded), dim=2)
-
-        embedded_input = self.relu(self.linear_in(x_flat))
-
-        if self.level_embedding is not None and levels is not None:
-            if levels.shape[0] == batch_size and levels.shape[1] == seq_len:
-                try:
-                    clamped_levels = torch.clamp(levels, 0, self.max_level)
-                    lvl_emb = self.level_embedding(clamped_levels)
-                    embedded_input = embedded_input + lvl_emb
-                except Exception as e: print(f"Warning: Error adding level embedding: {e}")
-
-        padding_mask = None
-        if x_lens is not None:
-            if not isinstance(x_lens, torch.Tensor):
-                x_lens_tensor = torch.tensor(x_lens, dtype=torch.long, device=device)
-            else:
-                x_lens_tensor = x_lens.to(device)
-            max_len_pad = seq_len
-            indices_pad = torch.arange(max_len_pad, device=device).expand(batch_size, max_len_pad)
-            padding_mask = indices_pad >= x_lens_tensor.unsqueeze(1)
-
-        causal_mask = torch.triu(torch.ones(seq_len, seq_len, device=device, dtype=torch.bool), diagonal=1)
-
-        attn_output, attn_weights = self.self_attention(
-            query=embedded_input, key=embedded_input, value=embedded_input,
-            key_padding_mask=padding_mask, attn_mask=causal_mask
-        )
-        attended_input = embedded_input + self.attention_dropout_layer(attn_output)
-        attended_input_norm = self.attention_norm(attended_input)
-
-        lstm_input = attended_input_norm
-        target_padded_length = lstm_input.shape[1]
-
-        if x_lens is not None:
-            x_lens_cpu = x_lens if isinstance(x_lens, torch.Tensor) else torch.tensor(x_lens)
-            x_lens_cpu = x_lens_cpu.cpu()
-            try:
-                lstm_input = pack_padded_sequence(lstm_input, x_lens_cpu, batch_first=True, enforce_sorted=False)
-            except RuntimeError as e: print(f"Error packing sequence: {e}")
-
-        # --- Use LSTM ---
-        lstm_output_packed, self.hidden = self.lstm(lstm_input, self.hidden)
-        # --- End LSTM ---
-
-        lstm_output = lstm_output_packed
-        if x_lens is not None:
-             try:
-                lstm_output, _ = pad_packed_sequence(lstm_output_packed, batch_first=True, total_length=target_padded_length)
-             except RuntimeError as e: print(f"Error unpacking sequence: {e}")
-
-        node_type_logits = None
-        if self.predict_node_types and self.node_type_predictor is not None:
-            node_type_logits = self.node_type_predictor(lstm_output)
-
-        final_output = lstm_output
-        if self.linear_out1:
-            final_output = self.relu(self.linear_out1(final_output))
-            if self.linear_out2:
-                final_output = self.linear_out2(final_output)
-
-        if self.predict_node_types:
-            return final_output, node_type_logits
-        else:
-            return final_output
-
-
-class EdgeLevelLSTM(nn.Module):
-    """ LSTM version of EdgeLevelRNN """
-
-    def __init__(self, embedding_size, hidden_size, num_layers,
-                 edge_feature_len=3,
-                 use_conditioning=False,
-                 tt_size=None,
-                 tt_embedding_size=64):
-        super().__init__()
-        self.num_layers = num_layers
-        self.hidden_size = hidden_size
-        self.edge_feature_len = edge_feature_len
-        self.use_conditioning = use_conditioning and (tt_size is not None)
-
-        self.tt_embedding = None
-        lstm_input_size = embedding_size  # Renamed from gru_input_size
-        if self.use_conditioning:
-            self.tt_embedding = nn.Sequential(
-                nn.Linear(tt_size, tt_embedding_size), nn.ReLU(),
-                nn.Linear(tt_embedding_size, tt_embedding_size), nn.ReLU()
-            )
-            lstm_input_size += tt_embedding_size
-            print(f"INFO: EdgeLevelLSTM using TT conditioning. LSTM input size: {lstm_input_size}")
-
-        self.linear_in = nn.Linear(edge_feature_len, embedding_size)
-        self.relu = nn.ReLU()
-
-        # --- USE LSTM ---
-        self.lstm = nn.LSTM(input_size=lstm_input_size, hidden_size=hidden_size,
-                            num_layers=num_layers, batch_first=True)
-        # --- END LSTM ---
-
-        self.linear_out1 = nn.Linear(hidden_size, embedding_size)
-        self.linear_out2 = nn.Linear(embedding_size, edge_feature_len)
-        self.sigmoid = nn.Sigmoid()
-        self.hidden = None  # LSTM hidden is a tuple (h_n, c_n)
-
-    def set_first_layer_hidden(self, h):
-        # h comes from the node-level model (GraphLevelLSTM or GraphLevelAttentionLSTM)
-        # It's the output sequence, typically shape [batch, seq_len, node_hidden_size]
-        # We need the *final* hidden state h_n from the node model to initialize the edge model.
-        # However, the current GRU implementation passes the *entire output sequence* h
-        # and expects the *edge* model's hidden state size to match the *node* model's hidden size.
-        # Let's keep that assumption for now, but it might be conceptually cleaner to pass
-        # the actual final hidden state h_n from the node model if possible.
-
-        # Adapting the GRU logic for LSTM:
-        # We'll use the first layer of h (assuming h is shaped like GRU output)
-        # as the initial h_0 for the LSTM, and initialize c_0 to zeros.
-        if h.shape[-1] != self.hidden_size:
-            raise ValueError(f"Hidden state dimension mismatch in set_first_layer_hidden. "
-                             f"Node model output dim ({h.shape[-1]}) != EdgeLevelLSTM hidden ({self.hidden_size})")
-
-        # Extract the first layer's state (like in GRU version)
-        if len(h.shape) == 3 and h.shape[0] > 1:
-            h_first_layer = h[0:1, :, :]
-        elif len(h.shape) == 2:
-            h_first_layer = h.unsqueeze(0)
-        elif len(h.shape) == 3 and h.shape[0] == 1:
-            h_first_layer = h
-        else:
-            raise ValueError(f"Unexpected shape for hidden state h: {h.shape}")
-
-        # Create initial hidden state h_0
-        h_0 = torch.cat([h_first_layer,
-                         torch.zeros([self.num_layers - 1, h_first_layer.shape[1], h_first_layer.shape[2]],
-                                     device=h.device)],
-                        dim=0)
-        # Create initial cell state c_0 (zeros)
-        c_0 = torch.zeros_like(h_0)
-
-        self.hidden = (h_0, c_0)  # Store as tuple
-
-    def reset_hidden(self):
-        """Reset the hidden state to None"""
-        self.hidden = None
-
-    def forward(self, x, x_lens=None, return_logits=False, truth_table=None):
-        # Replace assertion with initialization
-        if self.hidden is None:
-            # Initialize to zeros if not already set
-            batch_size = x.shape[0] if x.dim() > 1 else 1
-            device = x.device
-            print(f"INFO: Initializing hidden state for EdgeLevelLSTM (Batch: {batch_size}, Device: {device})")
-            h_0 = torch.zeros(self.num_layers, batch_size, self.hidden_size, device=device)
-            c_0 = torch.zeros(self.num_layers, batch_size, self.hidden_size, device=device)
-            self.hidden = (h_0, c_0)
-
-        embedded_x = self.relu(self.linear_in(x))
-        lstm_input = embedded_x
-
-        if self.use_conditioning and truth_table is not None and self.tt_embedding is not None:
-            truth_table = truth_table.to(embedded_x.device)
-            tt_emb = self.tt_embedding(truth_table)
-            seq_len_edge = embedded_x.shape[1]
-            tt_emb_expanded = tt_emb.unsqueeze(1).expand(-1, seq_len_edge, -1)
-            lstm_input = torch.cat((embedded_x, tt_emb_expanded), dim=2)
-
-        target_padded_length = lstm_input.shape[1]
-        if x_lens is not None:
-            x_lens_cpu = x_lens if isinstance(x_lens, torch.Tensor) else torch.tensor(x_lens)
-            x_lens_cpu = x_lens_cpu.cpu()
-            try:
-                lstm_input = pack_padded_sequence(lstm_input, x_lens_cpu, batch_first=True, enforce_sorted=False)
-            except RuntimeError as e:
-                print(f"Error packing sequence in EdgeLevelLSTM: {e}")
-
-        # --- Use LSTM ---
-        lstm_output_packed, self.hidden = self.lstm(lstm_input, self.hidden)
-        # --- End LSTM ---
-
-        lstm_output = lstm_output_packed
-        if x_lens is not None:
-            try:
-                lstm_output, _ = pad_packed_sequence(lstm_output_packed, batch_first=True,
-                                                     total_length=target_padded_length)
-            except RuntimeError as e:
-                print(f"Error unpacking sequence in EdgeLevelLSTM: {e}")
-
-        out = self.relu(self.linear_out1(lstm_output))
-        logits = self.linear_out2(out)
-
-        if not return_logits:
+            # Apply sigmoid (for BCELoss or if probabilities are desired)
+            # Note: For multi-class classification with CrossEntropyLoss,
+            # you should use return_logits=True and apply Softmax implicitly
+            # within the loss function or explicitly after this forward pass if needed elsewhere.
             return self.sigmoid(logits)
-        else:
-            return logits
-
-class EdgeLevelAttentionLSTM(nn.Module):
-    """ LSTM version of EdgeLevelAttentionRNN """
-    def __init__(self, embedding_size, hidden_size, num_layers,
-                 edge_feature_len=3,
-                 attention_heads=4,
-                 attention_dropout=0.1,
-                 use_conditioning=False,
-                 tt_size=None,
-                 tt_embedding_size=64):
-        super().__init__()
-        self.num_layers = num_layers
-        self.hidden_size = hidden_size
-        self.edge_feature_len = edge_feature_len
-        self.embedding_size = embedding_size
-        self.use_conditioning = use_conditioning and (tt_size is not None)
-
-        self.linear_in = nn.Linear(edge_feature_len, embedding_size)
-        self.relu = nn.ReLU()
-
-        self.tt_embedding = None
-        attn_input_dim = embedding_size
-        if self.use_conditioning:
-            self.tt_embedding = nn.Sequential(
-                nn.Linear(tt_size, tt_embedding_size), nn.ReLU(),
-                nn.Linear(tt_embedding_size, tt_embedding_size), nn.ReLU()
-            )
-            print(f"INFO: EdgeLevelAttentionLSTM optionally using TT conditioning.")
-
-        # --- Attention Layers ---
-        self.self_attention = nn.MultiheadAttention(
-            embed_dim=attn_input_dim, num_heads=attention_heads,
-            dropout=attention_dropout, batch_first=True
-        )
-        self.attention_norm = nn.LayerNorm(attn_input_dim)
-        self.attention_dropout_layer = nn.Dropout(attention_dropout)
-        # --- End Attention ---
-
-        # --- USE LSTM ---
-        lstm_input_size = attn_input_dim # Input to LSTM is output of attention
-        if self.use_conditioning:
-            lstm_input_size += tt_embedding_size # Add TT embedding dim if conditioning
-
-        self.lstm = nn.LSTM(input_size=lstm_input_size, hidden_size=hidden_size,
-                           num_layers=num_layers, batch_first=True)
-        # --- END LSTM ---
-
-        self.linear_out1 = nn.Linear(hidden_size, embedding_size)
-        self.linear_out2 = nn.Linear(embedding_size, edge_feature_len)
-        self.sigmoid = nn.Sigmoid()
-        self.hidden = None # LSTM hidden is tuple (h_n, c_n)
-
-    def set_first_layer_hidden(self, h):
-        # Same logic as EdgeLevelLSTM
-        if h.shape[-1] != self.hidden_size:
-            raise ValueError(f"Hidden state dimension mismatch. Node model output dim ({h.shape[-1]}) != EdgeLevelAttentionLSTM hidden ({self.hidden_size})")
-
-        if len(h.shape) == 3 and h.shape[0] > 1: h_first_layer = h[0:1, :, :]
-        elif len(h.shape) == 2: h_first_layer = h.unsqueeze(0)
-        elif len(h.shape) == 3 and h.shape[0] == 1: h_first_layer = h
-        else: raise ValueError(f"Unexpected shape for hidden state h: {h.shape}")
-
-        h_0 = torch.cat([h_first_layer,
-                         torch.zeros([self.num_layers - 1, h_first_layer.shape[1], h_first_layer.shape[2]], device=h.device)],
-                        dim=0)
-        c_0 = torch.zeros_like(h_0)
-        self.hidden = (h_0, c_0)
-
-    def forward(self, x,
-                node_context: Optional[torch.Tensor] = None, # <<< ADDED: Accept node context (Optional)
-              # hidden: Optional[Tuple[torch.Tensor, torch.Tensor]] = None, # Using self.hidden instead
-                x_lens=None,
-                return_logits=False,
-                truth_table=None):
-
-        # <<< START STATE INITIALIZATION >>>
-        # Initialize hidden state IF self.hidden is None (e.g., first call in sequence)
-        local_hidden = self.hidden # Use the stored state if available
-
-        if local_hidden is None:
-             # Initialize to zeros if this is the first step for this instance
-             batch_size = x.shape[0] if x.dim() > 1 else 1 # Get batch size from input x
-             device = x.device
-             # Use logger if available, otherwise print
-             # logger.debug(f"Initializing hidden state for {type(self).__name__} (Batch: {batch_size}, Device: {device})")
-             print(f"INFO: Initializing hidden state for {type(self).__name__} (Batch: {batch_size}, Device: {device})") # Use print if logger not set up here
-             h_0 = torch.zeros(self.num_layers, batch_size, self.hidden_size, device=device)
-             c_0 = torch.zeros(self.num_layers, batch_size, self.hidden_size, device=device)
-             local_hidden = (h_0, c_0)
-        # <<< END STATE INITIALIZATION >>>
-
-        # Remove the assert statement that caused the crash
-        # assert self.hidden is not None, "Hidden state not set for EdgeLevelAttentionLSTM!" # <<< REMOVED
-
-        embedded_x = self.relu(self.linear_in(x))
-        attn_input = embedded_x
-
-        # Apply Attention
-        padding_mask = None # No padding mask needed for single step generation
-        attn_output, _ = self.self_attention(query=attn_input, key=attn_input, value=attn_input, key_padding_mask=padding_mask)
-        attended_edges = attn_input + self.attention_dropout_layer(attn_output)
-        attended_edges_norm = self.attention_norm(attended_edges)
-
-        # Prepare LSTM Input
-        lstm_input = attended_edges_norm
-
-        # --- Optional: Use node_context ---
-        if node_context is not None:
-             node_context = node_context.to(x.device)
-             # Example: Add node context if dimensions match (Node output_size == Edge embedding_size)
-             if node_context.shape[0] == lstm_input.shape[0] and \
-                node_context.shape[1] == lstm_input.shape[1] and \
-                node_context.shape[2] == lstm_input.shape[2]:
-                  lstm_input = lstm_input + node_context
-                  # print("DEBUG: Added node context to EdgeLevelAttentionLSTM input.") # Optional debug print
-             else:
-                  # print(f"WARN: EdgeLevelAttentionLSTM node_context shape {node_context.shape} mismatch with input {lstm_input.shape}. Skipping fusion.") # Optional warning
-                   pass # Skip fusion if shapes don't match for addition
-        # --- End Optional ---
-
-        # Add truth table conditioning if enabled
-        if self.use_conditioning and truth_table is not None and self.tt_embedding is not None:
-            truth_table = truth_table.to(lstm_input.device)
-            tt_emb = self.tt_embedding(truth_table)
-            tt_emb_expanded = tt_emb.unsqueeze(1).expand(-1, lstm_input.shape[1], -1)
-            # Ensure lstm_input_size in __init__ accounts for this!
-            lstm_input = torch.cat((lstm_input, tt_emb_expanded), dim=2)
-
-
-        # --- Use LSTM ---
-        # Pass the current local_hidden state, receive output and next hidden state
-        lstm_output, next_hidden = self.lstm(lstm_input, local_hidden) # Use local_hidden
-        # --- End LSTM ---
-
-        # <<< Update the stored hidden state for the next call >>>
-        self.hidden = next_hidden
-
-        # Output layers
-        out = self.relu(self.linear_out1(lstm_output))
-        logits = self.linear_out2(out)
-
-        # Return only logits
-        if not return_logits:
-            return self.sigmoid(logits)
-        else:
-            return logits
 

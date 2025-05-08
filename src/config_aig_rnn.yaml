@@ -1,43 +1,40 @@
-# Config: GRU Node + RNN Edge
+# Config: GRU Node + RNN Edge (with Node Prediction)
 data:
   dataset_type: 'aig-directed-multiclass'
-  # graph_file: 'dataset/final_data.pkl' # OLD - Single file path
-  graph_files: # NEW - List of file paths
-    - './aigs/real_aigs_part_1_of_6.pkl' # Assuming files are in 'aigs' subfolder
+  graph_files: # List of file paths
+    - './aigs/real_aigs_part_1_of_6.pkl'
     - './aigs/real_aigs_part_2_of_6.pkl'
     - './aigs/real_aigs_part_3_of_6.pkl'
     - './aigs/real_aigs_part_4_of_6.pkl'
     # Add paths to all your generated .pkl files here
   use_bfs: false # Keep false for topological sort used by AIGDataset
-  max_graphs: null # Set to null to use all graphs from the listed files
-  # 'm' is calculated internally by AIGDataset based on max_node_count.
-  # Keep this value roughly correct (max_node_count - 1) for potential use elsewhere,
-  # but the dataset class will use the precise value.
-  # Update this if your new dataset's max_node_count is significantly different.
+  max_graphs: null # Use all graphs from the listed files
   m: 63
+  max_node_count: 64
   max_level: 22
+  train_split: 0.9 # Fraction for training
+  max_train_graphs: null # Optional limit on number of training graphs
 
 model:
-  mode: 'directed-multiclass'
-  use_lstm: false         # GRU Node
-  use_attention: false    # No Node Attention
-  edge_model: 'rnn'       # RNN Edge
+  mode: 'directed-multiclass' # Or 'aig' if that's more appropriate
+  # --- Removed flags now handled in train config or implicitly ---
+  # use_lstm: false
+  # use_attention: false
+  # edge_model: 'rnn'
+  # predict_node_types: false # Moved to train config
 
   GraphRNN:
     embedding_size: 384
     hidden_size: 768
     num_layers: 4
-    # IMPORTANT: This must be 3 for the 3-class edge representation
-    # (NONE, REGULAR, INVERTED) used internally and output by AIGDataset
-    edge_feature_len: 3
-    output_size: 384      # MUST match EdgeRNN.hidden_size
+    # edge_feature_len: 3 # Now defaults to NUM_EDGE_FEATURES (3) in utils.py
+    # output_size: 384    # Now set automatically in utils.py to match EdgeRNN hidden_size
 
   EdgeRNN:
     embedding_size: 192
-    hidden_size: 384      # MUST match GraphRNN.output_size
+    hidden_size: 768      # MUST match GraphRNN hidden_size (as output_size is set to this)
     num_layers: 4
-    # IMPORTANT: This must also be 3
-    edge_feature_len: 3
+    # edge_feature_len: 3 # Now defaults to NUM_EDGE_FEATURES (3) in utils.py
 
 train:
   batch_size: 64
@@ -45,6 +42,12 @@ train:
   steps: 75000            # Total training steps
   print_iter: 100
   checkpoint_iter: 7500
-  checkpoint_dir: 'checkpoints/checkpoints_gru_rnn' # Specific directory
-  log_file: 'train_results/logs_gru_rnn'               # Specific directory
-  # lr_schedule_* removed; code uses CosineAnnealingLR
+  checkpoint_dir: 'checkpoints/checkpoints_gru_rnn_node' # Specific directory for this run
+  log_file: 'train_results/logs_gru_rnn_node.csv'      # Specific directory/file for this run
+  eta_min: 0             # For CosineAnnealingLR
+
+  # --- ADDED Node Prediction Config ---
+  predict_node_types: true  # Enable node type prediction training
+  node_loss_weight: 1.0     # Weight for node loss relative to edge loss (adjust as needed)
+  # --- END ADDED ---
+
