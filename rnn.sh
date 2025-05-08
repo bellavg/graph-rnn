@@ -91,7 +91,7 @@ echo "--------------------------------------------------------"
 # Note: evaluate_aigs.py will output results to stdout
 srun python -u src/evaluate_aigs.py \
     "${GENERATED_GRAPHS_PATH}" \
-    --train_pkl_files ${TRAIN_PKL_FILES_STR} # Pass training files for novelty
+    --train_pkl_files aigs/real_aigs_part_1_of_6.pkl aigs/real_aigs_part_2_of_6.pkl aigs/real_aigs_part_3_of_6.pkl  aigs/real_aigs_part_4_of_6.pkl
 
 echo "Evaluation finished."
 
