@@ -5,7 +5,7 @@ import logging
 import os # Added for path joining
 import pickle # Added for saving graphs
 from typing import Optional, Tuple, Callable, Any, Dict, List
-from src.model import * # Import necessary model classes
+from model import * # Import necessary model classes
 import networkx as nx
 import sys # Added for sys.exit
 
@@ -18,7 +18,7 @@ if not logger.hasHandlers():
 # --- Import the AIG configuration for type strings ---
 # Ensure aig_config.py is in the same directory or Python path
 try:
-    import src.aig_config as aig_config
+    import aig_config as aig_config
 except ImportError:
     # Attempt relative import if run from src/
     try:
