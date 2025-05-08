@@ -47,35 +47,35 @@ module load Anaconda3/2024.06-1
 echo "Activating Conda environment..."
 source activate aig-rnn # Replace with your actual environment name
 
-
-
-echo "--------------------------------------------------------"
-echo "Step 1: Starting Training (src/main.py)..."
-echo "--------------------------------------------------------"
-srun python -u main.py \
-    --config_file="${CONFIG_FILE}" \
-    --save_dir="${CHECKPOINT_DIR}" \
-    # Add --restore argument here if needed, e.g.:
-    # --restore path/to/previous/checkpoint.pth
-
-echo "Training finished."
-
-# Check if final checkpoint exists
-if [ ! -f "$FINAL_CHECKPOINT_PATH" ]; then
-    echo "ERROR: Expected final checkpoint ${FINAL_CHECKPOINT_PATH} not found after training!"
-    # List available checkpoints for debugging
-    echo "Available files in ${CHECKPOINT_DIR}:"
-    ls -lh "${CHECKPOINT_DIR}"
-    exit 1
-fi
-echo "Final checkpoint found: ${FINAL_CHECKPOINT_PATH}"
+#
+#
+#echo "--------------------------------------------------------"
+#echo "Step 1: Starting Training (src/main.py)..."
+#echo "--------------------------------------------------------"
+#srun python -u main.py \
+#    --config_file="${CONFIG_FILE}" \
+#    --save_dir="${CHECKPOINT_DIR}" \
+#    # Add --restore argument here if needed, e.g.:
+#    # --restore path/to/previous/checkpoint.pth
+#
+#echo "Training finished."
+#
+## Check if final checkpoint exists
+#if [ ! -f "$FINAL_CHECKPOINT_PATH" ]; then
+#    echo "ERROR: Expected final checkpoint ${FINAL_CHECKPOINT_PATH} not found after training!"
+#    # List available checkpoints for debugging
+#    echo "Available files in ${CHECKPOINT_DIR}:"
+#    ls -lh "${CHECKPOINT_DIR}"
+#    exit 1
+#fi
+#echo "Final checkpoint found: ${FINAL_CHECKPOINT_PATH}"
 
 # --- Step 2: Generation ---
 echo "--------------------------------------------------------"
 echo "Step 2: Starting Generation (src/get_aigs.py)..."
 echo "--------------------------------------------------------"
 srun python -u src/get_aigs.py \
-    --model-path="${FINAL_CHECKPOINT_PATH}" \
+    --model-path="aig_run_11632175/checkpoints/checkpoints/checkpoints_gru_rnn/checkpoint-75000.pth" \
     --output-dir="${GENERATION_DIR}" \
     --output-graphs-file="${GENERATED_GRAPHS_FILENAME}" \
     --num-generate=${NUM_GENERATE} \
