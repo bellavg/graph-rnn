@@ -396,9 +396,15 @@ def generate(
                 try:
                     # Call edge gen function - it returns indices directly now
                     adj_indices_vec_tensor = edge_gen_function(
-                        edge_model, h, num_edges_to_generate, input_size, sample_fun, mode,
-                        temperature, top_k, top_p, edge_sample_attempts
-                    )  # Returns shape [1, 1, input_size] with indices
+                        edge_model, h, num_edges_to_generate, input_size,
+                        edge_feature_len,  # Correctly pass the integer edge_feature_len here
+                        sample_fun,  # Correctly pass the callable sample_fun here
+                        mode,
+                        temperature,
+                        top_k,
+                        top_p,
+                        edge_sample_attempts
+                    )
 
                     # Extract relevant indices and convert to numpy
                     current_indices_np = adj_indices_vec_tensor[0, 0, :num_edges_to_generate].cpu().numpy()
