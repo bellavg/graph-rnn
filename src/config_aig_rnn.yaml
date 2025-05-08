@@ -25,6 +25,7 @@ model:
   # predict_node_types: false # Moved to train config
 
   GraphRNN:
+    edge_feature_len: 3
     embedding_size: 384
     hidden_size: 768
     num_layers: 4
@@ -32,6 +33,7 @@ model:
     # output_size: 384    # Now set automatically in utils.py to match EdgeRNN hidden_size
 
   EdgeRNN:
+    edge_feature_len: 3
     embedding_size: 192
     hidden_size: 768      # MUST match GraphRNN hidden_size (as output_size is set to this)
     num_layers: 4

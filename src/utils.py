@@ -112,13 +112,17 @@ def setup_criteria(config, device, dataset=None):
     """
     Sets up loss criteria for edges and optionally for node types.
     Edge class weights are now hardcoded.
+    num_node_types is now fetched from config['data'].
     """
-    loss_reduction = config.get('train', {}).get('loss_reduction', 'mean')
+    train_config = config.get('train', {})
+    model_config = config.get('model', {})
+    data_config = config.get('data', {})  # Get data sub-config
+
+    loss_reduction = train_config.get('loss_reduction', 'mean')
 
     # --- Edge Criterion ---
-    # Hardcoded edge class weights as requested
     hardcoded_edge_weights = [0.015618128702044487, 1.4666249752044678, 1.5177571773529053]
-    num_edge_classes = len(hardcoded_edge_weights)  # Should be 3 based on weights
+    num_edge_classes = len(hardcoded_edge_weights)
 
     print(f"Setting up CrossEntropyLoss for {num_edge_classes} edge classes.")
 
@@ -126,27 +130,33 @@ def setup_criteria(config, device, dataset=None):
     print(f"Applying HARDCODED edge class weights: {edge_class_weights_tensor.tolist()}")
     criterion_edge = nn.CrossEntropyLoss(weight=edge_class_weights_tensor, reduction=loss_reduction)
 
-    # Determine if edge features are used (for multi-class CrossEntropyLoss) or binary (for BCELoss)
-    # For AIG, it's typically multi-class (None, Regular, Inverted)
-    use_edge_features = config.get('model', {}).get('GraphRNN', {}).get('edge_feature_len', 1) > 1
-    if not use_edge_features:
-        print("Warning: edge_feature_len <= 1, but CrossEntropyLoss is set up. Ensure this is intended.")
-        # If it were truly binary and you wanted BCELoss, you'd do:
-        # criterion_edge = nn.BCEWithLogitsLoss(pos_weight=pos_weight_tensor, reduction=loss_reduction)
+    # Determine if edge features are used (for multi-class CrossEntropyLoss)
+    # Default to 3 if not specified, aligning with hardcoded weights
+    edge_feature_len_for_warning = model_config.get('GraphRNN', {}).get('edge_feature_len',
+                                                                        model_config.get('edge_feature_len', 3))
+    use_edge_features = edge_feature_len_for_warning > 1
+
+    if not use_edge_features:  # This means edge_feature_len_for_warning is 1
+        print(
+            f"Warning: edge_feature_len is {edge_feature_len_for_warning}, but CrossEntropyLoss for multiple classes is set up. Ensure this is intended.")
 
     # --- Node Criterion (Optional) ---
     criterion_node = None
-    predict_node_types = config.get('train', {}).get('predict_node_types',
-                                                     config.get('model', {}).get('predict_node_types', False))
+    predict_node_types = train_config.get('predict_node_types',
+                                          model_config.get('predict_node_types', False))
 
     if predict_node_types:
-        num_node_types = config.get('model', {}).get('num_node_types')
+        # **MODIFIED TO FETCH FROM data_config FIRST**
+        num_node_types = data_config.get('num_node_types', model_config.get('num_node_types', None))
+
         if num_node_types is None:
+            # This error message reflects the updated logic.
             raise ValueError(
-                "num_node_types must be specified in config if predict_node_types is True for criterion setup.")
+                "num_node_types must be specified in config (preferably under 'data') if predict_node_types is True for criterion setup.")
+
         print(f"Setting up CrossEntropyLoss for {num_node_types} node classes.")
 
-        node_class_weights_list = config.get('train', {}).get('node_class_weights', None)
+        node_class_weights_list = train_config.get('node_class_weights', None)
         node_class_weights_tensor = None
         if node_class_weights_list is not None:
             if len(node_class_weights_list) != num_node_types:
