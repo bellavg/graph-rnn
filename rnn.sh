@@ -71,24 +71,17 @@ source activate aig-rnn # Replace with your actual environment name
 #echo "Final checkpoint found: ${FINAL_CHECKPOINT_PATH}"
 #
 # --- Step 2: Generation ---
-echo "--------------------------------------------------------"
-echo "Step 2: Starting Generation (src/get_aigs.py)..."
-echo "--------------------------------------------------------"
-srun python -u src/get_aigs.py \
-    --model-path="aig_run_11632175/checkpoints/checkpoints/checkpoints_gru_rnn/checkpoint-75000.pth" \
-    --output-dir="${GENERATION_DIR}" \
-    --output-graphs-file="${GENERATED_GRAPHS_FILENAME}" \
-    --num-generate=${NUM_GENERATE} \
-    # Add other generation parameters like --gen-temp if needed
-
-echo "Generation finished."
-
- Check if generated graphs file exists
-if [ ! -f "$GENERATED_GRAPHS_PATH" ]; then
-    echo "ERROR: Generated graphs file ${GENERATED_GRAPHS_PATH} not found after generation!"
-    exit 1
-fi
-echo "Generated graphs saved to: ${GENERATED_GRAPHS_PATH}"
+#echo "--------------------------------------------------------"
+#echo "Step 2: Starting Generation (src/get_aigs.py)..."
+#echo "--------------------------------------------------------"
+#srun python -u src/get_aigs.py \
+#    --model-path="aig_run_11632175/checkpoints/checkpoints/checkpoints_gru_rnn/checkpoint-75000.pth" \
+#    --output-dir="${GENERATION_DIR}" \
+#    --output-graphs-file="${GENERATED_GRAPHS_FILENAME}" \
+#    --num-generate=${NUM_GENERATE} \
+#    # Add other generation parameters like --gen-temp if needed
+#
+#echo "Generation finished."
 
 
 # --- Step 3: Evaluation ---
