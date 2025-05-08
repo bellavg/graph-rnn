@@ -30,7 +30,7 @@ DEFAULT_MAX_LEVEL = 22
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_file', default="src/config_aig_rnn.yaml", # Adjusted default path
+    parser.add_argument('--config_file', default="/Users/bellavg/graph-rnn/src/config_aig_rnn.yaml", # Adjusted default path
                         help='Path of the config file to use for training')
     parser.add_argument('-r', '--restore', dest='restore_path', default=None,
                         help='Checkpoint to continue training from')
@@ -137,8 +137,7 @@ def train_loop(config, node_model, edge_model, step_fn,
         epoch_node_loss_sum = 0.0
         epoch_steps = 0
 
-        # --- FIXED: Use tqdm.tqdm ---
-        pbar = tqdm.tqdm(data_loader, desc=f"Epoch {epoch}", leave=False)
+        pbar = tqdm(data_loader, desc=f"Epoch {epoch}", leave=False)
         # --- END FIXED ---
         for batch_idx, data in enumerate(pbar):
             global_step += 1

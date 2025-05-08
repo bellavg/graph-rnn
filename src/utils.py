@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn # Added for nn.CrossEntropyLoss
 # Import necessary constants from aig_config
 try:
-    from .aig_config import NUM_EDGE_FEATURES, NUM_NODE_TYPES
+    from aig_config import NUM_EDGE_FEATURES, NUM_NODE_TYPES
 except ImportError:
     print("Warning: Could not import from .aig_config. Using default values in utils.py")
     NUM_EDGE_FEATURES = 3
