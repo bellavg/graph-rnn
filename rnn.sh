@@ -32,8 +32,8 @@ echo "========================================================"
 
 # Create directories
 mkdir -p slurm_logs
-mkdir -p "${CHECKPOINT_DIR}"
-mkdir -p "${GENERATION_DIR}"
+#mkdir -p "${CHECKPOINT_DIR}"
+#mkdir -p "${GENERATION_DIR}"
 # Evaluation script outputs to its own directory, no need to pre-create
 
 # Navigate to the script's parent directory (assuming script is in a 'scripts' folder)
@@ -90,7 +90,7 @@ echo "Step 3: Starting Evaluation (src/evaluate_aigs.py)..."
 echo "--------------------------------------------------------"
 # Note: evaluate_aigs.py will output results to stdout
 srun python -u src/evaluate_aigs.py \
-    "${GENERATED_GRAPHS_PATH}" \
+    "aig_run_11640569/generated/generated_aigs.pkl" \
     --train_pkl_files aigs/real_aigs_part_1_of_6.pkl aigs/real_aigs_part_2_of_6.pkl aigs/real_aigs_part_3_of_6.pkl  aigs/real_aigs_part_4_of_6.pkl
 
 echo "Evaluation finished."
