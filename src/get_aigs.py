@@ -30,11 +30,12 @@ except ImportError as e:
 # Generation imports (Ensure generate_aigs.py is the updated version)
 try:
     # Import the main generate function and necessary helpers/constants
-    from generate_aigs import generate, rnn_edge_gen, mlp_edge_gen, EDGE_TYPES, NUM_EDGE_FEATURES
+    from generate_aigs import generate, rnn_edge_gen, mlp_edge_gen
 except ImportError as e:
     print(f"Error importing from generate_aigs.py: {e}. Ensure it exists and is accessible.")
     sys.exit(1)
 
+from aig_config import NUM_EDGE_FEATURES
 # --- Setup Logging ---
 logging.basicConfig(
     level=logging.INFO, # Set default level
