@@ -2,7 +2,7 @@
 #SBATCH --job-name=aig_rnn_pipeline
 #SBATCH --partition=gpu_h100     # Specify the appropriate partition here
 #SBATCH --gpus=1
-#SBATCH --time=12:00:00          # Adjust time as needed
+#SBATCH --time=06:00:00          # Adjust time as needed
 #SBATCH --output=slurm_logs/aig_pipeline_%j.out
 
 
