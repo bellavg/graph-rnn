@@ -27,6 +27,8 @@ except ImportError as e:
                        GraphLevelLSTM, EdgeLevelLSTM,
                        GraphLevelAttentionLSTM, EdgeLevelAttentionLSTM)
 
+    MODEL_CLASSES_LOADED = True
+
 # Generation imports (Ensure generate_aigs.py is the updated version)
 try:
     # Import the main generate function and necessary helpers/constants
