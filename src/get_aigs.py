@@ -503,10 +503,10 @@ if __name__ == "__main__":
 
     # --- Base Generation Config Dictionary ---
     GENERATION_CONFIG = {
-        'max_nodes': args.gen_max_nodes if args.gen_max_nodes is not None else 80,
-        'min_nodes': args.gen_min_nodes if args.gen_min_nodes is not None else 8,
+        'max_nodes': args.gen_max_nodes if args.gen_max_nodes is not None else 64,
+        'min_nodes': args.gen_min_nodes if args.gen_min_nodes is not None else 5,
         'patience': args.gen_patience if args.gen_patience is not None else 16,
-        'temperature': args.gen_temp if args.gen_temp is not None else 1.2,
+        'temperature': args.gen_temp if args.gen_temp is not None else 0.6,
         'top_k': args.gen_top_k if args.gen_top_k is not None else 0,
         'top_p': args.gen_top_p if args.gen_top_p is not None else 0.0,
         'edge_sample_attempts': args.gen_edge_attempts if args.gen_edge_attempts is not None else 3,
