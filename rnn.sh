@@ -137,27 +137,27 @@ echo "Activating Conda environment..."
 #fi
 #echo "Final checkpoint found: ${FINAL_CHECKPOINT_PATH}"
 
-# --- Step 2: Generation ---
-echo "--------------------------------------------------------"
-echo "Step 2: Starting Generation (src/get_aigs.py)..."
-echo "Using model: ${FINAL_CHECKPOINT_PATH}"
-echo "Saving generated graphs in: ${GENERATION_DIR}"
-echo "--------------------------------------------------------"
-srun python -u src/get_aigs.py \
-    --model-path="aig_run_11655841/checkpoints/checkpoints_gru_rnn_node/checkpoint-75000.pth"\
-    --output-dir="${GENERATION_DIR}" \
-    --output-graphs-file="generated_graphs.pkl" \
-    --num-generate=${NUM_GENERATE} \
-    # Add other generation parameters like --gen-temp if needed
-
-echo "Generation finished."
-
-# Check if generated graphs file exists
-if [ ! -f "$GENERATED_GRAPHS_PATH" ]; then
-    echo "ERROR: Generated graphs file ${GENERATED_GRAPHS_PATH} not found after generation!"
-    exit 1
-fi
-echo "Generated graphs saved to: ${GENERATED_GRAPHS_PATH}"
+## --- Step 2: Generation ---
+#echo "--------------------------------------------------------"
+#echo "Step 2: Starting Generation (src/get_aigs.py)..."
+#echo "Using model: ${FINAL_CHECKPOINT_PATH}"
+#echo "Saving generated graphs in: ${GENERATION_DIR}"
+#echo "--------------------------------------------------------"
+#srun python -u src/get_aigs.py \
+#    --model-path="aig_run_11655841/checkpoints/checkpoints_gru_rnn_node/checkpoint-75000.pth"\
+#    --output-dir="${GENERATION_DIR}" \
+#    --output-graphs-file="generated_graphs.pkl" \
+#    --num-generate=${NUM_GENERATE} \
+#    # Add other generation parameters like --gen-temp if needed
+#
+#echo "Generation finished."
+#
+## Check if generated graphs file exists
+#if [ ! -f "$GENERATED_GRAPHS_PATH" ]; then
+#    echo "ERROR: Generated graphs file ${GENERATED_GRAPHS_PATH} not found after generation!"
+#    exit 1
+#fi
+#echo "Generated graphs saved to: ${GENERATED_GRAPHS_PATH}"
 
 # --- Step 3: Evaluation ---
 echo "--------------------------------------------------------"
@@ -167,7 +167,7 @@ echo "Against Training Files: ${TRAIN_PKL_FILES_STR}"
 echo "--------------------------------------------------------"
 # Note: evaluate_aigs.py will output results to stdout
 srun python -u src/evaluate_aigs.py \
-    "${GENERATED_GRAPHS_PATH}" \
+    "./generated/generated_graphs.pkl" \
     --train_pkl_files ${TRAIN_PKL_FILES_STR} # Pass training files for novelty
 
 echo "Evaluation finished."
