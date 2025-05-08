@@ -10,6 +10,7 @@ data:
   use_bfs: false # Keep false for topological sort used by AIGDataset
   max_graphs: null # Use all graphs from the listed files
   m: 63
+  num_node_types: 4
   max_node_count: 64
   max_level: 22
   train_split: 0.9 # Fraction for training
