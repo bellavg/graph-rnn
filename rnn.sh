@@ -146,7 +146,7 @@ echo "--------------------------------------------------------"
 srun python -u src/get_aigs.py \
     --model-path="aig_run_11655841/checkpoints/checkpoints_gru_rnn_node/checkpoint-75000.pth"\
     --output-dir="${GENERATION_DIR}" \
-    --output-graphs-file="${GENERATED_GRAPHS_FILENAME}" \
+    --output-graphs-file="generated_graphs.pkl" \
     --num-generate=${NUM_GENERATE} \
     # Add other generation parameters like --gen-temp if needed
 

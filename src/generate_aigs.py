@@ -4,19 +4,14 @@ import argparse
 import numpy as np
 import torch
 import networkx as nx
-import logging  # Use logging
+import logging
 import sys
 import os
-import time
-import json
-import pickle
-import inspect
 from typing import Dict, Any, List, Tuple, Optional, Callable
 
 # --- Import from project files ---
 try:
     from model import GraphLevelRNN, EdgeLevelRNN
-
     MODEL_CLASSES_LOADED = True
 except ImportError as e:
     print(f"Error importing models from model.py: {e}. Ensure GraphLevelRNN and EdgeLevelRNN are defined.")
@@ -27,453 +22,322 @@ logger = logging.getLogger("generate_aigs")
 if not logger.hasHandlers():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-# --- Configuration Import with Fallback ---
-try:
-    # Try importing from the project structure if available
-    from . import aig_config as aig_config
-
-    logger.info("Successfully imported aig_config.")
-except ImportError:
-    logger.warning("Could not import from .aig_config. Using default internal values.")
-
-
-    # Define fallbacks directly if import fails
-    class aig_config:  # Simple class to hold fallback values
-        NODE_TYPE_KEYS = ["CONST0", "PI", "AND", "PO"]
-        NUM_NODE_FEATURES = 4
-        EDGE_TYPE_KEYS = ["regular", "inverted"]
-        NUM_EDGE_FEATURES_AIG = 2  # Regular, Inverted (excluding None)
+# --- Configuration Import ---
+# Assumes aig_config.py is in the same directory or accessible in PYTHONPATH
+import aig_config as aig_config
 
 # --- Constants ---
 EDGE_TYPES_INTERNAL = {"NONE": 0, "REGULAR": 1, "INVERTED": 2}
-NUM_EDGE_FEATURES = 3  # Number of edge classes model predicts (None, Reg, Inv)
+# NUM_EDGE_FEATURES should be 3 because the model predicts one of three classes: None, Regular, Inverted.
+NUM_EDGE_FEATURES = 3
 
-# Map internal indices (1, 2) to string keys from aig_config
 INT_TO_EDGE_TYPE_STR = {
-    EDGE_TYPES_INTERNAL["REGULAR"]: aig_config.EDGE_TYPE_KEYS[0],  # 'regular'
-    EDGE_TYPES_INTERNAL["INVERTED"]: aig_config.EDGE_TYPE_KEYS[1],  # 'inverted'
+    EDGE_TYPES_INTERNAL["REGULAR"]: aig_config.EDGE_TYPE_KEYS[0],
+    EDGE_TYPES_INTERNAL["INVERTED"]: aig_config.EDGE_TYPE_KEYS[1],
 }
-
-# Map internal indices (0, 1, 2, 3) to string keys from aig_config
-INT_TO_NODE_TYPE_STR = {
-    i: node_key for i, node_key in enumerate(aig_config.NODE_TYPE_KEYS)
-}
-# Validate mapping length against config
-if len(INT_TO_NODE_TYPE_STR) != aig_config.NUM_NODE_FEATURES:
-    logger.warning(
-        f"Mismatch between derived INT_TO_NODE_TYPE_STR ({len(INT_TO_NODE_TYPE_STR)}) "
-        f"and aig_config.NUM_NODE_FEATURES ({aig_config.NUM_NODE_FEATURES})"
-    )
-
+INT_TO_NODE_TYPE_STR = {i: key for i, key in enumerate(aig_config.NODE_TYPE_KEYS)}
+NODE_STR_TO_INT = {name: i for i, name in INT_TO_NODE_TYPE_STR.items()} # For robust default type assignment
 NODE_UNKNOWN_STR = "UNKNOWN_NODE"
 
+if len(INT_TO_NODE_TYPE_STR) != aig_config.NUM_NODE_FEATURES:
+    logger.warning(
+        f"Mismatch: INT_TO_NODE_TYPE_STR len ({len(INT_TO_NODE_TYPE_STR)}) "
+        f"!= aig_config.NUM_NODE_FEATURES ({aig_config.NUM_NODE_FEATURES})"
+    )
 
-# --- Sampling Functions ---
+# --- Sampling Functions (Assumed correct) ---
 def sample_bernoulli(p):
-    """ Samples 0 or 1 based on probability p. """
     p_val = p.item() if isinstance(p, torch.Tensor) else p
     return int(np.random.random() < p_val)
 
-
-# --- MODIFIED: sample_temperature returns INDEX ---
 def sample_temperature(logits: torch.Tensor, temperature: float, top_k: int = 0, top_p: float = 0.0) -> int:
-    """ Samples an index from logits using temperature, top-k, or top-p sampling. """
-    if logits.numel() == 0:
-        logger.error("Cannot sample from empty logits tensor.")
-        return 0  # Default to index 0 (e.g., 'NONE' edge or 'CONST0' node)
-
-    if temperature <= 1e-6:  # Use argmax for zero or near-zero temperature
-        return torch.argmax(logits).item()
-
+    if logits.numel() == 0: return EDGE_TYPES_INTERNAL["NONE"]
+    if temperature <= 1e-6: return torch.argmax(logits).item()
     logits = logits / temperature
-
-    # Top-p filtering
     if top_p > 0.0 and top_p < 1.0:
         sorted_logits, sorted_indices = torch.sort(logits, descending=True)
         cumulative_probs = torch.cumsum(torch.softmax(sorted_logits, dim=-1), dim=-1)
         sorted_indices_to_remove = cumulative_probs > top_p
         sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
         sorted_indices_to_remove[..., 0] = 0
-        # Use scatter_ to map back to original indices
-        indices_to_remove = torch.zeros_like(logits, dtype=torch.bool).scatter_(-1, sorted_indices,
-                                                                                sorted_indices_to_remove)
+        indices_to_remove = torch.zeros_like(logits, dtype=torch.bool).scatter_(-1, sorted_indices, sorted_indices_to_remove)
         logits = logits.masked_fill(indices_to_remove, -float('Inf'))
-
-    # Top-k filtering
     if top_k > 0:
-        top_k = min(top_k, logits.size(-1))  # Ensure top_k is not larger than num_classes
-        if top_k > 0:  # Proceed only if top_k is valid
-            indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
+        top_k_val = min(top_k, logits.size(-1))
+        if top_k_val > 0:
+            indices_to_remove = logits < torch.topk(logits, top_k_val)[0][..., -1, None]
             logits = logits.masked_fill(indices_to_remove, -float('Inf'))
-
     probabilities = torch.softmax(logits, dim=-1)
-
-    # Multinomial sampling
     try:
-        # Ensure probabilities are valid for multinomial
-        if not torch.all(probabilities >= 0):
-            logger.warning("Negative probabilities encountered after filtering/softmax. Clamping.")
-            probabilities = torch.clamp(probabilities, min=0)
-
-        # Check if sum is too small
+        if not torch.all(probabilities >= 0): probabilities = torch.clamp(probabilities, min=0)
         prob_sum = torch.sum(probabilities)
         if prob_sum < 1e-6:
-            logger.warning(f"Probabilities sum to {prob_sum.item()} after filtering. Using uniform distribution.")
-            probabilities = torch.ones_like(logits) / logits.numel()
+            valid_logits_mask = logits > -float('Inf')
+            if torch.any(valid_logits_mask): probabilities = torch.ones_like(logits) * valid_logits_mask.float(); probabilities = probabilities / torch.sum(probabilities)
+            else: probabilities = torch.ones_like(logits) / logits.numel()
+        return torch.multinomial(probabilities, 1).item()
+    except RuntimeError: return torch.argmax(logits).item()
 
-        sampled_index = torch.multinomial(probabilities, 1).item()
-    except RuntimeError as e:
-        logger.error(
-            f"Runtime error during torch.multinomial: {e}. Logits: {logits.cpu().numpy()}, Probs: {probabilities.cpu().numpy()}. Falling back to argmax.")
-        # Fallback to argmax of original scaled logits if sampling fails
-        sampled_index = torch.argmax(logits).item()  # Use potentially filtered logits
-
-    return sampled_index
-
-
-# --- END MODIFIED ---
-
-
-# --- Edge Generation Helper Function (RNN Only) ---
+# --- Edge Generation Helper (Assumed correct) ---
 def rnn_edge_gen(
-        edge_rnn: EdgeLevelRNN,
-        h_context: torch.Tensor,  # Renamed from node_output_context for clarity
-        num_edges_to_generate: int,
-        adj_vec_padding_size: int,
-        edge_feature_len: int,  # Should be NUM_EDGE_FEATURES (e.g., 3)
-        sample_fun: Callable,  # Should be sample_temperature
-        mode: str,  # Unused in this specific function, but kept for signature consistency
-        temperature: float = 1.0,
-        top_k: int = 0,
-        top_p: float = 0.0,
-        attempts: Optional[int] = None  # Unused placeholder
-) -> torch.Tensor:  # Returns tensor of indices
-    """ Generates edge indices (0, 1, or 2) using an EdgeLevelRNN model. """
-    try:
-        device = h_context.device
-    except AttributeError:  # Handle case where h_context might not be a tensor initially? Unlikely here.
-        device = next(edge_rnn.parameters()).device
-
-    # Stores the sampled class index for each potential edge
+        edge_rnn: EdgeLevelRNN, h_context: torch.Tensor, num_edges_to_generate: int,
+        adj_vec_padding_size: int, edge_feature_len_arg: int, sample_fun_arg: Callable,
+        mode_arg: str, temperature_arg: float, top_k_arg: int, top_p_arg: float,
+        attempts_arg: Optional[int]) -> torch.Tensor:
+    device = h_context.device
     adj_indices_vec = torch.full((adj_vec_padding_size,), EDGE_TYPES_INTERNAL["NONE"], dtype=torch.long, device=device)
-
-    # Initial SOS token (one-hot for class 0 - NoEdge)
-    x_edge_input = torch.zeros([1, 1, edge_feature_len], device=device)
+    x_edge_input = torch.zeros([1, 1, edge_feature_len_arg], device=device)
     x_edge_input[0, 0, EDGE_TYPES_INTERNAL["NONE"]] = 1.0
-
-    # Set hidden state (assuming it's handled correctly before calling this)
-    # No internal initialization here, rely on set_first_layer_hidden being called externally.
     if hasattr(edge_rnn, 'hidden') and edge_rnn.hidden is None:
-        logger.error("rnn_edge_gen called but edge_rnn.hidden is None. External init failed?")
-        # Return vector of NONEs
-        return adj_indices_vec.unsqueeze(0).unsqueeze(0)  # Add batch/seq dims back
-
-    # Generation loop
+        logger.error("rnn_edge_gen: edge_rnn.hidden is None."); return adj_indices_vec.unsqueeze(0).unsqueeze(0)
     for i in range(num_edges_to_generate):
         try:
-            # Call EdgeLevelRNN forward pass
             edge_logits = edge_rnn(x_edge_input, x_lens=torch.tensor([1], device='cpu'), return_logits=True)
-            # Output edge_logits shape: [1, 1, edge_feature_len]
-
-            # Sample the edge type index using the provided sample_fun
-            sampled_class_index = sample_fun(
-                edge_logits.squeeze(),  # Remove batch/seq dims -> [edge_feature_len]
-                temperature=temperature,
-                top_k=top_k,
-                top_p=top_p
-            )  # sample_fun now returns an index
-
-            # Update the adjacency vector for this step
+            sampled_class_index = sample_fun_arg(edge_logits.squeeze(), temperature_arg, top_k_arg, top_p_arg)
             adj_indices_vec[i] = sampled_class_index
-
-            # Prepare input for the next edge prediction step (one-hot encoding of sampled index)
             next_x_one_hot = torch.zeros_like(x_edge_input)
-            if 0 <= sampled_class_index < edge_feature_len:
-                next_x_one_hot[0, 0, sampled_class_index] = 1.0
-            else:
-                logger.warning(f"RNN Gen: Invalid edge class index {sampled_class_index} sampled. Using NONE.")
-                next_x_one_hot[0, 0, EDGE_TYPES_INTERNAL["NONE"]] = 1.0
+            if 0 <= sampled_class_index < edge_feature_len_arg: next_x_one_hot[0, 0, sampled_class_index] = 1.0
+            else: logger.warning(f"RNN Gen: Invalid edge index {sampled_class_index}. Using NONE."); next_x_one_hot[0, 0, EDGE_TYPES_INTERNAL["NONE"]] = 1.0
             x_edge_input = next_x_one_hot
-
-        except Exception as e:
-            logger.error(f"Error during edge generation step {i}: {e}", exc_info=True)
-            # Return partially generated vector on error
-            return adj_indices_vec.unsqueeze(0).unsqueeze(0)  # Add batch/seq dims back
-
-    # Return the vector of sampled indices, adding batch/seq dims for consistency if needed elsewhere
-    # Shape [adj_vec_padding_size] -> [1, 1, adj_vec_padding_size]
+        except Exception as e: logger.error(f"RNN edge gen step {i} error: {e}", exc_info=True); return adj_indices_vec.unsqueeze(0).unsqueeze(0)
     return adj_indices_vec.unsqueeze(0).unsqueeze(0)
 
-
-# --- Graph Building Function (Unchanged) ---
+# --- Graph Building (Assumed correct) ---
 def build_graph_from_indices(
-        list_adj_indices: List[np.ndarray],
-        list_predicted_node_types: List[int],
-        m: int,
-        final_num_nodes: int
-) -> nx.DiGraph:
-    """ Builds a NetworkX DiGraph from generated edge index lists and predicted node type indices. """
+        list_adj_indices: List[np.ndarray], list_predicted_node_types: List[int],
+        m: int, final_num_nodes: int) -> nx.DiGraph:
     G = nx.DiGraph()
     if final_num_nodes <= 0: return G
-
     if len(list_predicted_node_types) != final_num_nodes:
-        logger.error(f"Node type list length ({len(list_predicted_node_types)}) != final nodes ({final_num_nodes}).")
-        return G
-
-    logger.debug(f"Assigning predicted node types for {final_num_nodes} nodes...")
+        logger.error(f"Node type list len ({len(list_predicted_node_types)}) != final nodes ({final_num_nodes})."); return G
     for node_idx in range(final_num_nodes):
-        predicted_type_idx = list_predicted_node_types[node_idx]
-        node_type_str = INT_TO_NODE_TYPE_STR.get(predicted_type_idx, NODE_UNKNOWN_STR)
-        if node_type_str == NODE_UNKNOWN_STR: logger.warning(
-            f"Node {node_idx}: Invalid type index {predicted_type_idx}.")
-        G.add_node(node_idx, type=node_type_str)  # Assign string type attribute
-
-    logger.debug(f"Adding edges based on {len(list_adj_indices)} adjacency vectors...")
-    for target_node_idx, class_indices in enumerate(list_adj_indices,
-                                                    start=1):  # list_adj_indices is for nodes 1 to n-1
+        predicted_type_int = list_predicted_node_types[node_idx]
+        node_type_str = INT_TO_NODE_TYPE_STR.get(predicted_type_int, NODE_UNKNOWN_STR)
+        if node_type_str == NODE_UNKNOWN_STR: logger.warning(f"Node {node_idx}: Invalid type index {predicted_type_int}.")
+        G.add_node(node_idx, type=node_type_str)
+    for j, class_indices_for_target_node in enumerate(list_adj_indices):
+        target_node_idx = j + 1
         if target_node_idx not in G: continue
-
-        num_connections_possible = min(target_node_idx, m)
-        actual_indices_len = len(class_indices)  # This is the vector for edges INTO target_node_idx
-        len_to_process = min(actual_indices_len, num_connections_possible)
-
-        # class_indices[k] represents edge from (target_node_idx - 1 - k) to target_node_idx
-        for k in range(len_to_process):
-            source_node_idx = (target_node_idx - 1) - k
+        num_potential_sources = min(target_node_idx, m)
+        for k_rev in range(num_potential_sources):
+            source_node_idx = (target_node_idx - 1) - k_rev
             if source_node_idx < 0 or source_node_idx not in G: continue
-
-            edge_class_int = class_indices[k]
+            edge_class_int = class_indices_for_target_node[k_rev]
             edge_type_str = INT_TO_EDGE_TYPE_STR.get(edge_class_int)
-
-            if edge_type_str:  # Add edge only if not NONE (index 0)
-                G.add_edge(source_node_idx, target_node_idx, type=edge_type_str)
-                logger.debug(f"  Added edge: {source_node_idx} -> {target_node_idx} (type: {edge_type_str})")
-
+            if edge_type_str: G.add_edge(source_node_idx, target_node_idx, type=edge_type_str)
     return G
-
 
 # --- Main Generation Function ---
 def generate(
         node_model: GraphLevelRNN,
         edge_model: EdgeLevelRNN,
-        input_size: int,  # m
-        edge_gen_function: Callable,  # Should be rnn_edge_gen
+        input_size: int,  # m, max predecessors
+        edge_gen_function: Callable,
         mode: str,
-        edge_feature_len: int,  # Should be NUM_EDGE_FEATURES
+        edge_feature_len: int, # Should be NUM_EDGE_FEATURES (3)
         predict_node_types: bool,
-        num_node_types: Optional[int],
-        # Generation parameters
+        num_node_types: Optional[int], # e.g., 4 for AIG
         max_nodes: int,
         min_nodes: int,
         patience: int,
         temperature: float = 1.0,
         top_k: int = 0,
         top_p: float = 0.0,
-        edge_sample_attempts: int = 1  # Unused by rnn_edge_gen
+        edge_sample_attempts: int = 1
 ) -> Optional[nx.DiGraph]:
-    """ Generates a DAG using GraphLevelRNN and EdgeLevelRNN models. """
+
     # --- Validation and Setup ---
-    if not isinstance(node_model, GraphLevelRNN): logger.warning(f"generate expects node_model type GraphLevelRNN")
-    if not isinstance(edge_model, EdgeLevelRNN): logger.warning(f"generate expects edge_model type EdgeLevelRNN")
-    if edge_gen_function is not rnn_edge_gen: logger.warning(f"generate expects edge_gen_function=rnn_edge_gen")
-    if predict_node_types and num_node_types is None: logger.error(
-        "Node prediction enabled but num_node_types not provided."); return None
-    if edge_feature_len != NUM_EDGE_FEATURES: logger.warning(
-        f"edge_feature_len mismatch: Expected {NUM_EDGE_FEATURES}, got {edge_feature_len}.")
+    if not isinstance(node_model, GraphLevelRNN): logger.warning("Node_model type mismatch")
+    if not isinstance(edge_model, EdgeLevelRNN): logger.warning("Edge_model type mismatch")
+    if predict_node_types and num_node_types is None:
+        logger.error("Node prediction enabled but num_node_types not provided."); return None
+    if edge_feature_len != NUM_EDGE_FEATURES:
+        logger.warning(f"edge_feature_len mismatch: Expected {NUM_EDGE_FEATURES}, got {edge_feature_len}.")
 
     if hasattr(node_model, 'eval'): node_model.eval()
     if hasattr(edge_model, 'eval'): edge_model.eval()
-    try:
-        device = next(node_model.parameters()).device
-    except:
-        device = torch.device('cpu'); node_model.to(device)
-    try:
-        edge_model.to(device)
-    except Exception as e:
-        logger.error(f"Failed to move edge_model to device {device}: {e}")
+    device = next(node_model.parameters()).device
+    edge_model.to(device)
 
-    # --- MODIFIED: Use sample_temperature ---
     sample_fun = sample_temperature
-    # --- END MODIFIED ---
-
     min_nodes = max(1, min_nodes)
-    if max_nodes < min_nodes: max_nodes = min_nodes; logger.warning(
-        f"max_nodes < min_nodes. Setting max_nodes = {max_nodes}.")
+    if max_nodes < min_nodes: max_nodes = min_nodes
     patience = max(1, patience)
-    # --- End Validation ---
 
     # --- Generation Loop ---
-    # Initial input: SOS token (all NONE edges)
-    adj_vec_input_node = torch.zeros([1, 1, input_size, NUM_EDGE_FEATURES], device=device)
-    adj_vec_input_node[:, :, :, EDGE_TYPES_INTERNAL["NONE"]] = 1.0
+    # `adj_vec_for_node_model_input` stores the connections *into* the previous node (node i-1)
+    adj_vec_for_node_model_input = torch.zeros([1, 1, input_size, NUM_EDGE_FEATURES], device=device)
+    adj_vec_for_node_model_input[:, :, :, EDGE_TYPES_INTERNAL["NONE"]] = 1.0 # SOS for first step
 
-    list_adj_indices = []  # Stores np arrays of sampled edge indices (0, 1, 2) for each node
-    list_predicted_node_types = []  # Stores predicted node type index for each node
+    list_adj_indices_for_all_nodes = []  # Stores edge indices for edges *into* node i+1
+    list_predicted_node_types = []       # Stores type index for node i
 
     if hasattr(node_model, 'reset_hidden'): node_model.reset_hidden()
     if hasattr(edge_model, 'reset_hidden'): edge_model.reset_hidden()
 
-    generated_nodes_count = 0
+    generated_nodes_count = 0 # Tracks number of nodes whose types and incoming edges are finalized
     no_edge_streak = 0
+
+    # --- Level Calculation Setup ---
+    current_node_levels = {} # Stores level of each generated node_idx
+    model_max_allowable_level = node_model.max_level if hasattr(node_model, 'max_level') and node_model.max_level is not None else float('inf')
+    uses_level_embedding = hasattr(node_model, 'level_embedding') and node_model.level_embedding is not None
 
     logger.info(
         f"Starting generation: max_nodes={max_nodes}, min_nodes={min_nodes}, patience={patience}, "
-        f"temp={temperature}, top_k={top_k}, top_p={top_p}, predict_nodes={predict_node_types}")
+        f"temp={temperature}, top_k={top_k}, top_p={top_p}, predict_nodes={predict_node_types}, use_levels={uses_level_embedding}")
 
     with torch.no_grad():
-        # --- Predict Node 0 Type (Assume PI or CONST0) ---
-        # Run node model once with initial SOS input to get context for node 0 edges (if needed)
-        # and predict type for node 0.
-        initial_node_output = node_model(adj_vec_input_node)
-        initial_predicted_node_type_idx = 0  # Default to CONST0
+        # --- Loop for generating nodes 0 to max_nodes-1 ---
+        # `current_node_idx` is the index of the node we are currently generating (0, 1, 2, ...)
+        for current_node_idx in range(max_nodes):
 
-        if predict_node_types:
-            if not isinstance(initial_node_output, tuple) or len(initial_node_output) != 2:
-                logger.error("Initial node model call didn't return (output, logits). Cannot predict node 0 type.")
-                return None
-            _, initial_node_logits = initial_node_output
-            initial_node_type_idx = sample_fun(
-                initial_node_logits.squeeze(), temperature, top_k, top_p
-            )
-            logger.debug(
-                f"  Node 0: Predicted type logits: {initial_node_logits.squeeze().cpu().numpy()}, Sampled index: {initial_node_type_idx}")
-        else:
-            # Assign default type if not predicting (e.g., PI if node 0 is always input)
-            initial_predicted_node_type_idx = aig_config.NODE_TYPE_TO_INT.get("PI", 1)  # Example default
+            # --- Determine Level for the current_node_idx ---
+            # Calculate the level of the current node *before* calling NodeModel,
+            # based on the levels of its potential predecessors (nodes 0 to current_node_idx - 1).
+            # This requires knowing which predecessors *will* connect, which we only know *after* edge generation.
+            # This seems like the core difficulty.
 
-        list_predicted_node_types.append(initial_predicted_node_type_idx)
-        generated_nodes_count = 1  # Count node 0
-        # Note: Node 0 has no incoming edges, so list_adj_indices remains empty for step 0.
+            # *** REVISED LEVEL LOGIC V3: Align with older script `aig_generate.py` ***
+            # Calculate the level of the current node based on the levels of nodes 0..i-1
+            # *before* calling the node model for node i.
+            # This assumes the level embedding should represent the structural level of the node being generated.
+            current_node_calculated_level = 0
+            if current_node_idx > 0:
+                # Find max level among predecessors of current_node_idx
+                # Predecessors are determined by the *last* generated edge vector: list_adj_indices_for_all_nodes[-1]
+                max_predecessor_level = -1
+                if list_adj_indices_for_all_nodes: # Check if edge vectors exist
+                    last_edge_indices_np = list_adj_indices_for_all_nodes[-1]
+                    num_potential_preds = len(last_edge_indices_np)
+                    for k_rev in range(num_potential_preds):
+                        if last_edge_indices_np[k_rev] != EDGE_TYPES_INTERNAL["NONE"]: # If edge exists
+                            # Source node for the edge into node current_node_idx-1
+                            source_node_for_prev = (current_node_idx - 1 - 1) - k_rev
+                            # We need the level of the node that *will* connect to current_node_idx
+                            # This still seems problematic.
 
-        # --- Loop for Nodes 1 to max_nodes-1 ---
-        for i in range(1, max_nodes):
-            current_node_idx = i
-            logger.debug(f"Generating node {current_node_idx}...")
+                            # Let's try the logic from the older `aig_generate.py` directly:
+                            # Calculate level based on predecessors 0..i-1, assuming connectivity based on previous steps.
+                            # This might be an approximation if the model needs exact current connectivity.
 
-            # --- Node Model Forward Pass & Type Prediction ---
-            predicted_node_type_idx = 0  # Default
-            try:
-                # Input is the one-hot encoding of edges generated for the *previous* node (i-1)
-                node_model_output = node_model(adj_vec_input_node)  # Pass edge input from previous step
+                            # Re-calculating level based on nodes 0..i-1 that *could* connect
+                            max_pred_level_for_current = -1
+                            num_preds_possible_for_current = min(current_node_idx, input_size)
+                            for k in range(num_preds_possible_for_current):
+                                source_node = current_node_idx - 1 - k # Potential source node index
+                                if source_node in current_node_levels:
+                                     max_pred_level_for_current = max(max_pred_level_for_current, current_node_levels[source_node])
+                            current_node_calculated_level = max_pred_level_for_current + 1
+                else: # First node (node 1) after node 0
+                     current_node_calculated_level = current_node_levels.get(0, 0) + 1 # Depends only on node 0
 
-                if predict_node_types:
-                    if not isinstance(node_model_output, tuple) or len(node_model_output) != 2:
-                        logger.error("Node model didn't return (output, logits) when predict_node_types=True.")
-                        return None
-                    h, node_type_logits = node_model_output
-                    # Logits for the current node i are the last in the sequence output
-                    current_node_logits = node_type_logits[0, -1, :]  # Assuming batch=1, take last sequence item
-                    predicted_node_type_idx = sample_fun(
-                        current_node_logits, temperature, top_k, top_p
-                    )
-                    logger.debug(
-                        f"  Node {i}: Predicted type logits: {current_node_logits.cpu().numpy()}, Sampled index: {predicted_node_type_idx}")
-                else:
-                    h = node_model_output
-                    # Assign default type if not predicting (e.g., AND)
-                    predicted_node_type_idx = aig_config.NODE_TYPE_TO_INT.get("AND", 2)  # Example default
+            else: # current_node_idx is 0
+                current_node_calculated_level = 0
 
-                list_predicted_node_types.append(predicted_node_type_idx)
+            current_node_levels[current_node_idx] = current_node_calculated_level # Store calculated level for this node
+            clamped_level_for_node_model = min(current_node_calculated_level, model_max_allowable_level)
+            level_input_tensor = torch.tensor([[clamped_level_for_node_model]], dtype=torch.long, device=device) if uses_level_embedding else None
 
-                # Initialize/Set edge hidden state using node output 'h'
-                if hasattr(edge_model, 'set_first_layer_hidden') and callable(edge_model.set_first_layer_hidden):
+            logger.debug(f"Generating node {current_node_idx} (NodeModel input level: {clamped_level_for_node_model if uses_level_embedding else 'N/A'})...")
+
+            # --- Node Model: Get context (h) and predict type for current_node_idx ---
+            # Input `adj_vec_for_node_model_input` represents edges into node `current_node_idx - 1`
+            node_model_output = node_model(adj_vec_for_node_model_input, levels=level_input_tensor)
+
+            predicted_type_for_current_node = 0
+            if predict_node_types:
+                if not isinstance(node_model_output, tuple) or len(node_model_output) != 2:
+                    logger.error(f"Node model (for node {current_node_idx}) didn't return (h, logits)."); return None
+                h_context_for_current_node, logits_for_current_node_type = node_model_output
+                predicted_type_for_current_node = sample_fun(logits_for_current_node_type.squeeze(), temperature, top_k, top_p)
+            else:
+                h_context_for_current_node = node_model_output
+                predicted_type_for_current_node = NODE_STR_TO_INT.get(aig_config.NODE_TYPE_KEYS[0 if current_node_idx == 0 else 2], 0) # Default CONST0 for node 0, AND for others
+
+            list_predicted_node_types.append(predicted_type_for_current_node)
+            # --- End Node Model processing for current node ---
+
+            # --- Edge Prediction: Edges *into* current_node_idx ---
+            num_edges_to_predict = min(current_node_idx, input_size)
+            edge_indices_for_current_node_np = np.array([], dtype=int)
+
+            if num_edges_to_predict > 0:
+                if hasattr(edge_model, 'set_first_layer_hidden'):
                     try:
-                        edge_model.set_first_layer_hidden(h)
+                        edge_model.set_first_layer_hidden(h_context_for_current_node)
                     except Exception as e:
-                        logger.error(f"Error setting edge hidden state for node {i}: {e}"); return None
+                        logger.error(f"Error setting edge hidden state for node {current_node_idx}: {e}"); return None
 
-            except Exception as e:
-                logger.error(f"Error during NodeModel forward/Edge init for node {i}: {e}", exc_info=True)
-                return None
-            # --- End Node Model ---
+                adj_indices_tensor = edge_gen_function(
+                    edge_model, h_context_for_current_node, num_edges_to_predict, input_size,
+                    edge_feature_len, sample_fun, mode, temperature, top_k, top_p, edge_sample_attempts
+                )
+                edge_indices_for_current_node_np = adj_indices_tensor[0, 0, :num_edges_to_predict].cpu().numpy()
 
-            # --- Edge Prediction ---
-            num_edges_to_generate = min(current_node_idx, input_size)
-            current_indices_np = np.array([], dtype=int)
+            # Store edge indices. Note: Node 0 has no incoming edges from previous nodes.
+            if current_node_idx > 0:
+                list_adj_indices_for_all_nodes.append(edge_indices_for_current_node_np)
 
-            if num_edges_to_generate > 0:
-                logger.debug(f"  Generating {num_edges_to_generate} edges into node {i}...")
-                try:
-                    # Call edge gen function - it returns indices directly now
-                    adj_indices_vec_tensor = edge_gen_function(
-                        edge_model, h, num_edges_to_generate, input_size,
-                        edge_feature_len,  # Correctly pass the integer edge_feature_len here
-                        sample_fun,  # Correctly pass the callable sample_fun here
-                        mode,
-                        temperature,
-                        top_k,
-                        top_p,
-                        edge_sample_attempts
-                    )
-
-                    # Extract relevant indices and convert to numpy
-                    current_indices_np = adj_indices_vec_tensor[0, 0, :num_edges_to_generate].cpu().numpy()
-
-                except Exception as e:
-                    logger.error(f"Error during EdgeModel generation for node {i}: {e}", exc_info=True)
-                    return None
-
-            list_adj_indices.append(current_indices_np)  # Append indices for node i
-            generated_nodes_count += 1
+            generated_nodes_count += 1 # We have now finalized node `current_node_idx`
             # --- End Edge Prediction ---
 
             # --- Patience Stopping Check ---
             if generated_nodes_count >= min_nodes:
-                only_no_edge_predicted = np.all(
-                    current_indices_np <= EDGE_TYPES_INTERNAL["NONE"]) if current_indices_np.size > 0 else True
-                if only_no_edge_predicted:
+                # Check edges generated for the *current* node (node `current_node_idx`)
+                all_none_edges = np.all(edge_indices_for_current_node_np == EDGE_TYPES_INTERNAL["NONE"]) if edge_indices_for_current_node_np.size > 0 else True
+
+                # Increment streak only if the current node (which is > 0) received no edges
+                if current_node_idx > 0 and all_none_edges:
                     no_edge_streak += 1
-                else:
+                elif current_node_idx > 0 and not all_none_edges : # Reset if any edge is made to a node > 0
                     no_edge_streak = 0
-                logger.debug(f"  Node {i}: Edge streak: {no_edge_streak}/{patience}")
-                if no_edge_streak >= patience:
-                    logger.info(f"Stopping early at node {i}: reached patience={patience}.")
+
+                logger.debug(f"  Node {current_node_idx}: Edges {edge_indices_for_current_node_np.tolist() if edge_indices_for_current_node_np.size > 0 else '[]'}. Streak: {no_edge_streak}/{patience}")
+
+                if no_edge_streak >= patience and current_node_idx > 0 : # Don't stop due to node 0 having no incoming edges
+                    logger.info(f"Stopping early at node {current_node_idx}: reached patience={patience}.")
                     break
             # --- End Patience Check ---
 
-            # --- Prepare input for the NEXT node iteration ---
-            # Convert the sampled *indices* back to one-hot for the node model input
-            next_adj_vec_input = torch.zeros([1, 1, input_size, NUM_EDGE_FEATURES], device=device)
-            next_adj_vec_input[:, :, :, EDGE_TYPES_INTERNAL["NONE"]] = 1.0  # Default to NONE
-            num_indices = len(current_indices_np)
-            len_slice = min(num_indices, input_size)
-            for k in range(len_slice):
-                class_idx = current_indices_np[k]
-                if 0 <= k < input_size:  # Check index is within bounds for input vec
-                    if 0 <= class_idx < NUM_EDGE_FEATURES:  # Check index is valid edge type
-                        next_adj_vec_input[0, 0, k, EDGE_TYPES_INTERNAL["NONE"]] = 0.0  # Clear NONE flag
-                        next_adj_vec_input[0, 0, k, class_idx] = 1.0  # Set one-hot flag
-                    # else: keep the default NONE if class_idx is invalid (shouldn't happen)
+            # --- Prepare `adj_vec_for_node_model_input` for the *next* iteration (for node current_node_idx + 1) ---
+            # This vector represents connections *into* `current_node_idx`
+            adj_vec_for_node_model_input.zero_()
+            adj_vec_for_node_model_input[:, :, :, EDGE_TYPES_INTERNAL["NONE"]] = 1.0
 
-            adj_vec_input = next_adj_vec_input  # Use this for the next iteration
+            num_actual_indices = len(edge_indices_for_current_node_np)
+            slice_len_for_next_input = min(num_actual_indices, input_size)
+            for k_one_hot in range(slice_len_for_next_input):
+                class_idx = edge_indices_for_current_node_np[k_one_hot]
+                if 0 <= class_idx < NUM_EDGE_FEATURES:
+                    adj_vec_for_node_model_input[0, 0, k_one_hot, EDGE_TYPES_INTERNAL["NONE"]] = 0.0
+                    adj_vec_for_node_model_input[0, 0, k_one_hot, class_idx] = 1.0
             # --- End Input Prep ---
 
+            # No need for explicit check `generated_nodes_count >= max_nodes` here,
+            # the loop condition `range(max_nodes)` handles it.
+
     # --- Post-processing After Loop ---
-    if generated_nodes_count == 0: logger.warning("Generation resulted in 0 nodes."); return None
+    if generated_nodes_count == 0:
+        logger.warning("Generation resulted in 0 nodes."); return None
+    # Check if enough nodes were generated *before* patience stop
     if generated_nodes_count < min_nodes:
         logger.warning(f"Generated nodes ({generated_nodes_count}) < min_nodes ({min_nodes}). Returning None.")
         return None
 
     logger.info(f"Building NetworkX graph for {generated_nodes_count} generated nodes...")
-    try:
-        # list_adj_indices contains vectors for nodes 1 to n-1
-        # list_predicted_node_types contains types for nodes 0 to n-1
-        final_graph = build_graph_from_indices(
-            list_adj_indices,
-            list_predicted_node_types,
-            input_size,  # m
-            generated_nodes_count  # n
-        )
-        logger.debug(
-            f"Graph building successful. Nodes: {final_graph.number_of_nodes()}, Edges: {final_graph.number_of_edges()}")
-        return final_graph
-    except Exception as e:
-        logger.error(f"Error building NetworkX graph: {e}", exc_info=True)
-        return None
+    # list_adj_indices_for_all_nodes has edge info for nodes 1 to N-1
+    # list_predicted_node_types has type info for nodes 0 to N-1
+    final_graph = build_graph_from_indices(
+        list_adj_indices_for_all_nodes,
+        list_predicted_node_types,
+        input_size, # m
+        generated_nodes_count # n
+    )
+    logger.debug(f"Graph building successful. Nodes: {final_graph.number_of_nodes()}, Edges: {final_graph.number_of_edges()}")
+    return final_graph
 
 
-# Example of how to use if run standalone (for testing)
 if __name__ == '__main__':
     print("This script defines generation functions. Run get_aigs.py or a similar control script to execute.")
-    # Add basic tests here if desired, e.g., creating dummy models and calling generate
 
