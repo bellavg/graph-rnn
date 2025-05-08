@@ -605,7 +605,7 @@ if __name__ == "__main__":
     parser.add_argument('input_pickle_file', type=str,
                         help='Path to the pickle file containing the list of generated NetworkX DiGraphs (e.g., generated_aigs.pkl).')
     # --- MODIFIED ARGUMENT ---
-    parser.add_argument('--train_pkl_files', type=str, default=None, nargs='+', # Accept one or more paths
+    parser.add_argument('--train_pkl_files', type=str, default=["aigs/real_aigs_part_1_of_6.pkl, aigs/real_aigs_part_2_of_6.pkl,aigs/real_aigs_part_3_of_6.pkl, aigs/real_aigs_part_4_of_6.pkl"], nargs='+', # Accept one or more paths
                         help='(Optional) Path(s) to the training dataset PKL file(s) for Novelty calculation.')
     # --- END MODIFIED ARGUMENT ---
 
