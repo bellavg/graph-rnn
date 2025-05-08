@@ -31,15 +31,11 @@ except ImportError as e:
     sys.exit(1)
 # --- END MODIFIED ---
 
-# Import config constants
-try:
-    from aig_config import NUM_EDGE_FEATURES, NUM_NODE_TYPES
-except ImportError:
-    print("Warning: Could not import from aig_config.py. Using default values.")
-    NUM_EDGE_FEATURES = 3 # Default internal edge features (None, Reg, Inv)
-    NUM_NODE_TYPES = 4    # Default node types (CONST0, PI, AND, PO)
 
 
+
+NUM_EDGE_FEATURES = 3 # Default internal edge features (None, Reg, Inv)
+NUM_NODE_TYPES = 4    # Default node types (CONST0, PI, AND, PO)
 # --- Setup Logging ---
 logging.basicConfig(
     level=logging.INFO,
