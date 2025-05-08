@@ -108,54 +108,54 @@ def setup_models(config, device, max_node_count, max_level):
     return node_model, edge_model, step_fn
 
 
-# --- MODIFIED: setup_criteria ---
-def setup_criteria(config, device, dataset):
+def setup_criteria(config, device, dataset=None):
     """
-    Sets up loss criteria for edges and nodes.
-
-    Args:
-        config (dict): Configuration dictionary.
-        device (torch.device): PyTorch device.
-        dataset (Dataset): The initialized AIGDataset instance (used for edge weights).
-
-    Returns:
-        tuple: (criterion_edge, criterion_node, use_edge_features)
-            - criterion_edge: Loss function for edge prediction.
-            - criterion_node: Loss function for node prediction (or None).
-            - use_edge_features: Boolean indicating if multi-class edges are used.
+    Sets up loss criteria for edges and optionally for node types.
+    Edge class weights are now hardcoded.
     """
+    loss_reduction = config.get('train', {}).get('loss_reduction', 'mean')
+
     # --- Edge Criterion ---
-    # Assume internal edge feature length is always NUM_EDGE_FEATURES (3)
-    edge_feature_len = NUM_EDGE_FEATURES
-    use_edge_features = edge_feature_len > 1 # This will always be true for 3 features
+    # Hardcoded edge class weights as requested
+    hardcoded_edge_weights = [0.015618128702044487, 1.4666249752044678, 1.5177571773529053]
+    num_edge_classes = len(hardcoded_edge_weights)  # Should be 3 based on weights
 
-    print(f"Setting up CrossEntropyLoss for {edge_feature_len} edge classes.")
-    edge_weights = None
-    if hasattr(dataset, 'edge_weights') and dataset.edge_weights is not None:
-        edge_weights = dataset.edge_weights.to(device)
-        print(f"Applying edge class weights: {edge_weights.tolist()}")
-        criterion_edge = nn.CrossEntropyLoss(weight=edge_weights).to(device)
-    else:
-        print("Warning: Dataset object does not have 'edge_weights'. Using uniform weights for edges.")
-        criterion_edge = nn.CrossEntropyLoss().to(device)
+    print(f"Setting up CrossEntropyLoss for {num_edge_classes} edge classes.")
 
-    # --- Node Criterion ---
+    edge_class_weights_tensor = torch.tensor(hardcoded_edge_weights, dtype=torch.float32, device=device)
+    print(f"Applying HARDCODED edge class weights: {edge_class_weights_tensor.tolist()}")
+    criterion_edge = nn.CrossEntropyLoss(weight=edge_class_weights_tensor, reduction=loss_reduction)
+
+    # Determine if edge features are used (for multi-class CrossEntropyLoss) or binary (for BCELoss)
+    # For AIG, it's typically multi-class (None, Regular, Inverted)
+    use_edge_features = config.get('model', {}).get('GraphRNN', {}).get('edge_feature_len', 1) > 1
+    if not use_edge_features:
+        print("Warning: edge_feature_len <= 1, but CrossEntropyLoss is set up. Ensure this is intended.")
+        # If it were truly binary and you wanted BCELoss, you'd do:
+        # criterion_edge = nn.BCEWithLogitsLoss(pos_weight=pos_weight_tensor, reduction=loss_reduction)
+
+    # --- Node Criterion (Optional) ---
     criterion_node = None
     predict_node_types = config.get('train', {}).get('predict_node_types',
-                                                    config.get('model', {}).get('predict_node_types', False))
+                                                     config.get('model', {}).get('predict_node_types', False))
 
     if predict_node_types:
-        # Use standard CrossEntropyLoss for node type classification
-        # Node types are typically not as imbalanced as edge types (None vs Reg/Inv)
-        # so class weighting might not be necessary, but could be added if needed.
-        print(f"Setting up CrossEntropyLoss for {NUM_NODE_TYPES} node classes.")
-        # Consider adding ignore_index=PAD_VALUE if your dataset uses padding values in y_node_type
-        criterion_node = nn.CrossEntropyLoss().to(device)
-        # Example with ignore_index (if needed):
-        # from .aig_config import PAD_VALUE # Assuming PAD_VALUE is defined appropriately
-        # criterion_node = nn.CrossEntropyLoss(ignore_index=PAD_VALUE).to(device)
-        # print(f"Setting up Node CrossEntropyLoss (ignoring index {PAD_VALUE}).")
+        num_node_types = config.get('model', {}).get('num_node_types')
+        if num_node_types is None:
+            raise ValueError(
+                "num_node_types must be specified in config if predict_node_types is True for criterion setup.")
+        print(f"Setting up CrossEntropyLoss for {num_node_types} node classes.")
 
+        node_class_weights_list = config.get('train', {}).get('node_class_weights', None)
+        node_class_weights_tensor = None
+        if node_class_weights_list is not None:
+            if len(node_class_weights_list) != num_node_types:
+                raise ValueError(f"Length of node_class_weights ({len(node_class_weights_list)}) "
+                                 f"must match num_node_types ({num_node_types}).")
+            node_class_weights_tensor = torch.tensor(node_class_weights_list, dtype=torch.float32, device=device)
+            print(f"Applying node class weights: {node_class_weights_tensor.tolist()}")
+
+        criterion_node = nn.CrossEntropyLoss(weight=node_class_weights_tensor, reduction=loss_reduction)
+        print("Node type prediction criterion created.")
 
     return criterion_edge, criterion_node, use_edge_features
-# --- END MODIFIED ---
